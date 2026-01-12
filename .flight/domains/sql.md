@@ -448,6 +448,78 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 ---
 
+## Naming Conventions
+
+### Tables
+```sql
+-- Use snake_case, plural nouns
+users, orders, order_items, product_categories
+
+-- NOT
+User, Orders, orderItems, tbl_users
+```
+
+### Columns
+```sql
+-- Use snake_case, descriptive names
+user_id, created_at, is_active, total_amount, password_hash
+
+-- NOT
+userId, CreatedAt, isactive, amt, pwd
+```
+
+### Indexes
+```sql
+-- Pattern: idx_table_column(s)
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_orders_user_id ON orders(user_id);
+CREATE INDEX idx_orders_user_status ON orders(user_id, status);
+
+-- Partial indexes: add condition hint
+CREATE INDEX idx_orders_pending ON orders(created_at) WHERE status = 'pending';
+```
+
+### Constraints
+```sql
+-- Primary key: pk_table
+CONSTRAINT pk_users PRIMARY KEY (id)
+
+-- Foreign key: fk_table_reftable
+CONSTRAINT fk_orders_users FOREIGN KEY (user_id) REFERENCES users(id)
+
+-- Unique: uq_table_column(s)
+CONSTRAINT uq_users_email UNIQUE (email)
+
+-- Check: chk_table_rule
+CONSTRAINT chk_orders_positive_total CHECK (total >= 0)
+```
+
+### Aliases
+```sql
+-- Use first letter or short abbreviation for table aliases
+SELECT u.id, u.name, o.total, oi.quantity
+FROM users u
+JOIN orders o ON o.user_id = u.id
+JOIN order_items oi ON oi.order_id = o.id;
+
+-- NOT
+SELECT users.id, users.name, orders.total
+FROM users
+JOIN orders ON orders.user_id = users.id;
+```
+
+### RLS Policies
+```sql
+-- Pattern: "Entity can action own entity"
+CREATE POLICY "Users can view own orders" ON orders FOR SELECT ...
+CREATE POLICY "Users can insert own orders" ON orders FOR INSERT ...
+
+-- NOT
+CREATE POLICY "policy1" ON orders ...
+```
+
+---
+
 ## Anti-Patterns
 
 | Pattern | Problem | Fix |
