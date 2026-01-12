@@ -1,10 +1,51 @@
-# /flight-prd - Product Requirements Document Generator
+# /flight-prd - Product Requirements → Atomic Tasks
 
-Generate a PRD from a rough idea using comprehensive research.
+Transform a rough product idea into atomic tasks that Claude Code can actually execute.
 
-## Purpose
+## The Problem This Solves
 
-Transform a vague product idea into a concrete, well-researched PRD that can be fed to `/flight-prime`.
+Claude Code excels at **atomic, well-defined tasks** (1-2 hours). It struggles with:
+- Large, interconnected systems
+- Multi-day projects with many files
+- Maintaining consistency across long sessions
+
+A monolithic PRD like "Build an SMS document system" will fail. Claude will:
+- Lose context
+- Make inconsistent decisions
+- Over-engineer
+- Produce code that doesn't fit together
+
+## The Solution: Atomic Task Decomposition
+
+Instead of one big PRD, output a **task queue** that feeds the Flight loop:
+
+```
+/flight-prd "rough idea"
+    ↓
+PRD.md              # Vision (human reference)
+MILESTONES.md       # Phases (human planning)
+tasks/
+  001-project-setup.md
+  002-database-schema.md
+  003-auth-system.md
+  ...
+    ↓
+/flight-prime tasks/001-project-setup.md
+    ↓
+PROMPT.md
+    ↓
+[Claude executes atomic task]
+    ↓
+/flight-validate
+    ↓
+[Human reviews, approves]
+    ↓
+/flight-prime tasks/002-database-schema.md
+    ↓
+... loop continues
+```
+
+---
 
 ## Usage
 
@@ -15,7 +56,7 @@ Transform a vague product idea into a concrete, well-researched PRD that can be 
 ## Example
 
 ```
-/flight-prd Simple document collection system - user uploads docs via SMS link, stored encrypted
+/flight-prd Simple document collection - user gets SMS link, uploads docs, stored encrypted
 ```
 
 ---
@@ -25,222 +66,340 @@ Transform a vague product idea into a concrete, well-researched PRD that can be 
 ### 1. Understand the Request
 
 Parse the rough idea into:
-- **Core problem**: What pain point does this solve?
+- **Core problem**: What pain point?
 - **Target users**: Who needs this?
-- **Key capabilities**: What must it do?
+- **Key capabilities**: What must it do (high level)?
 
-### 2. Research Phase - USE ALL AVAILABLE TOOLS
+### 2. Research Phase
 
-**IMPORTANT**: You have access to multiple research tools. Use them strategically:
+Use available tools to ground the PRD in reality:
 
-#### Web Search (built-in)
-- Search for existing solutions and competitors
-- Find articles about the problem space
-- Look for recent developments and trends
-- **Queries**: `"{problem} solutions"`, `"{problem} software"`, `"best {category} tools"`, `"{competitor} alternatives"`
+#### Web Search
+- Competitor solutions
+- Problem space articles
+- Technology options
+- **Queries**: `"{problem} solutions"`, `"best {category} tools"`, `"{competitor} alternatives"`
 
-#### Context7 MCP (if available)
-- Get up-to-date documentation for relevant libraries/frameworks
-- Pull current API examples for tech stack decisions
-- **Check for**: `resolve-library-id` and `get-library-docs` tools
-- **Use for**: Framework docs (Next.js, React, Supabase, etc.)
+#### MCP Tools (if available)
+Check your tool list for:
+- `context7_*` → Use for framework/library documentation
+- `firecrawl_*` → Use for competitor deep-dives
 
-#### Firecrawl MCP (if available)
-- Deep crawl competitor websites
-- Extract features, pricing, architecture details
-- Scrape documentation sites for patterns
-- **Check for**: `firecrawl_scrape`, `firecrawl_crawl`, `firecrawl_search` tools
-- **Use for**: Competitor analysis, feature extraction
-
-#### Tool Availability Check
-
-Before researching, check what MCP tools are available by looking at your tool list. Look for:
-- `context7_*` tools → Context7 is available
-- `firecrawl_*` tools → Firecrawl is available
-
-**If a tool is NOT available but would significantly improve the PRD:**
-
+**If tools are missing but would help:**
 ```
-NOTE: This PRD would benefit from [Context7/Firecrawl] for [specific reason].
-
-To install (check docs for current method):
+NOTE: Better results with [Context7/Firecrawl]. Install from:
 - Context7: https://github.com/upstash/context7
 - Firecrawl: https://github.com/mendableai/firecrawl
 
-Would you like me to proceed with available tools, or install these first?
+Proceed with available tools, or install first?
 ```
 
 ### 3. Competitive Analysis
 
-Using research results, document:
+| Competitor | What They Do Well | Where They Fall Short |
+|------------|-------------------|----------------------|
+| ... | ... | ... |
 
-| Competitor | Strengths | Weaknesses | Price Point |
-|------------|-----------|------------|-------------|
-| ... | ... | ... | ... |
+### 4. Generate Outputs
 
-### 4. Generate PRD.md
+Create THREE outputs:
 
-Create `PRD.md` with this structure:
+#### A. `PRD.md` - The Vision
 
 ```markdown
 # PRD: [Product Name]
 
 ## Problem Statement
-[What problem does this solve? Who has this problem? Why do current solutions fail?]
+[Specific problem. Who has it. Why current solutions fail.]
 
 ## Target Users
-- Primary: [who]
-- Secondary: [who]
+- Primary: [specific persona]
+- Secondary: [specific persona]
 
-## User Stories
+## Core Value Proposition
+[One sentence: what makes this different]
 
-### Must Have (P0)
-- As a [user], I want to [action] so that [benefit]
-- ...
+## Success Metrics
+- [Measurable metric]: [Target]
 
-### Should Have (P1)
-- ...
-
-### Nice to Have (P2)
-- ...
-
-## Functional Requirements
-
-### Core Features
-1. [Feature]: [Description]
-   - Acceptance criteria: [specific, testable criteria]
-   
-2. [Feature]: [Description]
-   - Acceptance criteria: [specific, testable criteria]
-
-### Integrations
-- [Integration]: [Why needed]
-
-## Non-Functional Requirements
-
-### Security
-- [Requirement]
-
-### Performance  
-- [Requirement]
-
-### Scalability
-- [Requirement]
+## Competitive Landscape
+[Brief summary of research findings]
 
 ## Technical Constraints
 - [Constraint]: [Reason]
 
-## Out of Scope
-- [What this is NOT]
-- [What we're explicitly deferring]
-
-## Competitive Landscape
-[Summary of competitors and how this differs]
-
-## Success Metrics
-- [Metric]: [Target]
-
-## Open Questions
-- [Question that needs user input]
-
----
+## Out of Scope (V1)
+- [What this is NOT building]
 
 ## Research Sources
-- [URL]: [What was learned]
-- [URL]: [What was learned]
+- [URL]: [Key finding]
 ```
 
-### 5. Output
+#### B. `MILESTONES.md` - The Phases
 
-1. Save to `PRD.md` in project root
-2. Summarize key findings
-3. List any open questions that need user input
-4. Suggest next step: `/flight-prime Implement the system in PRD.md`
+```markdown
+# Milestones
+
+## M1: Foundation (Tasks 001-003)
+Project setup, database schema, basic auth.
+**Exit Criteria**: Can log in and see empty dashboard.
+
+## M2: Core Feature (Tasks 004-007)
+[The main thing the product does]
+**Exit Criteria**: [Specific testable outcome]
+
+## M3: Polish (Tasks 008-010)
+Error handling, edge cases, UX improvements.
+**Exit Criteria**: Ready for beta users.
+```
+
+#### C. `tasks/` - Atomic Task Files
+
+Create 8-15 task files, each following this structure:
+
+```markdown
+# Task [NNN]: [Short Name]
+
+## Depends On
+- [Task numbers that must complete first]
+- OR "None (first task)"
+
+## Delivers
+- [Specific, concrete output 1]
+- [Specific, concrete output 2]
+- [Specific, concrete output 3]
+
+## NOT In Scope (Critical)
+- [Thing that seems related but is a different task]
+- [Thing user might expect but we're deferring]
+- [Adjacent feature that's Task XXX]
+
+## Acceptance Criteria
+- [ ] [Testable criterion 1]
+- [ ] [Testable criterion 2]
+- [ ] [Testable criterion 3]
+
+## Domain Constraints
+Load these before starting:
+- code-hygiene.md (always)
+- [relevant-domain].md
+
+## Context
+[Minimal context Claude needs for THIS task only.
+Don't repeat the whole PRD. Just what's relevant.]
+
+## Technical Notes
+[Any specific technical decisions or patterns to follow.
+Reference prior tasks if building on them.]
+```
 
 ---
 
-## Research Strategy by Product Type
+## Task Decomposition Rules
 
-### SaaS / Web App
-1. Web search for competitors
-2. Firecrawl competitor sites for feature lists
-3. Context7 for framework docs (Next.js, React, etc.)
+### Size Constraints
+- **Maximum**: 2 hours of Claude work
+- **Maximum files**: 5-7 files created/modified
+- **If bigger**: Split into multiple tasks
 
-### API / Developer Tool
-1. Web search for existing solutions
-2. Context7 for SDK patterns and conventions
-3. Firecrawl for documentation structure examples
+### Dependency Rules
+- Tasks should be **sequential** where possible
+- Minimize parallel dependencies (harder to coordinate)
+- Each task should work even if future tasks never happen
 
-### Mobile App
-1. Web search for App Store competitors
-2. Firecrawl for competitor landing pages
-3. Context7 for React Native / Flutter docs
+### Scope Rules
+- **"NOT In Scope" is the most important section**
+- Be explicit about what's adjacent but excluded
+- Reference which task WILL handle deferred items
 
-### Integration / Plugin
-1. Context7 for platform API docs
-2. Web search for existing integrations
-3. Firecrawl for integration examples
+### Naming Convention
+```
+tasks/
+  001-project-setup.md       # Always first
+  002-database-schema.md     # Data layer early
+  003-auth-basic.md          # Auth before features
+  004-[core-feature-1].md
+  005-[core-feature-2].md
+  ...
+  0XX-error-handling.md      # Polish later
+  0XX-testing.md             # Near end
+```
+
+---
+
+## Example Decomposition
+
+**Input**: `/flight-prd Document collection via SMS - encrypted storage`
+
+**Output**:
+
+### tasks/001-project-setup.md
+```markdown
+# Task 001: Project Setup
+
+## Depends On
+- None (first task)
+
+## Delivers
+- Next.js 14 project with App Router
+- Supabase project connected
+- Environment variables configured
+- Basic layout component
+
+## NOT In Scope
+- Authentication (Task 003)
+- Database tables (Task 002)
+- Any business logic
+- Styling beyond basic layout
+
+## Acceptance Criteria
+- [ ] `npm run dev` starts without errors
+- [ ] `/` route renders "Hello World"
+- [ ] `supabase status` shows connection
+- [ ] .env.local has SUPABASE_URL and SUPABASE_ANON_KEY
+
+## Domain Constraints
+- code-hygiene.md
+- nextjs.md
+- typescript.md
+```
+
+### tasks/002-database-schema.md
+```markdown
+# Task 002: Database Schema
+
+## Depends On
+- 001-project-setup
+
+## Delivers
+- users table (id, email, created_at)
+- documents table (id, user_id, filename, encrypted_url, created_at)
+- upload_links table (id, user_id, token, expires_at, used_at)
+- RLS policies for all tables
+- Indexes on foreign keys
+
+## NOT In Scope
+- Authentication logic (Task 003)
+- File upload handling (Task 005)
+- SMS sending (Task 004)
+- Any API routes
+
+## Acceptance Criteria
+- [ ] All tables created in Supabase
+- [ ] RLS enabled on all tables
+- [ ] Can insert test row via SQL editor
+- [ ] Foreign key indexes exist
+
+## Domain Constraints
+- code-hygiene.md
+- sql.md
+
+## Technical Notes
+Use snake_case for columns. user_id references auth.users().
+```
+
+### tasks/003-auth-basic.md
+```markdown
+# Task 003: Basic Authentication
+
+## Depends On
+- 001-project-setup
+- 002-database-schema
+
+## Delivers
+- /login page with email/password
+- /signup page
+- Auth middleware protecting /dashboard
+- useAuth hook
+- Logout functionality
+
+## NOT In Scope
+- Magic links (future enhancement)
+- OAuth providers (future enhancement)
+- Password reset (Task 008)
+- Profile editing
+
+## Acceptance Criteria
+- [ ] Can create account at /signup
+- [ ] Can log in at /login
+- [ ] /dashboard redirects to /login if not authenticated
+- [ ] Logout clears session
+
+## Domain Constraints
+- code-hygiene.md
+- nextjs.md
+- react.md
+- typescript.md
+```
+
+*[Continue for all tasks...]*
 
 ---
 
 ## Critical Rules
 
-1. **ALWAYS check for available tools first** - Don't assume. List MCP tools.
+1. **Research BEFORE decomposing** - Understand the problem space first
 
-2. **Use ALL available tools** - Don't skip Context7 if it's there. Don't skip Firecrawl if it's there.
+2. **Tasks must be atomic** - If you can't do it in 2 hours, split it
 
-3. **If tools are missing, tell the user** - They may want to install them for better results.
+3. **"NOT In Scope" is sacred** - This prevents Claude from scope creeping
 
-4. **Research BEFORE writing** - Don't generate a PRD from imagination. Research first.
+4. **Dependencies flow forward** - Task 005 can depend on 001-004, not on 006
 
-5. **Cite sources** - Every claim should trace back to research.
+5. **Each task is self-contained** - Include enough context to execute without re-reading PRD
 
-6. **Ask about unknowns** - If something is ambiguous, add it to Open Questions.
+6. **Acceptance criteria are testable** - "Works well" is bad. "Returns 200 on GET /api/users" is good.
 
-7. **Be specific** - "User authentication" is bad. "Email/password auth with magic link option" is good.
+7. **Always include domain constraints** - Tell Claude which .md files to load
 
-8. **Include acceptance criteria** - Every feature needs testable criteria.
+8. **Number tasks with padding** - 001, 002... not 1, 2 (sorting matters)
 
 ---
 
-## PRD Completeness Checklist
-
-Before finalizing, verify:
+## Checklist Before Finishing
 
 ### Research
-- [ ] At least 3 competitors identified
-- [ ] Competitor strengths/weaknesses documented
-- [ ] Price points researched (if applicable)
-- [ ] All claims have source citations
+- [ ] At least 3 competitors analyzed
+- [ ] Tech stack decisions grounded in research
+- [ ] Sources cited in PRD.md
 
-### Requirements
-- [ ] Problem statement is specific, not generic
-- [ ] Target users are named personas, not "users"
-- [ ] P0 features are truly minimal (3-5 max)
-- [ ] Every feature has acceptance criteria
-- [ ] Non-functional requirements cover security, performance, scalability
+### Decomposition
+- [ ] 8-15 tasks (not too few, not too many)
+- [ ] No task exceeds 2-hour estimate
+- [ ] Dependencies are linear where possible
+- [ ] Every task has "NOT In Scope" section
 
-### Clarity
-- [ ] No vague terms ("fast", "secure", "easy") without metrics
-- [ ] Out of Scope section explicitly lists what's NOT included
-- [ ] Open Questions captures genuine unknowns
-- [ ] Technical constraints are justified
+### Task Quality
+- [ ] Each task has 3-5 acceptance criteria
+- [ ] All acceptance criteria are testable
+- [ ] Domain constraints specified for each task
+- [ ] Context section is minimal but sufficient
 
 ### Workflow Ready
-- [ ] PRD.md saved to project root
-- [ ] Can be directly fed to `/flight-prime`
-- [ ] Success metrics are measurable
+- [ ] tasks/ directory created
+- [ ] User knows to run `/flight-prime tasks/001-*.md` next
+- [ ] MILESTONES.md shows the journey
 
 ---
 
-## Example Output
+## Output Summary
 
-Given: `/flight-prd Simple document collection system - user uploads docs via SMS link, stored encrypted`
+After running `/flight-prd`, tell the user:
 
-After research, outputs `PRD.md` with:
-- Competitor analysis (DocuSign Request, Dropbox File Request, HelloSign, etc.)
-- Differentiation (SMS-first, zero-knowledge encryption, simpler UX)
-- Specific features with acceptance criteria
-- Security requirements based on competitor research
-- Tech stack suggestions based on Context7 docs
-- Open questions (SMS provider choice, encryption key management)
+```
+Created:
+  PRD.md           - Product vision (for reference)
+  MILESTONES.md    - 3 milestones, [X] tasks total
+  tasks/
+    001-project-setup.md
+    002-database-schema.md
+    ...
+
+Next step:
+  /flight-prime tasks/001-project-setup.md
+
+Then after each task:
+  /flight-validate
+  [review and approve]
+  /flight-prime tasks/002-[next].md
+```

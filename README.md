@@ -23,6 +23,8 @@ your-project/
 ├── .flight/
 │   ├── FLIGHT.md                       # Core methodology
 │   ├── domains/
+│   │   ├── bash.md                     # Shell script best practices
+│   │   ├── bash.validate.sh            # Executable validation
 │   │   ├── code-hygiene.md             # Universal naming/quality (any language)
 │   │   ├── code-hygiene.validate.sh    # Executable validation
 │   │   ├── embedded-c-p10.md           # NASA JPL Power of 10 rules
@@ -36,6 +38,7 @@ your-project/
 │   │   ├── react.md                    # React invariants
 │   │   ├── react.validate.sh           # Executable validation
 │   │   ├── rp2040-pico.md              # RP2040 dual-core patterns
+│   │   ├── rp2040-pico.validate.sh     # Executable validation
 │   │   ├── sql.md                      # SQL/PostgreSQL patterns
 │   │   ├── sql.validate.sh             # Executable validation
 │   │   ├── typescript.md               # TypeScript type safety
@@ -115,13 +118,14 @@ Validation is deterministic. The script decides correctness, not interpretation.
 
 | Domain | Validation Script |
 |--------|-------------------|
+| `bash` | ✅ |
 | `code-hygiene` | ✅ (always load) |
 | `embedded-c-p10` | ✅ |
 | `javascript` | ✅ |
 | `nextjs` | ✅ |
 | `python` | ✅ |
 | `react` | ✅ |
-| `rp2040-pico` | — |
+| `rp2040-pico` | ✅ |
 | `sql` | ✅ |
 | `typescript` | ✅ |
 

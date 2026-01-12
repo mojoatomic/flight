@@ -15,7 +15,7 @@ mkdir -p .claude/commands .flight/domains
 cp -r "$TMP/.claude/commands/"* .claude/commands/ 2>/dev/null || true
 
 # Update core domains (overwrite stock ones, preserve custom)
-for domain in code-hygiene embedded-c-p10 javascript nextjs python react react-line-formulas rp2040-pico sms-twilio sql typescript; do
+for domain in bash code-hygiene embedded-c-p10 javascript nextjs python react react-line-formulas rp2040-pico sms-twilio sql typescript; do
     [ -f "$TMP/.flight/domains/${domain}.md" ] && cp "$TMP/.flight/domains/${domain}.md" .flight/domains/
     [ -f "$TMP/.flight/domains/${domain}.validate.sh" ] && cp "$TMP/.flight/domains/${domain}.validate.sh" .flight/domains/
 done
