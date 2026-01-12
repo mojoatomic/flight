@@ -23,12 +23,23 @@ your-project/
 ├── .flight/
 │   ├── FLIGHT.md                       # Core methodology
 │   ├── domains/
+│   │   ├── code-hygiene.md             # Universal naming/quality (any language)
+│   │   ├── code-hygiene.validate.sh    # Executable validation
 │   │   ├── embedded-c-p10.md           # NASA JPL Power of 10 rules
 │   │   ├── embedded-c-p10.validate.sh  # Executable validation
 │   │   ├── javascript.md               # JS/Node invariants
 │   │   ├── javascript.validate.sh      # Executable validation
+│   │   ├── nextjs.md                   # Next.js App Router patterns
+│   │   ├── nextjs.validate.sh          # Executable validation
+│   │   ├── python.md                   # Python best practices
+│   │   ├── python.validate.sh          # Executable validation
 │   │   ├── react.md                    # React invariants
-│   │   └── rp2040-pico.md              # RP2040 dual-core patterns
+│   │   ├── react.validate.sh           # Executable validation
+│   │   ├── rp2040-pico.md              # RP2040 dual-core patterns
+│   │   ├── sql.md                      # SQL/PostgreSQL patterns
+│   │   ├── sql.validate.sh             # Executable validation
+│   │   ├── typescript.md               # TypeScript type safety
+│   │   └── typescript.validate.sh      # Executable validation
 │   ├── examples/
 │   └── templates/
 ├── .claude/
@@ -104,10 +115,15 @@ Validation is deterministic. The script decides correctness, not interpretation.
 
 | Domain | Validation Script |
 |--------|-------------------|
+| `code-hygiene` | ✅ (always load) |
 | `embedded-c-p10` | ✅ |
 | `javascript` | ✅ |
+| `nextjs` | ✅ |
+| `python` | ✅ |
 | `react` | ✅ |
 | `rp2040-pico` | — |
+| `sql` | ✅ |
+| `typescript` | ✅ |
 
 ## Core Concepts
 

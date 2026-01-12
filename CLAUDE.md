@@ -24,19 +24,25 @@ cppcheck --enable=all --error-exitcode=1 src/
 
 | Domain | Purpose |
 |--------|---------|
+| `code-hygiene.md` | **ALWAYS LOAD** - Universal naming, redundancy, quality (any language) |
 | `embedded-c-p10.md` | NASA JPL Power of 10 safety-critical C rules |
-| `rp2040-pico.md` | RP2040 Pico dual-core, spinlocks, ring buffers |
 | `javascript.md` | JavaScript/Node.js patterns |
+| `nextjs.md` | Next.js App Router patterns |
+| `python.md` | Python best practices and type safety |
 | `react.md` | React component patterns |
 | `react-line-formulas.md` | React component line count estimation |
+| `rp2040-pico.md` | RP2040 Pico dual-core, spinlocks, ring buffers |
 | `sms-twilio.md` | Twilio SMS integration |
+| `sql.md` | SQL/PostgreSQL security and performance |
+| `typescript.md` | TypeScript type safety patterns |
 
 ## Before ANY Code Generation
 
-1. **Read `.flight/domains/*.md`** - Load all domain constraints
-2. **Check `@fix_plan.md`** - Current task priorities (if exists)
-3. **Read `specs/`** - Technical specifications (if exists)
-4. **Follow invariants** - If code follows the invariants, it's correct
+1. **ALWAYS load `code-hygiene.md`** - Universal quality rules for ALL code
+2. **Load task-specific domains** - e.g., `react.md` for React, `python.md` for Python
+3. **Check `@fix_plan.md`** - Current task priorities (if exists)
+4. **Read `specs/`** - Technical specifications (if exists)
+5. **Follow invariants** - If code follows the invariants, it's correct
 
 ## Flight Workflow
 
