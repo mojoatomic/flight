@@ -128,7 +128,7 @@ When [condition], MUST [behavior].
 To verify fix, re-run:
 ```bash
 /flight-compile
-ralph --monitor  # or manual implementation
+# Execute generated prompt
 /flight-validate
 ```
 

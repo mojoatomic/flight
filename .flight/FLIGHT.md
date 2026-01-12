@@ -16,7 +16,7 @@ Prime → Compile → [Execute] → Validate → Tighten
 
 1. **Prime**: Research context, load domains, gather constraints
 2. **Compile**: Build atomic prompt with invariants → PROMPT.md
-3. **Execute**: Ralph autonomous loop OR manual Claude Code
+3. **Execute**: Run generated prompt in Claude Code
 4. **Validate**: Check output against domain invariants
 5. **Tighten**: If failures, strengthen rules and retry
 
@@ -63,23 +63,12 @@ Every validation failure that leads to tightening makes the system more reliable
 ### 5. Examples Over Explanations
 Show correct code patterns, not lengthy descriptions.
 
-## Integration with Ralph
-
-Flight handles **what** Claude generates (quality).
-Ralph handles **how** Claude runs (execution).
-
-```
-Flight: /flight-prime → /flight-compile → PROMPT.md
-Ralph:  ralph --monitor reads PROMPT.md, loops until done
-Flight: /flight-validate checks result
-```
-
 ## Quick Reference
 
 | Phase | Command | Output |
 |-------|---------|--------|
 | Prime | `/flight-prime [task]` | Prime Document |
 | Compile | `/flight-compile` | PROMPT.md |
-| Execute | `ralph --monitor` | Generated code |
+| Execute | Run prompt in Claude Code | Generated code |
 | Validate | `/flight-validate` | Pass/Fail report |
 | Tighten | `/flight-tighten` | Updated domains |
