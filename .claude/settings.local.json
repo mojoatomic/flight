@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gcc:*)",
+      "Bash(./test_ring_buffer)",
+      "Bash(ls:*)",
+      "Bash(chmod:*)",
+      "Bash(./.flight/domains/p10_validate.sh:*)",
+      "Bash(bash:*)"
+    ]
+  }
+}
