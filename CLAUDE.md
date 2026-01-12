@@ -24,6 +24,7 @@ cppcheck --enable=all --error-exitcode=1 src/
 
 | Domain | Purpose |
 |--------|---------|
+| `bash.md` | Shell script best practices, safe patterns |
 | `code-hygiene.md` | **ALWAYS LOAD** - Universal naming, redundancy, quality (any language) |
 | `embedded-c-p10.md` | NASA JPL Power of 10 safety-critical C rules |
 | `javascript.md` | JavaScript/Node.js patterns |
