@@ -13,7 +13,13 @@
       "Bash(git rm:*)",
       "Bash(/Users/dougfennell/vscode/projects/flight/.flight/domains/javascript.validate.sh:*)",
       "Bash(test:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(git branch:*)",
+      "Bash(git stash:*)",
+      "Bash(grep:*)",
+      "Bash(for f in *.md)",
+      "Bash(do echo \"$f\")",
+      "Bash(done)"
     ]
   }
 }
