@@ -123,6 +123,7 @@ If MCP tools aren't available, fall back to web search.
 | `code-hygiene` | **ALWAYS** - applies to all code |
 | `testing` | Unit tests (any language) |
 | `api` | REST/HTTP API routes, controllers |
+| `webhooks` | Webhook handlers (provider/consumer) |
 | `bash` | Shell scripts (.sh) |
 | `javascript` | .js files |
 | `typescript` | .ts files |
