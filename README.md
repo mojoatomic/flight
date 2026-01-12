@@ -8,6 +8,14 @@ TDD-style prompt engineering methodology for consistent AI code generation.
 curl -fsSL https://raw.githubusercontent.com/mojoatomic/flight/main/install.sh | bash
 ```
 
+## Update
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mojoatomic/flight/main/update.sh | bash
+```
+
+Updates core domains and commands while preserving your CLAUDE.md, PROMPT.md, and custom domains.
+
 ## What Gets Installed
 
 ```
@@ -98,7 +106,7 @@ Validation is deterministic. The script decides correctness, not interpretation.
 |--------|-------------------|
 | `embedded-c-p10` | ✅ |
 | `javascript` | ✅ |
-| `react` | — |
+| `react` | ✅ |
 | `rp2040-pico` | — |
 
 ## Core Concepts
