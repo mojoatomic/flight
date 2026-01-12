@@ -2,66 +2,41 @@
 
 Production shell script patterns. Safe, portable, maintainable.
 
+**Validation:** `bash.validate.sh` enforces NEVER/MUST rules. SHOULD rules trigger warnings. GUIDANCE is not mechanically checked.
+
 ---
 
 ## Invariants
 
-### NEVER
+### NEVER (validator will reject)
 
-1. **Unquoted Variables** - Word splitting and glob expansion will bite you
+1. **Unquoted Variables in Commands** - Word splitting and glob expansion
    ```bash
    # BAD - breaks on spaces, expands globs
-   files=$some_var
    rm $files
-   for f in $files; do
+   cp $src $dest
 
    # GOOD - always quote
-   files="$some_var"
    rm "$files"
-   for f in "$files"; do
-
-   # GOOD - arrays for multiple items
-   files=("$dir"/*.txt)
-   for f in "${files[@]}"; do
+   cp "$src" "$dest"
    ```
 
-2. **Unset Variables** - Silent bugs when variables don't exist
+2. **Unquoted `$(cmd)` Substitution** - Same word splitting issues
    ```bash
-   # BAD - if DEPLOY_DIR is unset, this deletes /
-   rm -rf "$DEPLOY_DIR/"*
+   # BAD
+   result=$(get_path)
+   cd $result
 
-   # GOOD - fail on unset variables
-   set -u
-
-   # GOOD - default value
-   rm -rf "${DEPLOY_DIR:-/nonexistent}/"*
-
-   # GOOD - check first
-   [[ -n "${DEPLOY_DIR:-}" ]] || { echo "DEPLOY_DIR not set"; exit 1; }
+   # GOOD
+   result="$(get_path)"
+   cd "$result"
    ```
 
-3. **`cd` Without Checking** - Script continues in wrong directory
-   ```bash
-   # BAD - if cd fails, rm runs in current dir
-   cd "$some_dir"
-   rm -rf *
-
-   # GOOD - fail on cd error
-   cd "$some_dir" || exit 1
-
-   # GOOD - subshell so cd doesn't affect parent
-   (cd "$some_dir" && rm -rf *)
-
-   # GOOD - explicit check
-   cd "$some_dir" || { echo "Failed to cd to $some_dir"; exit 1; }
-   ```
-
-4. **Parsing `ls` Output** - Breaks on filenames with spaces/newlines
+3. **Parsing `ls` Output** - Breaks on filenames with spaces/newlines
    ```bash
    # BAD - breaks on special characters
    for f in $(ls *.txt); do
    for f in `ls`; do
-   files=$(ls -la | awk '{print $9}')
 
    # GOOD - glob expansion
    for f in *.txt; do
@@ -71,45 +46,28 @@ Production shell script patterns. Safe, portable, maintainable.
    find . -name "*.txt" -print0 | while IFS= read -r -d '' f; do
    ```
 
-5. **Useless Use of Cat** - Extra process, slower
-   ```bash
-   # BAD
-   cat file.txt | grep "pattern"
-   cat file.txt | wc -l
-   cat file.txt | head -10
-
-   # GOOD
-   grep "pattern" file.txt
-   wc -l < file.txt
-   head -10 file.txt
-   ```
-
-6. **Backticks for Command Substitution** - Can't nest, harder to read
+4. **Backticks for Command Substitution** - Can't nest, harder to read
    ```bash
    # BAD - old style
    result=`command`
-   nested=`echo \`date\``
 
    # GOOD - modern style
    result=$(command)
-   nested=$(echo "$(date)")
    ```
 
-7. **`[ ]` Instead of `[[ ]]`** - Word splitting, no pattern matching
+5. **`[ ]` Instead of `[[ ]]` in Bash** - Word splitting, no pattern matching
    ```bash
    # BAD - requires quoting, limited features
-   [ -z $var ]           # breaks if var has spaces
-   [ $var = "foo" ]      # breaks if var is empty
-   [ -f $file -a -r $file ]  # deprecated
+   [ -z $var ]
+   [ $var = "foo" ]
 
    # GOOD - safer, more features
    [[ -z "$var" ]]
    [[ "$var" = "foo" ]]
-   [[ -f "$file" && -r "$file" ]]
    [[ "$string" =~ ^[0-9]+$ ]]  # regex support
    ```
 
-8. **`function` Keyword** - Not POSIX, inconsistent behavior
+6. **`function` Keyword** - Not POSIX, inconsistent behavior
    ```bash
    # BAD - bash-specific
    function do_something {
@@ -122,123 +80,79 @@ Production shell script patterns. Safe, portable, maintainable.
    }
    ```
 
-9. **`echo` for User Data** - Interpretation varies, escape issues
+7. **`cd` Without Error Handling** - Script continues in wrong directory
    ```bash
-   # BAD - behavior varies by system, interprets escapes
-   echo $user_input
-   echo -e "tab:\there"
+   # BAD - if cd fails, rm runs in current dir
+   cd "$some_dir"
+   rm -rf *
 
-   # GOOD - consistent, literal
-   printf '%s\n' "$user_input"
-   printf 'tab:\there\n'
+   # GOOD - fail on cd error
+   cd "$some_dir" || exit 1
+
+   # GOOD - explicit check
+   cd "$some_dir" || { echo "Failed to cd to $some_dir"; exit 1; }
    ```
 
-10. **`eval`** - Code injection risk
-    ```bash
-    # BAD - never eval user input
-    eval "$user_command"
-    eval "$(curl http://...)"
+8. **Useless Use of Cat** - Extra process, slower
+   ```bash
+   # BAD
+   cat file.txt | grep "pattern"
+   cat file.txt | wc -l
 
-    # GOOD - if you must, validate strictly
-    [[ "$cmd" =~ ^[a-z_]+$ ]] || exit 1
+   # GOOD
+   grep "pattern" file.txt
+   wc -l < file.txt
+   ```
 
-    # BETTER - avoid eval entirely, use arrays
-    cmd_args=("$program" "$arg1" "$arg2")
-    "${cmd_args[@]}"
-    ```
+9. **`eval`** - Code injection risk
+   ```bash
+   # BAD - never eval user input
+   eval "$user_command"
 
-11. **Hardcoded Temporary Files** - Race conditions, security
+   # GOOD - use arrays instead
+   cmd_args=("$program" "$arg1" "$arg2")
+   "${cmd_args[@]}"
+   ```
+
+10. **Hardcoded `/tmp` Files** - Race conditions, security
     ```bash
     # BAD - predictable, race condition
     tmp_file="/tmp/myscript.tmp"
 
     # GOOD - mktemp for safe temp files
     tmp_file=$(mktemp)
-    tmp_dir=$(mktemp -d)
-
-    # Always cleanup
-    trap 'rm -f "$tmp_file"' EXIT
     ```
 
-12. **No Error Handling** - Script continues after failure
-    ```bash
-    # BAD - no error detection
-    #!/bin/bash
-    command1
-    command2  # runs even if command1 failed
-
-    # GOOD - fail fast
-    #!/bin/bash
-    set -euo pipefail
-    command1
-    command2  # only runs if command1 succeeded
-    ```
-
-13. **Global Variables in Functions** - Side effects, hard to debug
-    ```bash
-    # BAD - modifies global state
-    process_file() {
-        result="processed"  # global!
-        count=$((count + 1))  # global!
-    }
-
-    # GOOD - local variables
-    process_file() {
-        local result="processed"
-        local -i count=0
-        echo "$result"  # return via stdout
-    }
-    ```
-
-14. **Magic Numbers** - Unclear intent
-    ```bash
-    # BAD
-    sleep 86400
-    [[ ${#password} -lt 8 ]]
-
-    # GOOD
-    readonly SECONDS_PER_DAY=86400
-    readonly MIN_PASSWORD_LENGTH=8
-
-    sleep "$SECONDS_PER_DAY"
-    [[ ${#password} -lt $MIN_PASSWORD_LENGTH ]]
-    ```
-
-15. **`curl|bash` or `wget|bash`** - Remote code execution
+11. **`curl|bash` or `wget|bash`** - Remote code execution
     ```bash
     # BAD - executing untrusted remote code
     curl -fsSL https://example.com/install.sh | bash
-    wget -qO- https://example.com/script.sh | sh
 
     # GOOD - download, inspect, then execute
     curl -fsSL https://example.com/install.sh -o install.sh
     less install.sh  # review the script
-    chmod +x install.sh
     ./install.sh
-
-    # GOOD - if you must pipe, use checksums
-    curl -fsSL https://example.com/install.sh | sha256sum -c expected.sha256
     ```
 
-### MUST
+12. **Unquoted Array Expansion** - Use `[@]` not `[*]`
+    ```bash
+    # BAD - joins into single string
+    echo ${arr[*]}
+
+    # GOOD - preserves elements
+    echo "${arr[@]}"
+    ```
+
+### MUST (validator will reject)
 
 1. **Shebang Required** - Explicit interpreter declaration
    ```bash
    #!/bin/bash
    # or for POSIX compatibility:
    #!/bin/sh
-
-   # BAD - no shebang, relies on caller's shell
-   set -e
-   echo "hello"
-
-   # GOOD - explicit interpreter
-   #!/bin/bash
-   set -euo pipefail
-   echo "hello"
    ```
 
-2. **Start with Strict Mode**
+2. **Strict Mode** - Fail fast on errors
    ```bash
    #!/bin/bash
    set -euo pipefail
@@ -248,108 +162,111 @@ Production shell script patterns. Safe, portable, maintainable.
    # -o pipefail: pipeline fails if any command fails
    ```
 
-3. **Quote All Variable Expansions**
-   ```bash
-   # Always quote, even when "it works without"
-   echo "$var"
-   cp "$src" "$dest"
-   [[ -f "$file" ]]
-   func "$arg1" "$arg2"
+### SHOULD (validator warns)
 
-   # Exception: intentional word splitting (rare)
-   # shellcheck disable=SC2086
-   cmd $intentionally_unquoted
-   ```
-
-4. **Use `local` in Functions**
+1. **Use `local` in Functions** - Avoid global state pollution
    ```bash
    process_data() {
        local input="$1"
        local -i count=0
-       local -a items=()
-       local -A map=()
-
        # ...
    }
    ```
 
-5. **Validate Inputs**
+2. **Trap for Cleanup with mktemp** - Don't leave temp files
+   ```bash
+   tmp_file=$(mktemp)
+   trap 'rm -f "$tmp_file"' EXIT
+   ```
+
+3. **Use `readonly` for Constants** - Prevent accidental modification
+   ```bash
+   readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+   readonly VERSION="1.0.0"
+   ```
+
+4. **`IFS= read -r` in Read Loops** - Preserve whitespace and backslashes
+   ```bash
+   while IFS= read -r line; do
+       process_line "$line"
+   done < "$input_file"
+   ```
+
+5. **Lines Under 100 Characters** - Readability
+   ```bash
+   # Break long lines with backslash
+   long_command \
+       --option1 \
+       --option2
+   ```
+
+6. **Prefer `printf` Over `echo`** - Consistent behavior across systems
+   ```bash
+   # BAD - behavior varies, interprets escapes
+   echo $user_input
+   echo -e "tab:\there"
+
+   # GOOD - consistent, literal
+   printf '%s\n' "$user_input"
+   ```
+
+### GUIDANCE (not mechanically checked)
+
+These are best practices that improve code quality but cannot be reliably detected with grep patterns.
+
+1. **Quote All Variable Expansions** - Even when "it works without"
+   ```bash
+   echo "$var"
+   cp "$src" "$dest"
+   [[ -f "$file" ]]
+   ```
+
+2. **Validate Inputs** - Check arguments and file existence
    ```bash
    main() {
        [[ $# -ge 1 ]] || { usage; exit 1; }
-
        local input_file="$1"
        [[ -f "$input_file" ]] || { echo "File not found: $input_file"; exit 1; }
-       [[ -r "$input_file" ]] || { echo "Cannot read: $input_file"; exit 1; }
    }
    ```
 
-6. **Use `readonly` for Constants**
+3. **Use Arrays for Multiple Items** - Not space-separated strings
    ```bash
-   readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-   readonly CONFIG_FILE="${SCRIPT_DIR}/config.sh"
-   readonly VERSION="1.0.0"
-   readonly -a VALID_COMMANDS=("start" "stop" "restart")
-   ```
-
-7. **Trap for Cleanup**
-   ```bash
-   cleanup() {
-       local exit_code=$?
-       rm -f "$tmp_file"
-       exit "$exit_code"
-   }
-   trap cleanup EXIT
-
-   tmp_file=$(mktemp)
-   # ... script continues, cleanup runs on exit
-   ```
-
-8. **Use Arrays for Multiple Items**
-   ```bash
-   # For command arguments
    local -a cmd_args=("-v" "--config" "$config_file")
    program "${cmd_args[@]}"
-
-   # For file lists
-   local -a files=("$dir"/*.txt)
-   for f in "${files[@]}"; do
    ```
 
-9. **Check Command Existence**
+4. **Check Command Existence** - Before using external tools
    ```bash
-   require_cmd() {
-       command -v "$1" >/dev/null 2>&1 || {
-           echo "Required command not found: $1"
-           exit 1
-       }
-   }
-
-   require_cmd jq
-   require_cmd curl
+   command -v jq >/dev/null 2>&1 || { echo "jq required"; exit 1; }
    ```
 
-10. **Meaningful Exit Codes**
+5. **Meaningful Exit Codes** - Not just 0 and 1
    ```bash
    readonly E_SUCCESS=0
    readonly E_USAGE=1
    readonly E_NO_FILE=2
-   readonly E_PERMISSION=3
-   readonly E_NETWORK=4
-
-   [[ -f "$file" ]] || exit $E_NO_FILE
    ```
 
-11. **Use `printf` for Output**
-    ```bash
-    # For formatted output
-    printf 'Processing: %s\n' "$filename"
-    printf 'Count: %d\n' "$count"
-    printf '%s\t%s\n' "$col1" "$col2"
+6. **Avoid Global Variables in Functions** - Use local and return via stdout
+   ```bash
+   # BAD
+   process_file() {
+       result="processed"  # global!
+   }
 
-    # For raw data (no trailing newline issues)
-    printf '%s' "$data" > "$file"
-    ```
+   # GOOD
+   process_file() {
+       local result="processed"
+       echo "$result"
+   }
+   ```
+
+7. **Avoid Magic Numbers** - Use named constants
+   ```bash
+   readonly SECONDS_PER_DAY=86400
+   sleep "$SECONDS_PER_DAY"
+   ```
 
 ---
 
@@ -361,16 +278,13 @@ Production shell script patterns. Safe, portable, maintainable.
 # script-name.sh - Brief description
 set -euo pipefail
 
-# Constants
 readonly SCRIPT_NAME="${0##*/}"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Logging
 log() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"; }
 error() { log "ERROR: $*" >&2; }
 die() { error "$*"; exit 1; }
 
-# Cleanup
 cleanup() {
     local exit_code=$?
     # cleanup code here
@@ -378,7 +292,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Usage
 usage() {
     cat <<EOF
 Usage: $SCRIPT_NAME [OPTIONS] <input>
@@ -386,24 +299,16 @@ Usage: $SCRIPT_NAME [OPTIONS] <input>
 Options:
     -h, --help      Show this help
     -v, --verbose   Verbose output
-    -o, --output    Output file (default: stdout)
-
-Examples:
-    $SCRIPT_NAME input.txt
-    $SCRIPT_NAME -v -o output.txt input.txt
 EOF
 }
 
-# Main
 main() {
     local verbose=false
-    local output="/dev/stdout"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -h|--help) usage; exit 0 ;;
             -v|--verbose) verbose=true; shift ;;
-            -o|--output) output="$2"; shift 2 ;;
             -*) die "Unknown option: $1" ;;
             *) break ;;
         esac
@@ -412,12 +317,10 @@ main() {
     [[ $# -ge 1 ]] || { usage; exit 1; }
     local input="$1"
 
-    # Validate
     [[ -f "$input" ]] || die "File not found: $input"
 
-    # Process
     $verbose && log "Processing $input"
-    process_file "$input" > "$output"
+    process_file "$input"
 }
 
 process_file() {
@@ -432,7 +335,7 @@ main "$@"
 ```bash
 # Safe temporary files
 tmp_file=$(mktemp) || die "Failed to create temp file"
-tmp_dir=$(mktemp -d) || die "Failed to create temp dir"
+trap 'rm -f "$tmp_file"' EXIT
 
 # Safe directory change
 pushd "$target_dir" > /dev/null || die "Cannot cd to $target_dir"
@@ -450,29 +353,8 @@ while IFS= read -r -d '' file; do
 done < <(find "$dir" -type f -name "*.txt" -print0)
 ```
 
-### Argument Parsing with getopts
-```bash
-parse_args() {
-    local OPTIND opt
-
-    while getopts ":hvo:" opt; do
-        case $opt in
-            h) usage; exit 0 ;;
-            v) VERBOSE=true ;;
-            o) OUTPUT_FILE="$OPTARG" ;;
-            :) die "Option -$OPTARG requires an argument" ;;
-            \?) die "Invalid option: -$OPTARG" ;;
-        esac
-    done
-
-    shift $((OPTIND - 1))
-    ARGS=("$@")
-}
-```
-
 ### Colored Output
 ```bash
-# Colors (only if terminal)
 if [[ -t 1 ]]; then
     readonly RED=$'\033[31m'
     readonly GREEN=$'\033[32m'
@@ -485,46 +367,6 @@ fi
 success() { printf '%s✓ %s%s\n' "$GREEN" "$*" "$RESET"; }
 warning() { printf '%s⚠ %s%s\n' "$YELLOW" "$*" "$RESET"; }
 fail() { printf '%s✗ %s%s\n' "$RED" "$*" "$RESET"; }
-```
-
-### Retry Logic
-```bash
-retry() {
-    local -i max_attempts=$1
-    local -i delay=$2
-    shift 2
-    local -i attempt=1
-
-    until "$@"; do
-        if ((attempt >= max_attempts)); then
-            error "Command failed after $max_attempts attempts: $*"
-            return 1
-        fi
-        log "Attempt $attempt failed, retrying in ${delay}s..."
-        sleep "$delay"
-        ((attempt++))
-    done
-}
-
-# Usage
-retry 3 5 curl -sf "$url"
-```
-
-### Parallel Execution
-```bash
-# Using xargs
-find . -name "*.txt" -print0 | xargs -0 -P 4 -I {} process_file {}
-
-# Using wait
-local -a pids=()
-for file in "${files[@]}"; do
-    process_file "$file" &
-    pids+=($!)
-done
-
-for pid in "${pids[@]}"; do
-    wait "$pid" || error "Process $pid failed"
-done
 ```
 
 ---
@@ -552,7 +394,7 @@ done
 
 ## ShellCheck
 
-All scripts must pass ShellCheck:
+All scripts should pass ShellCheck (errors are blocking, warnings are advisory):
 
 ```bash
 # Install
@@ -561,9 +403,6 @@ apt install shellcheck   # Ubuntu
 
 # Run
 shellcheck script.sh
-
-# In CI
-shellcheck **/*.sh || exit 1
 ```
 
 ### Common ShellCheck Codes
@@ -573,6 +412,5 @@ shellcheck **/*.sh || exit 1
 | SC2046 | Unquoted command substitution | `"$(cmd)"` |
 | SC2006 | Backticks | Use `$()` |
 | SC2012 | Parsing ls | Use globs or find |
-| SC2034 | Unused variable | Remove or export |
 | SC2155 | Declare and assign separately | `local var; var=$(cmd)` |
 | SC2164 | cd without error check | `cd dir || exit 1` |
