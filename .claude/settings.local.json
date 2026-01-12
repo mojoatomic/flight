@@ -7,7 +7,13 @@
       "Bash(chmod:*)",
       "Bash(./.flight/domains/p10_validate.sh:*)",
       "Bash(bash:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git rm:*)",
+      "Bash(/Users/dougfennell/vscode/projects/flight/.flight/domains/javascript.validate.sh:*)",
+      "Bash(test:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }

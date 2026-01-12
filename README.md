@@ -128,17 +128,6 @@ Calculable targets for component sizing:
 | List | `40 + (fields × 3) + (actions × 4)` |
 | Modal | `45 + (sections × 8) + (actions × 5)` |
 
-## With Ralph Loop
-
-For autonomous execution:
-
-```
-/ralph-wiggum:ralph-loop "Implement P10-compliant state machine.
-Follow .flight/domains/embedded-c-p10.md.
-Run: .flight/domains/embedded-c-p10.validate.sh src/*.c
-Output COMPLETE when validation passes." --max-iterations 20 --completion-promise "COMPLETE"
-```
-
 ## Philosophy
 
 > If it follows the invariants, it's correct.

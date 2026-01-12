@@ -4,7 +4,7 @@ description: Compile atomic prompt from primed context with domain invariants
 
 # /flight-compile
 
-Compile an atomic Flight prompt from primed context. Output goes to PROMPT.md for `/ralph-loop` execution.
+Compile an atomic Flight prompt from primed context. Output goes to PROMPT.md.
 
 ## Usage
 
@@ -102,7 +102,7 @@ BLOCKED: [reason]
 
 Write the compiled prompt to `PROMPT.md` in the project root.
 
-**This file is used with `/ralph-loop` for autonomous execution.**
+**This file contains the compiled prompt for execution.**
 
 ```bash
 # The compiled prompt becomes PROMPT.md
@@ -139,12 +139,7 @@ After writing PROMPT.md, report:
 - Files to create: [count]
 - Files to modify: [count]
 
-**Ready for Ralph loop execution:**
-```bash
-/ralph-loop "$(cat PROMPT.md)" --max-iterations 20 --completion-promise "COMPLETE"
-```
-
-Or continue manually in Claude Code.
+**Ready for execution in Claude Code.**
 ```
 
 ## Quality Checks
@@ -162,4 +157,4 @@ Before finalizing, verify:
 - The compiled prompt should be executable by Claude without additional context
 - Include enough detail that invariants can be validated
 - Keep focused - one task per compile
-- `/ralph-loop` will execute the prompt iteratively until COMPLETE is output
+- The prompt can be executed iteratively until COMPLETE is output
