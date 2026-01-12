@@ -162,6 +162,31 @@ Production shell script patterns. Safe, portable, maintainable.
    # -o pipefail: pipeline fails if any command fails
    ```
 
+3. **Resolve Paths Before `cd`** - Relative paths break after directory change
+   ```bash
+   # BAD - $config_file is relative, breaks after cd
+   config_file="./config.json"
+   cd "$project_dir"
+   cat "$config_file"  # WRONG: looks in $project_dir, not original dir
+
+   # GOOD - resolve to absolute before cd
+   config_file="$(cd "$(dirname "./config.json")" && pwd)/$(basename "./config.json")"
+   cd "$project_dir"
+   cat "$config_file"  # correct: uses absolute path
+
+   # GOOD - use realpath if available
+   config_file="$(realpath "./config.json")"
+   cd "$project_dir"
+   cat "$config_file"
+
+   # GOOD - capture cwd before cd
+   original_dir="$(pwd)"
+   cd "$project_dir"
+   cat "$original_dir/config.json"
+   ```
+
+   **Validation:** grep for `cd ` in script, trace every variable used after that line, verify each is either relative to new cwd (`.`, `./subdir`) or an absolute path.
+
 ### SHOULD (validator warns)
 
 1. **Use `local` in Functions** - Avoid global state pollution
@@ -379,6 +404,7 @@ fail() { printf '%s✗ %s%s\n' "$RED" "$*" "$RESET"; }
 | `[ ]` test | Word splitting, limited | `[[ ]]` |
 | Backticks | Can't nest, hard to read | `$()` |
 | `cd dir` alone | Continues if fails | `cd dir \|\| exit 1` |
+| Relative path after `cd` | Wrong directory reference | Resolve to absolute before `cd` |
 | `for f in $(ls)` | Breaks on spaces | `for f in *` |
 | `cat f \| grep` | Useless cat | `grep pattern f` |
 | `echo $var` | Escapes, splitting | `printf '%s\n' "$var"` |

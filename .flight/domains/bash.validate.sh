@@ -110,7 +110,22 @@ check "M2: Full strict mode (set -euo pipefail)" \
     done
     "
 
-warn "M3: Functions should use 'local'" \
+warn "M3: cd should use safe path pattern (pushd/popd or capture pwd)" \
+    bash -c "
+    for f in $FILES; do
+        # Skip if no cd commands
+        grep -qE '^\s*cd\s+' \"\$f\" || continue
+        # Check if using safe patterns: pushd/popd, or captures pwd/realpath before cd
+        if grep -q 'pushd' \"\$f\" 2>/dev/null; then continue; fi
+        if grep -qE '(pwd|realpath|SCRIPT_DIR).*=|original.*=.*pwd' \"\$f\" 2>/dev/null; then continue; fi
+        # Flag cd commands for manual review
+        grep -En '^\s*cd\s+\"\\\$' \"\$f\" 2>/dev/null | head -3 | while IFS= read -r line; do
+            printf '%s (review: paths resolved before cd?)\n' \"\$line\"
+        done
+    done
+    "
+
+warn "M4: Functions should use 'local'" \
     bash -c "
     for f in $FILES; do
         awk '/^[a-zA-Z_][a-zA-Z0-9_]*\s*\(\)\s*\{/,/^\}/ {
@@ -121,13 +136,13 @@ warn "M3: Functions should use 'local'" \
     done
     " | head -10
 
-warn "M4: mktemp needs cleanup trap" \
+warn "M5: mktemp needs cleanup trap" \
     bash -c "for f in $FILES; do if grep -q 'mktemp' \"\$f\" && ! grep -q 'trap.*EXIT' \"\$f\"; then printf '%s: mktemp without trap\n' \"\$f\"; fi; done"
 
-warn "M5: Constants should use readonly" \
+warn "M6: Constants should use readonly" \
     bash -c "for f in $FILES; do grep -En '^[A-Z_]+=' \"\$f\" | grep -v 'readonly\|declare -r\|export\|local' | head -3; done"
 
-warn "M6: Read loops need 'IFS= read -r'" \
+warn "M7: Read loops need 'IFS= read -r'" \
     bash -c "for f in $FILES; do grep -En 'while\s+read\s' \"\$f\" | grep -v 'IFS=\|read -r' | head -3; done"
 
 printf '\n%s\n' "## Style"
