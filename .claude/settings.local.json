@@ -6,7 +6,8 @@
       "Bash(ls:*)",
       "Bash(chmod:*)",
       "Bash(./.flight/domains/p10_validate.sh:*)",
-      "Bash(bash:*)"
+      "Bash(bash:*)",
+      "Bash(git add:*)"
     ]
   }
 }
