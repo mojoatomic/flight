@@ -121,6 +121,7 @@ If MCP tools aren't available, fall back to web search.
 | Domain | When to Load |
 |--------|--------------|
 | `code-hygiene` | **ALWAYS** - applies to all code |
+| `testing` | Unit tests (any language) |
 | `bash` | Shell scripts (.sh) |
 | `javascript` | .js files |
 | `typescript` | .ts files |
