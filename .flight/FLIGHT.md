@@ -1,74 +1,182 @@
-# Flight Methodology
+# Flight - AI Quick Reference
 
-TDD-style prompt engineering for consistent AI code generation.
+**Read this file first.** This tells you everything you need to work with Flight.
 
-## Core Concept
+---
 
-**Invariants over guidelines.** Define what MUST and NEVER happen. Code that follows invariants is correct by definition.
+## What Flight Is
 
-## The PCTV Loop
+Flight is TDD for prompts. Rules come first, code comes second.
+
+**Core principle:** If code follows the domain invariants, it's correct.
+
+---
+
+## Commands - What to Use When
+
+| Situation | Command | What It Does |
+|-----------|---------|--------------|
+| Vague idea ("build SMS thing") | `/flight-prd` | Creates PRD.md + atomic task files |
+| Clear task to implement | `/flight-prime` | Gathers context → PRIME.md |
+| Have PRIME.md, ready to code | `/flight-compile` | Creates atomic PROMPT.md |
+| Code written, need to check | `/flight-validate` | Runs validators → PASS/FAIL |
+| Validation failed | `/flight-tighten` | Strengthens rules, retry |
+| Have domain.md, need validator | `/flight-create-validator` | Generates .validate.sh + tests |
+
+---
+
+## The Loop
 
 ```
-Prime → Compile → [Execute] → Validate → Tighten
-  ↑                                         │
-  └─────────────────────────────────────────┘
+/flight-prd (if starting from scratch)
+      ↓
+/flight-prime <task>
+      ↓
+/flight-compile
+      ↓
+[Execute - write code following PROMPT.md]
+      ↓
+/flight-validate
+      ↓
+PASS → Done
+FAIL → /flight-tighten → /flight-compile → repeat
 ```
 
-1. **Prime**: Research context, load domains, gather constraints
-2. **Compile**: Build atomic prompt with invariants → PROMPT.md
-3. **Execute**: Run generated prompt in Claude Code
-4. **Validate**: Check output against domain invariants
-5. **Tighten**: If failures, strengthen rules and retry
+---
 
 ## Domain Files
 
-Domain files (`.flight/domains/*.md`) contain:
+Location: `.flight/domains/*.md`
+
+**Always read these first.** Domains override external documentation.
+
+### Structure
 
 ```markdown
 # Domain: [Name]
 
 ## Invariants
 
-### MUST
-- Required behaviors that code MUST exhibit
-- Patterns that MUST be followed
+### NEVER (validator will reject)
+- Rules that cause hard failure
+- Each has a corresponding check in .validate.sh
 
-### NEVER  
-- Forbidden patterns
-- Anti-patterns to avoid
+### MUST (validator will reject)
+- Required patterns that cause hard failure
+- Each has a corresponding check in .validate.sh
+
+### SHOULD (validator warns)
+- Best practices, warnings only
+- Don't block validation
+
+### GUIDANCE (not mechanically checked)
+- Too complex for grep
+- Human/AI judgment required
 
 ## Patterns
-
-[Code examples satisfying invariants]
-
-## Edge Cases
-
-[Specific scenarios with required handling]
+[Code examples that satisfy invariants]
 ```
 
-## Key Principles
+### The Contract
 
-### 1. Invariants Are Binary
-Code either follows an invariant or violates it. No "partial compliance."
+**The `.md` file is the contract. The `.validate.sh` enforces it.**
 
-### 2. Domains Are Authoritative
-If a domain file covers a topic, it's the source of truth. Don't search externally for covered topics.
+If it's in NEVER/MUST, there's a validator check. If there's no check possible, it goes in GUIDANCE.
 
-### 3. Atomic Prompts
-Each compiled prompt has one clear objective. Complex features = multiple compile cycles.
+---
 
-### 4. Tightening Is Learning
-Every validation failure that leads to tightening makes the system more reliable.
+## Research Tools
 
-### 5. Examples Over Explanations
-Show correct code patterns, not lengthy descriptions.
+Use these during `/flight-prime` and `/flight-prd`:
 
-## Quick Reference
+| Tool | Use For |
+|------|---------|
+| Domain Files | Project constraints - **always read first** |
+| Codebase Scan | Existing patterns, configs, conventions |
+| Web Search | Current API docs, recent changes |
+| Context7 (MCP) | Library/framework documentation |
+| Firecrawl (MCP) | Deep crawl documentation sites |
 
-| Phase | Command | Output |
-|-------|---------|--------|
-| Prime | `/flight-prime [task]` | Prime Document |
-| Compile | `/flight-compile` | PROMPT.md |
-| Execute | Run prompt in Claude Code | Generated code |
-| Validate | `/flight-validate` | Pass/Fail report |
-| Tighten | `/flight-tighten` | Updated domains |
+**Priority:** Domain files > Codebase patterns > External docs
+
+If MCP tools aren't available, fall back to web search.
+
+---
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `.flight/domains/*.md` | Domain rules (read these!) |
+| `.flight/domains/*.validate.sh` | Executable validators |
+| `PRIME.md` | Output of /flight-prime |
+| `PROMPT.md` | Output of /flight-compile (what to execute) |
+| `PRD.md` | Output of /flight-prd (product vision) |
+| `tasks/*.md` | Atomic task files from /flight-prd |
+
+---
+
+## Domain Quick Reference
+
+| Domain | When to Load |
+|--------|--------------|
+| `code-hygiene` | **ALWAYS** - applies to all code |
+| `bash` | Shell scripts (.sh) |
+| `javascript` | .js files |
+| `typescript` | .ts files |
+| `react` | React components (.jsx, .tsx) |
+| `nextjs` | Next.js projects |
+| `python` | .py files |
+| `sql` | Database queries, migrations |
+| `embedded-c-p10` | Safety-critical C |
+| `rp2040-pico` | RP2040 microcontroller |
+
+---
+
+## Critical Rules for AI
+
+1. **Read domains BEFORE external research** - They're authoritative
+2. **Always load code-hygiene.md** - It applies to everything
+3. **One task per compile** - Atomic prompts succeed, big prompts fail
+4. **NEVER/MUST rules are enforced** - Validator will catch violations
+5. **Cite your sources** - Note where information came from in PRIME.md
+6. **Don't skip validation** - Run `/flight-validate` after generating code
+
+---
+
+## Validation Output
+
+```
+═══════════════════════════════════════════
+  [Domain] Validation
+═══════════════════════════════════════════
+
+## NEVER Rules
+✅ N1: Rule passed
+❌ N2: Rule failed
+   src/file.ts:42: violation details
+
+## MUST Rules
+✅ M1: Rule passed
+
+## SHOULD Rules
+⚠️  S1: Warning (doesn't fail)
+
+  PASS: 5  FAIL: 1  WARN: 1
+  RESULT: FAIL
+═══════════════════════════════════════════
+```
+
+**FAIL means fix the code, then re-validate.**
+
+---
+
+## When Things Go Wrong
+
+| Problem | Solution |
+|---------|----------|
+| Validator false positive | Refine grep pattern or move rule to GUIDANCE |
+| Missing domain | Create with `/flight-create-validator` |
+| Task too big | Break into smaller atomic tasks |
+| Context lost | Re-run `/flight-prime` |
+| Rules unclear | Check domain file examples |
