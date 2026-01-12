@@ -1,147 +1,167 @@
-# Domain: JavaScript / Node.js
+# Domain: JavaScript Hygiene
+
+Code quality patterns that prevent common mistakes in JavaScript/Node.js projects.
+
+---
 
 ## Invariants
 
-### MUST
-- Use `const` for variables that won't be reassigned, `let` for those that will
-- Handle all Promise rejections with try/catch or .catch()
-- Use async/await over raw Promises for readability
-- Export functions individually: `export function name()` or `module.exports = { name }`
-- Include JSDoc comments for public functions
-- Validate function parameters at entry point
-- Return early for error conditions
-
 ### NEVER
-- Use `var` - always `const` or `let`
-- Leave Promises unhandled (no floating promises)
-- Use `==` - always `===` for comparison
-- Mutate function parameters directly
-- Use `eval()` or `Function()` constructor
-- Catch errors without handling or re-throwing
-- Use synchronous file operations in async contexts
+
+1. **Generic Names** - Never use: `data`, `result`, `temp`, `info`, `item`, `value`, `obj`, `thing`, `stuff`, `foo`, `bar`, `baz`, `tmp`, `ret`, `val`
+
+2. **Redundant Conditionals** - Never write:
+   ```javascript
+   // BAD
+   if (condition) return true; else return false;
+   if (condition) { return true; } return false;
+   return condition ? true : false;
+   
+   // GOOD
+   return condition;
+   ```
+
+3. **Equivalent Branches** - Never duplicate logic in if/else:
+   ```javascript
+   // BAD
+   if (x) {
+     doThing();
+     return result;
+   } else {
+     doThing();
+     return result;
+   }
+   
+   // GOOD
+   doThing();
+   return result;
+   ```
+
+4. **Redundant Boolean Logic** - Never write:
+   ```javascript
+   // BAD
+   x === true
+   x === false
+   x !== true
+   x !== false
+   !!x === true
+   
+   // GOOD
+   x
+   !x
+   ```
+
+5. **Magic Number Calculations** - Never compute at runtime what can be a constant:
+   ```javascript
+   // BAD
+   const timeout = 60 * 60 * 1000;
+   const days = 24 * 60 * 60;
+   
+   // GOOD
+   const MS_PER_HOUR = 3600000;
+   const SECONDS_PER_DAY = 86400;
+   ```
+
+6. **Unnecessary Abstraction** - Never wrap single-use trivial operations:
+   ```javascript
+   // BAD
+   function getValue(obj) { return obj.value; }
+   const v = getValue(thing);
+   
+   // GOOD
+   const v = thing.value;
+   ```
+
+7. **Inconsistent Naming Style** - Never mix conventions in the same file:
+   ```javascript
+   // BAD
+   const user_name = 'alice';
+   const userAge = 25;
+   const UserStatus = 'active';
+   
+   // GOOD (pick one, stick with it)
+   const userName = 'alice';
+   const userAge = 25;
+   const userStatus = 'active';
+   ```
+
+8. **Generic Function Names** - Never use: `handle`, `process`, `do`, `run`, `execute`, `manage` without context:
+   ```javascript
+   // BAD
+   function handleData(data) { ... }
+   function processItem(item) { ... }
+   
+   // GOOD
+   function validateUserInput(input) { ... }
+   function transformOrderToInvoice(order) { ... }
+   ```
+
+### MUST
+
+1. **Domain-Specific Names** - Use vocabulary from the problem domain
+2. **Boolean Prefixes** - Use `is`, `has`, `can`, `should`, `will` for booleans
+3. **Async Suffixes** - Consider `Async` suffix or verb prefixes for async functions
+4. **Plural Collections** - Arrays and collections use plural names: `users`, `items`, `orders`
+5. **Constants Uppercase** - `MAX_RETRIES`, `DEFAULT_TIMEOUT`, `API_BASE_URL`
+6. **Descriptive Errors** - Error messages state what went wrong and what was expected
+
+---
 
 ## Patterns
 
-### Async Function with Error Handling
-
+### Good Naming
 ```javascript
-async function fetchUserData(userId) {
-  if (!userId) {
-    throw new Error('userId is required');
-  }
-  
-  try {
-    const response = await fetch(`/api/users/${userId}`);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    return await response.json();
-  } catch (error) {
-    console.error(`Failed to fetch user ${userId}:`, error.message);
-    throw error; // Re-throw for caller to handle
-  }
-}
+// Domain-specific
+const customerOrder = fetchOrder(orderId);
+const invoiceTotal = calculateInvoiceTotal(lineItems);
+const isPaymentComplete = payment.status === 'complete';
+
+// Boolean prefixes
+const hasPermission = user.roles.includes('admin');
+const canEdit = hasPermission && !document.isLocked;
+const shouldRetry = attempts < MAX_RETRIES;
+
+// Collections are plural
+const users = await fetchUsers();
+const validOrders = orders.filter(isValidOrder);
 ```
 
-### Module Exports
-
+### Constants
 ```javascript
-// Named exports (preferred)
-export function createUser(data) { }
-export function updateUser(id, data) { }
-export function deleteUser(id) { }
+// Time constants (pre-calculated)
+const MS_PER_SECOND = 1000;
+const MS_PER_MINUTE = 60000;
+const MS_PER_HOUR = 3600000;
+const MS_PER_DAY = 86400000;
 
-// Or CommonJS
-module.exports = {
-  createUser,
-  updateUser,
-  deleteUser
-};
+// Configuration
+const MAX_RETRIES = 3;
+const DEFAULT_TIMEOUT_MS = 5000;
+const API_BASE_URL = 'https://api.example.com';
 ```
 
-### Parameter Validation
-
+### Simple Conditionals
 ```javascript
-function processOrder(order) {
-  // Validate at entry
-  if (!order) throw new Error('order is required');
-  if (!order.items?.length) throw new Error('order.items cannot be empty');
-  if (typeof order.total !== 'number') throw new Error('order.total must be a number');
-  
-  // Now safe to proceed
-  return {
-    ...order,
-    processedAt: new Date().toISOString()
-  };
-}
+// Direct returns
+return isValid;
+return !hasError;
+return items.length > 0;
+
+// Ternary for values, not booleans
+const status = isActive ? 'active' : 'inactive';
+const message = count === 1 ? 'item' : 'items';
 ```
 
-## Error Handling
+---
 
-### Error Types
+## Anti-Patterns to Avoid
 
-```javascript
-// Custom error for domain-specific issues
-class ValidationError extends Error {
-  constructor(message, field) {
-    super(message);
-    this.name = 'ValidationError';
-    this.field = field;
-  }
-}
-
-class NotFoundError extends Error {
-  constructor(resource, id) {
-    super(`${resource} not found: ${id}`);
-    this.name = 'NotFoundError';
-    this.resource = resource;
-    this.id = id;
-  }
-}
-```
-
-### Error Response Pattern
-
-```javascript
-// Standardized error responses
-function formatError(error) {
-  return {
-    error: {
-      type: error.name || 'Error',
-      message: error.message,
-      ...(error.field && { field: error.field }),
-      ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
-    }
-  };
-}
-```
-
-## Edge Cases
-
-### Empty Arrays
-MUST return `[]` for empty results, NEVER `null` or `undefined`:
-
-```javascript
-// Correct
-async function getUsers(filter) {
-  const users = await db.query(filter);
-  return users || []; // Ensure array
-}
-
-// Incorrect
-async function getUsers(filter) {
-  const users = await db.query(filter);
-  return users; // Could be null
-}
-```
-
-### Optional Chaining
-MUST use optional chaining for nested property access:
-
-```javascript
-// Correct
-const city = user?.address?.city;
-
-// Incorrect
-const city = user && user.address && user.address.city;
-```
+| Pattern | Problem | Fix |
+|---------|---------|-----|
+| `const data = ...` | Generic | Use domain term |
+| `function handleX()` | Vague verb | Describe action |
+| `if (x) return true` | Redundant | `return x` |
+| `60 * 60 * 1000` | Magic calc | Pre-computed constant |
+| `x === true` | Redundant | `x` |
+| `items.map(i => ...)` | Generic `i` | `items.map(item => ...)` |
+| `const temp = ...` | Temporary smell | Name by purpose |
