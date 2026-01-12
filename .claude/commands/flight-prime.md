@@ -1,21 +1,25 @@
 ---
 description: Prime context for a task - research, scan codebase, gather domain constraints
-argument-hint: [task description]
+argument-hint: [task description or PRD.md]
 ---
 
 # /flight-prime
 
-Prime the context for a task. Research, scan, and gather facts before compiling a prompt.
+Prime the context for a task. Research, scan, and gather all facts needed before compiling a prompt.
 
 ## Usage
 
 ```
 /flight-prime <task description>
+/flight-prime PRD.md
+/flight-prime tasks/001-project-setup.md
 ```
 
 ## Arguments
 
-- `$ARGUMENTS` - Task description, feature request, or issue to implement
+- `$ARGUMENTS` - Task description, PRD file, or task file to implement
+
+---
 
 ## Process
 
@@ -25,45 +29,86 @@ Prime the context for a task. Research, scan, and gather facts before compiling 
 
 ```bash
 ls -la .flight/domains/
-cat .flight/domains/*.md
 ```
 
-After reading, list what you found:
+Then read each `.md` file. After reading, list what you found:
 
 ```markdown
 ## Available Domains
+- code-hygiene.md: [Universal naming/quality - ALWAYS LOAD]
 - javascript.md: [what it covers]
 - react.md: [what it covers]
 - [etc.]
 ```
 
-**Then identify which domains are RELEVANT to the task.**
+**Identify which domains are RELEVANT to the task.**
 
 ### 2. Load Project Context
 
 ```bash
 # Check for existing patterns
-find . -name "*.js" -o -name "*.ts" | head -20
-grep -r "similar_pattern" --include="*.js" | head -10
+find . -name "*.js" -o -name "*.ts" -o -name "*.tsx" | head -20
 
 # Check configs
-ls -la package.json tsconfig.json .eslintrc* 2>/dev/null
+ls -la package.json tsconfig.json .eslintrc* next.config.* 2>/dev/null
+
+# Check existing structure
+ls -la src/ app/ components/ lib/ 2>/dev/null
 ```
 
-### 3. Identify Constraints
+### 3. Research with Available Tools
+
+Use all available research tools to ground implementation in current reality:
+
+#### Domain Files (Always)
+- Read `.flight/domains/*.md` for project constraints
+- These override external documentation
+
+#### Web Search
+Use for:
+- Current API documentation
+- Recent breaking changes
+- Framework version-specific patterns
+- **Queries**: `"{library} {version} documentation"`, `"{framework} {feature} example"`, `"{error message}"`
+
+#### MCP Tools (if available)
+
+Check your tool list for these:
+
+| Tool | What It Does | When to Use |
+|------|--------------|-------------|
+| `context7_*` | Library/framework docs (curated, versioned) | Getting current API docs for Next.js, React, Supabase, etc. |
+| `firecrawl_*` | Deep web scraping, crawl entire sites | Extracting patterns from documentation sites |
+
+**If MCP tools are available, prefer them over raw web search for documentation.**
+
+**If tools would help but aren't available:**
+```
+NOTE: Better research results available with MCP tools:
+- Context7: https://github.com/upstash/context7
+- Firecrawl: https://github.com/mendableai/firecrawl
+
+Proceeding with web search. Install MCP tools for improved documentation access.
+```
+
+### 4. Identify Constraints
 
 From domain files and codebase, determine:
 - What patterns MUST be followed
-- What's FORBIDDEN
+- What's FORBIDDEN (NEVER rules)
 - What files need to be created/modified
+- What existing patterns to match
 
-### 4. Fetch External Docs (if needed)
+### 5. Check for External Dependencies
 
-If the task involves external APIs:
-- Search for official documentation
+If the task involves external APIs or libraries:
 - Get exact endpoints, auth methods, response shapes
+- Check for version-specific requirements
+- Note any rate limits or quotas
 
-## Output: Prime Document
+---
+
+## Output: PRIME.md
 
 Generate this structure:
 
@@ -74,24 +119,27 @@ Generate this structure:
 [One paragraph describing what needs to be built]
 
 ## Task Type
-[API Endpoint | Migration | Component | Service | etc.]
+[API Endpoint | Migration | Component | Service | CLI Tool | etc.]
 
-## Domains Used
+## Domains Loaded
+- `code-hygiene.md` - Always loaded
 - `[domain].md` - [why relevant]
 
-## Key Constraints from Domains
+## Key Constraints
 
-### From [domain].md
-- [constraint 1]
-- [constraint 2]
+### NEVER (will fail validation)
+- [From domain files - hard failures]
 
-### From Codebase
-- [existing pattern to follow]
+### MUST (will fail validation)
+- [From domain files - required patterns]
+
+### SHOULD (warnings)
+- [From domain files - best practices]
 
 ## Relevant Files
 
 ### Existing Patterns to Follow
-- `path/to/file.js` - [why relevant]
+- `path/to/file.js` - [why relevant, what pattern to match]
 
 ### Files to Create/Modify
 - `path/to/new-file.js` - [what it will contain]
@@ -99,30 +147,52 @@ Generate this structure:
 ## External Dependencies
 
 ### APIs (if any)
+- **Service:** [name]
 - **Endpoint:** [URL]
 - **Auth:** [method]
+- **Docs:** [URL checked]
 
 ### Libraries (if any)
-- [library@version] - [purpose]
+- `[library@version]` - [purpose]
+- **Docs checked:** [URL or Context7]
 
-## Recommended Template
-`.flight/templates/[template-name].md`
+## Research Sources
+- [URL or tool]: [Key finding]
 
-## Recommended Examples
-- `.flight/examples/[example]`
+## Open Questions
+- [Anything unclear that needs human input]
 ```
+
+---
 
 ## Critical Rules
 
-1. **READ DOMAIN FILES FIRST** - Before scanning codebase
-2. **USE DOMAIN FILES** - If a domain covers the topic, use it as primary source
-3. **DO NOT SEARCH WEB** for topics covered by domain files
-4. **LIST DOMAINS USED** so compile step knows what to include
-5. **PULL ACTUAL CONSTRAINTS** from domain files into the Prime Document
+1. **READ DOMAIN FILES FIRST** - Before any external research
+2. **ALWAYS LOAD code-hygiene.md** - It applies to everything
+3. **USE MCP TOOLS** when available for documentation
+4. **CITE SOURCES** - Note where information came from
+5. **PULL ACTUAL CONSTRAINTS** from domain files into PRIME.md
+6. **DO NOT IMPLEMENT** - This is research only
+7. **DO NOT GENERATE CODE** - Output feeds into `/flight-compile`
 
-## Notes
+---
 
-- Do NOT start implementing yet
-- Do NOT generate code
-- This is research and context gathering only
-- Output feeds into `/flight-compile`
+## When to Use
+
+| Starting Point | Use This? |
+|----------------|-----------|
+| Vague idea ("build SMS thing") | No → Use `/flight-prd` first |
+| Clear task description | Yes |
+| PRD.md from /flight-prd | Yes |
+| Task file (tasks/001-*.md) | Yes |
+| Have code, need to check | No → Use `/flight-validate` |
+
+---
+
+## Next Step
+
+After generating PRIME.md:
+
+```
+/flight-compile
+```

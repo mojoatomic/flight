@@ -21,44 +21,71 @@ Flight inverts this. **The rules come first. The code comes second.**
 
 ---
 
-## Theory of Operation
-
-Flight works like Test-Driven Development, but for prompts:
+## Workflow
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        FLIGHT WORKFLOW                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  /flight-prime ──► /flight-compile ──► Execute ──► /flight-validate
-│        │                  │                              │      │
-│        ▼                  ▼                              ▼      │
-│   Research &         Build atomic          Validate against     │
-│   gather rules       PROMPT.md             domain rules         │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  /flight-prd                                                                │
+│  INPUT:  Rough idea ("document collection via SMS")                         │
+│  OUTPUT: PRD.md + tasks/*.md                                                │
+│  TOOLS:  Web Search, Firecrawl, Context7                                    │
+│  USE:    Starting from scratch, need to understand problem space            │
+└──────────────────────────────────┬──────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  /flight-prime                                                              │
+│  INPUT:  Task description, PRD.md, or tasks/001-*.md                        │
+│  OUTPUT: PRIME.md                                                           │
+│  TOOLS:  Domain Files, Codebase Scan, Web Search, Context7, Firecrawl       │
+│  USE:    Have a clear task, need to gather implementation details           │
+└──────────────────────────────────┬──────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  /flight-compile                                                            │
+│  INPUT:  PRIME.md                                                           │
+│  OUTPUT: PROMPT.md                                                          │
+│  TOOLS:  None - pure synthesis                                              │
+│  USE:    After prime, before implementation                                 │
+└──────────────────────────────────┬──────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  EXECUTE                                                                    │
+│  INPUT:  PROMPT.md                                                          │
+│  OUTPUT: Code files                                                         │
+│  HOW:    Claude implements following the compiled prompt                    │
+└──────────────────────────────────┬──────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  /flight-validate                                                           │
+│  INPUT:  Generated code files                                               │
+│  OUTPUT: PASS/FAIL with specific violations                                 │
+│  TOOLS:  .validate.sh scripts (deterministic grep-based checks)             │
+└──────────────────────────────────┬──────────────────────────────────────────┘
+                                   │
+                         ┌─────────┴─────────┐
+                         ▼                   ▼
+                      PASS               FAIL
+                        │                   │
+                        ▼                   ▼
+                      Done            /flight-tighten
+                                           │
+                                           ▼
+                                  Loop back to /flight-compile
 ```
 
-### The Core Insight
+### Entry Points
 
-> "The bugs aren't created because Claude knows the rules before writing."
-
-Claude generates bad code because it doesn't know your rules. Flight solves this by:
-
-1. **Injecting domain rules into context** before code generation
-2. **Requiring research** so Claude understands current APIs, not training data
-3. **Compiling atomic prompts** with explicit constraints and acceptance criteria
-4. **Validating output** with deterministic shell scripts, not Claude's opinion
-
-### Why This Works
-
-**Prevention beats remediation.** ESLint catches bugs after they exist. Flight prevents them from being created.
-
-**Ceremony forces compliance.** Each step makes Claude slow down and think. No more "sure, here's some code" that ignores your architecture.
-
-**Rules are executable.** Domain validators are shell scripts. They return pass/fail. No ambiguity, no "I think this looks okay."
-
-**Knowledge compounds.** Domains capture patterns once. Every future task benefits.
+| Starting Point | First Command |
+|----------------|---------------|
+| Vague idea ("build SMS thing") | `/flight-prd` |
+| Clear task description | `/flight-prime` |
+| PRD.md or tasks/*.md file | `/flight-prime` |
+| Have domain.md, need validator | `/flight-create-validator` |
+| Have code, need to check it | `/flight-validate` |
 
 ---
 
@@ -79,10 +106,12 @@ your-project/
 │       ├── react.md / .validate.sh
 │       └── ...
 ├── .claude/commands/          # Slash commands
+│   ├── flight-prd.md
 │   ├── flight-prime.md
 │   ├── flight-compile.md
 │   ├── flight-validate.md
-│   └── flight-tighten.md
+│   ├── flight-tighten.md
+│   └── flight-create-validator.md
 └── CLAUDE.md                  # Project instructions
 ```
 
@@ -98,39 +127,70 @@ Updates core domains and commands while preserving your `CLAUDE.md`, `PROMPT.md`
 
 ## Commands
 
-### `/flight-prime <task>`
+### `/flight-prd <rough idea>`
 
-**Purpose:** Research and prepare for a task.
+**Purpose:** Transform a rough product idea into atomic tasks.
 
-Gathers everything Claude needs to do the job right:
-- Reads relevant domain files (`.flight/domains/*.md`)
-- Uses web search for current documentation
-- Uses Context7 MCP for library docs (if available)
-- Uses Firecrawl MCP for deep site analysis (if available)
-- Outputs `PRIME.md` with consolidated research
+Claude Code excels at atomic, well-defined tasks (1-2 hours). It struggles with large, multi-day projects. This command breaks big ideas into executable units.
+
+**Output:**
+- `PRD.md` - Product vision (human reference)
+- `MILESTONES.md` - Phases with exit criteria
+- `tasks/*.md` - Atomic task files (001-project-setup.md, 002-database-schema.md, etc.)
+
+**Tools Used:**
+- Web Search → Competitors, market research, recent articles
+- Firecrawl → Deep crawl competitor sites, extract features
+- Context7 → Current docs for considered tech stack
 
 **Example:**
 ```
-/flight-prime Add Clerk authentication to the Next.js app
+/flight-prd Simple document collection - user gets SMS link, uploads docs, stored encrypted
+```
+
+### `/flight-prime <task>`
+
+**Purpose:** Gather all context needed to implement a task.
+
+**Input:** Task description, PRD.md, or task file (tasks/001-*.md)
+
+**Output:** `PRIME.md` with:
+- Relevant domain constraints (NEVER/MUST/SHOULD)
+- Existing patterns from codebase
+- External API documentation
+- Files to create/modify
+
+**Tools Used:**
+- Domain Files → Project constraints (always first)
+- Codebase Scan → Existing patterns, configs
+- Web Search → Current API docs, recent changes
+- Context7 → Library/framework documentation
+- Firecrawl → Deep dive specific doc sites
+
+**Example:**
+```
+/flight-prime tasks/003-auth-basic.md
 ```
 
 ### `/flight-compile`
 
 **Purpose:** Transform research into an atomic, executable prompt.
 
-Takes `PRIME.md` and produces `PROMPT.md` containing:
-- Single, focused task
-- Relevant constraints from domains
-- Acceptance criteria
-- What "done" looks like
+**Input:** `PRIME.md`
 
-**Why atomic?** Large tasks fail. Small, well-specified tasks succeed. Compile breaks work into executable units.
+**Output:** `PROMPT.md` containing:
+- Single, focused task
+- Extracted NEVER/MUST constraints
+- Acceptance criteria
+- Definition of done
+
+**Why atomic?** Large tasks fail. Small, well-specified tasks succeed.
 
 ### `/flight-validate [files]`
 
 **Purpose:** Check generated code against domain rules.
 
-Runs all relevant `.validate.sh` scripts against the specified files. Returns pass/fail with specific violations.
+Runs relevant `.validate.sh` scripts. Returns pass/fail with specific violations.
 
 **Example:**
 ```
@@ -143,11 +203,9 @@ Runs all relevant `.validate.sh` scripts against the specified files. Returns pa
 ## NEVER Rules
 ✅ N1: No explicit any without justification
 ✅ N2: No @ts-ignore without explanation
-✅ N3: No non-null assertions
 
 ## MUST Rules
 ✅ M1: Explicit return types on exports
-✅ M2: Error handling with typed errors
 
   RESULT: PASS
 ═══════════════════════════════════════════
@@ -157,7 +215,41 @@ Runs all relevant `.validate.sh` scripts against the specified files. Returns pa
 
 **Purpose:** Analyze validation failures and strengthen rules.
 
-When validation fails, tighten examines why and suggests domain improvements to prevent recurrence.
+When validation fails, tighten examines why and suggests domain improvements to prevent recurrence. Then loop back to `/flight-compile`.
+
+### `/flight-create-validator <domain.md>`
+
+**Purpose:** Generate validator script and test files from a domain contract.
+
+**Input:** Domain `.md` file
+
+**Output:**
+- `domain.validate.sh` - Executable validator matching NEVER/MUST/SHOULD rules
+- `tests/domain.bad.ext` - Test file that must fail validation
+- `tests/domain.good.ext` - Test file that must pass validation
+
+**Example:**
+```
+/flight-create-validator .flight/domains/my-domain.md
+```
+
+---
+
+## Research Tools
+
+| Tool | What It Does | When to Use |
+|------|--------------|-------------|
+| Web Search | General search, news, articles | Competitors, market research, recent changes |
+| Context7 | Library/framework docs (curated, versioned) | Getting current API docs for Next.js, React, Supabase, etc. |
+| Firecrawl | Deep web scraping, crawl entire sites | Extracting features from competitor sites, scraping doc sites |
+| Domain Files | Project-specific rules | Always - before any code generation |
+| Codebase Scan | Find existing patterns | Understanding project conventions |
+
+**MCP Tool Installation:**
+- Context7: https://github.com/upstash/context7
+- Firecrawl: https://github.com/mendableai/firecrawl
+
+Commands work without MCP tools (using web search fallback) but produce better results with them.
 
 ---
 
@@ -168,7 +260,6 @@ Domains are the heart of Flight. Each domain captures:
 - **MUST rules** - Required patterns that fail validation
 - **SHOULD rules** - Best practices that warn but don't fail
 - **GUIDANCE** - Patterns too complex for grep, documented for Claude
-- **Patterns** - Copy-paste templates for common tasks
 
 ### Available Domains
 
@@ -198,53 +289,20 @@ This keeps the contract honest. No aspirational rules that aren't enforced.
 ## Creating Custom Domains
 
 1. **Create the rules file:** `.flight/domains/your-domain.md`
-   ```markdown
-   # Domain: Your Domain
 
-   ## Invariants
-
-   ### NEVER (validator will reject)
-   1. **Rule name** - Why it matters
-      ```code
-      # BAD
-      bad_example()
-
-      # GOOD
-      good_example()
-      ```
-
-   ### MUST (validator will reject)
-   ...
-
-   ### SHOULD (validator warns)
-   ...
-
-   ### GUIDANCE (not mechanically checked)
-   ...
+2. **Generate the validator:**
+   ```
+   /flight-create-validator .flight/domains/your-domain.md
    ```
 
-2. **Create the validator:** `.flight/domains/your-domain.validate.sh`
+3. **Verify both directions:**
    ```bash
-   #!/bin/bash
-   set -uo pipefail
+   # Should FAIL
+   .flight/domains/your-domain.validate.sh .flight/domains/tests/your-domain.bad.ext
 
-   check() {
-       local name="$1"; shift
-       local result=$("$@" 2>/dev/null) || true
-       if [[ -z "$result" ]]; then
-           echo "✅ $name"; ((PASS++))
-       else
-           echo "❌ $name"; echo "$result" | head -5; ((FAIL++))
-       fi
-   }
-
-   # N1: Check for violation
-   check "N1: No bad pattern" grep -En 'bad_pattern' "$@"
+   # Should PASS
+   .flight/domains/your-domain.validate.sh .flight/domains/tests/your-domain.good.ext
    ```
-
-3. **Test both directions:**
-   - Bad code should fail
-   - Good code should pass
 
 ---
 
