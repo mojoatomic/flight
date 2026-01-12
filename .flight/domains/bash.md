@@ -204,9 +204,41 @@ Production shell script patterns. Safe, portable, maintainable.
     [[ ${#password} -lt $MIN_PASSWORD_LENGTH ]]
     ```
 
+15. **`curl|bash` or `wget|bash`** - Remote code execution
+    ```bash
+    # BAD - executing untrusted remote code
+    curl -fsSL https://example.com/install.sh | bash
+    wget -qO- https://example.com/script.sh | sh
+
+    # GOOD - download, inspect, then execute
+    curl -fsSL https://example.com/install.sh -o install.sh
+    less install.sh  # review the script
+    chmod +x install.sh
+    ./install.sh
+
+    # GOOD - if you must pipe, use checksums
+    curl -fsSL https://example.com/install.sh | sha256sum -c expected.sha256
+    ```
+
 ### MUST
 
-1. **Start with Strict Mode**
+1. **Shebang Required** - Explicit interpreter declaration
+   ```bash
+   #!/bin/bash
+   # or for POSIX compatibility:
+   #!/bin/sh
+
+   # BAD - no shebang, relies on caller's shell
+   set -e
+   echo "hello"
+
+   # GOOD - explicit interpreter
+   #!/bin/bash
+   set -euo pipefail
+   echo "hello"
+   ```
+
+2. **Start with Strict Mode**
    ```bash
    #!/bin/bash
    set -euo pipefail
@@ -216,7 +248,7 @@ Production shell script patterns. Safe, portable, maintainable.
    # -o pipefail: pipeline fails if any command fails
    ```
 
-2. **Quote All Variable Expansions**
+3. **Quote All Variable Expansions**
    ```bash
    # Always quote, even when "it works without"
    echo "$var"
@@ -229,7 +261,7 @@ Production shell script patterns. Safe, portable, maintainable.
    cmd $intentionally_unquoted
    ```
 
-3. **Use `local` in Functions**
+4. **Use `local` in Functions**
    ```bash
    process_data() {
        local input="$1"
@@ -241,7 +273,7 @@ Production shell script patterns. Safe, portable, maintainable.
    }
    ```
 
-4. **Validate Inputs**
+5. **Validate Inputs**
    ```bash
    main() {
        [[ $# -ge 1 ]] || { usage; exit 1; }
@@ -252,7 +284,7 @@ Production shell script patterns. Safe, portable, maintainable.
    }
    ```
 
-5. **Use `readonly` for Constants**
+6. **Use `readonly` for Constants**
    ```bash
    readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
    readonly CONFIG_FILE="${SCRIPT_DIR}/config.sh"
@@ -260,7 +292,7 @@ Production shell script patterns. Safe, portable, maintainable.
    readonly -a VALID_COMMANDS=("start" "stop" "restart")
    ```
 
-6. **Trap for Cleanup**
+7. **Trap for Cleanup**
    ```bash
    cleanup() {
        local exit_code=$?
@@ -273,7 +305,7 @@ Production shell script patterns. Safe, portable, maintainable.
    # ... script continues, cleanup runs on exit
    ```
 
-7. **Use Arrays for Multiple Items**
+8. **Use Arrays for Multiple Items**
    ```bash
    # For command arguments
    local -a cmd_args=("-v" "--config" "$config_file")
@@ -284,7 +316,7 @@ Production shell script patterns. Safe, portable, maintainable.
    for f in "${files[@]}"; do
    ```
 
-8. **Check Command Existence**
+9. **Check Command Existence**
    ```bash
    require_cmd() {
        command -v "$1" >/dev/null 2>&1 || {
@@ -297,7 +329,7 @@ Production shell script patterns. Safe, portable, maintainable.
    require_cmd curl
    ```
 
-9. **Meaningful Exit Codes**
+10. **Meaningful Exit Codes**
    ```bash
    readonly E_SUCCESS=0
    readonly E_USAGE=1
@@ -308,7 +340,7 @@ Production shell script patterns. Safe, portable, maintainable.
    [[ -f "$file" ]] || exit $E_NO_FILE
    ```
 
-10. **Use `printf` for Output**
+11. **Use `printf` for Output**
     ```bash
     # For formatted output
     printf 'Processing: %s\n' "$filename"
@@ -514,6 +546,7 @@ done
 | No `set -e` | Ignores errors | `set -euo pipefail` |
 | Predictable /tmp | Race condition | `mktemp` |
 | No cleanup | Leaves temp files | `trap cleanup EXIT` |
+| `curl \| bash` | Remote code execution | Download, inspect, run |
 
 ---
 
