@@ -1,13 +1,11 @@
-# Flight v2
+# Flight
 
 TDD-style prompt engineering methodology for consistent AI code generation.
 
 ## Quick Install
 
 ```bash
-# From your project root
-unzip flight-v2.zip
-./flight-v2/install.sh
+curl -fsSL https://raw.githubusercontent.com/mojoatomic/flight/main/install.sh | bash
 ```
 
 ## What Gets Installed
@@ -15,21 +13,25 @@ unzip flight-v2.zip
 ```
 your-project/
 ├── .flight/
-│   ├── FLIGHT.md              # Core methodology
+│   ├── FLIGHT.md                       # Core methodology
 │   ├── domains/
-│   │   ├── javascript.md      # JS/Node invariants
-│   │   ├── react.md           # React invariants
-│   │   └── react-line-formulas.md
-│   ├── exercises/             # Training exercises
-│   ├── examples/              # Reference code
-│   └── templates/             # Prompt skeletons
+│   │   ├── embedded-c-p10.md           # NASA JPL Power of 10 rules
+│   │   ├── embedded-c-p10.validate.sh  # Executable validation
+│   │   ├── javascript.md               # JS/Node invariants
+│   │   ├── javascript.validate.sh      # Executable validation
+│   │   ├── react.md                    # React invariants
+│   │   └── rp2040-pico.md              # RP2040 dual-core patterns
+│   ├── examples/
+│   └── templates/
 ├── .claude/
 │   └── commands/
 │       ├── flight-prime.md
 │       ├── flight-compile.md
 │       ├── flight-validate.md
 │       └── flight-tighten.md
-└── CLAUDE.md                  # Add Flight reference here
+├── CLAUDE.md
+├── PROMPT.md
+└── @fix_plan.md
 ```
 
 ## Usage
@@ -40,56 +42,84 @@ your-project/
 |---------|---------|
 | `/flight-prime` | Research context, scan codebase, identify constraints |
 | `/flight-compile` | Build atomic prompt from task + domain + examples |
-| `/flight-validate` | Check output against invariants |
+| `/flight-validate` | Run domain validation scripts |
 | `/flight-tighten` | Analyze failures, strengthen rules |
 
 ### Typical Workflow
 
 ```
-> /flight-prime Build a contact form with email validation
+> /flight-prime Build a P10-compliant ring buffer
 
-[Claude researches: React domain, form patterns, validation rules]
+[Claude reads domains, scans codebase, gathers context]
 
 > /flight-compile
 
-[Claude outputs atomic prompt with invariants]
+[Claude builds PROMPT.md with invariants]
 
-> [Execute the prompt - Claude generates code]
+> [Claude generates code]
 
 > /flight-validate
 
-[Claude checks: named exports ✓, useReducer ✓, handlers ✓...]
+[Runs validation script]
 
-> /flight-tighten   # Only if validation fails
+═══════════════════════════════════════════
+  P10 Validation: src/ring_buffer.c
+═══════════════════════════════════════════
 
-[Claude identifies root cause, updates domain file]
+## NEVER Rules
+✅ N1: No goto
+✅ N2: No setjmp/longjmp
+✅ N3: No malloc/free
+
+## MUST Rules
+✅ M1: Compile -Wall -Wextra -Werror
+✅ M2: Functions ≤60 lines
+✅ M3: ≥2 asserts/function
+
+  RESULT: PASS
+═══════════════════════════════════════════
 ```
 
-### CLAUDE.md Setup
+## Executable Domain Validation
 
-Add to your project's `CLAUDE.md`:
+Each domain includes:
+- `*.md` — Constraints for code generation
+- `*.validate.sh` — Executable checks returning PASS/FAIL
 
-```markdown
-## Flight Methodology
-
-Before any code generation task:
-1. Read .flight/FLIGHT.md for methodology
-2. Check .flight/domains/ for relevant invariants
-3. Use line formulas from react-line-formulas.md for targets
-
-Key principle: If it follows the invariants, it's correct.
+```bash
+.flight/domains/embedded-c-p10.validate.sh src/*.c src/*.h
 ```
+
+Validation is deterministic. The script decides correctness, not interpretation.
+
+### Available Domains
+
+| Domain | Validation Script |
+|--------|-------------------|
+| `embedded-c-p10` | ✅ |
+| `javascript` | ✅ |
+| `react` | — |
+| `rp2040-pico` | — |
 
 ## Core Concepts
 
 ### Invariants vs Guidelines
 
-- **Invariant**: Must pass or output is wrong
-- **Guideline**: Aim for, but don't fail if missed
+- **Invariant**: Must pass or output is incorrect
+- **Guideline**: Target, but not a failure condition
+
+### The Loop
+
+```
+Prime → Compile → Execute → Validate
+                              ↓
+                    [PASS] → Done
+                    [FAIL] → Tighten → Compile → ...
+```
 
 ### Line Formulas
 
-Calculable targets instead of arbitrary limits:
+Calculable targets for component sizing:
 
 | Component Type | Formula |
 |----------------|---------|
@@ -98,44 +128,22 @@ Calculable targets instead of arbitrary limits:
 | List | `40 + (fields × 3) + (actions × 4)` |
 | Modal | `45 + (sections × 8) + (actions × 5)` |
 
-### The Loop
+## With Ralph Loop
+
+For autonomous execution:
 
 ```
-Prime → Compile → Execute → Validate
-                              ↓
-                    [Pass] → Done
-                    [Fail] → Tighten → Compile → ...
+/ralph-wiggum:ralph-loop "Implement P10-compliant state machine.
+Follow .flight/domains/embedded-c-p10.md.
+Run: .flight/domains/embedded-c-p10.validate.sh src/*.c
+Output COMPLETE when validation passes." --max-iterations 20 --completion-promise "COMPLETE"
 ```
-
-## Training
-
-Run exercises to calibrate the model:
-
-```
-.flight/exercises/react/
-├── 01-counter.md        # Beginner
-├── 02-user-card.md      # Intermediate  
-├── 03-contact-form.md   # Advanced
-├── 04-todo-list.md      # Intermediate
-└── 05-confirm-modal.md  # Intermediate
-```
-
-Each exercise has:
-- Requirements
-- Line estimation formula
-- Must-pass invariants
-- Reference solution
-- Common failures
 
 ## Philosophy
 
-> "If it follows the rules and invariants, it's correct."
+> If it follows the invariants, it's correct.
 
 - Invariants beat intelligence
 - Prompts are compiled, not written
-- Test like code
-- Failures make it smarter
-
----
-
-Created by Doug + Claude, synthesized with Cole Medin's Context Engineering.
+- Validation is executable, not interpreted
+- Failures strengthen the system
