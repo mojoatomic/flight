@@ -118,10 +118,25 @@ your-project/
 ### Update
 
 ```bash
+./update.sh
+```
+
+Or fetch the latest update script directly:
+```bash
 curl -fsSL https://raw.githubusercontent.com/mojoatomic/flight/main/update.sh | bash
 ```
 
-Updates core domains and commands while preserving your `CLAUDE.md`, `PROMPT.md`, and custom domains.
+Updates:
+- `.claude/commands/*` (all slash commands)
+- `.flight/FLIGHT.md` (core methodology)
+- `.flight/validate-all.sh`
+- `.flight/domains/*` (all stock domains)
+- `.flight/examples/`, `exercises/`, `templates/`
+
+Preserves:
+- `CLAUDE.md` (your project description)
+- `PROMPT.md`, `PRIME.md` (your working files)
+- Custom domains (any `.md`/`.sh` not in Flight repo)
 
 ---
 
