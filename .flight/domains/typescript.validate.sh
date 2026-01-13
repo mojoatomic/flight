@@ -120,11 +120,29 @@ echo ""
 echo "## MUST Rules (warnings)"
 
 # M1: tsconfig strict mode check
-warn "M1: tsconfig.json should have strict: true" \
+# Note: Vite projects put strict:true in tsconfig.app.json, not tsconfig.json
+warn "M1: tsconfig should have strict: true enabled" \
     bash -c "
+    STRICT_FOUND=false
+
+    # Check tsconfig.json
     if [ -f tsconfig.json ]; then
-        if ! grep -q '\"strict\":\s*true' tsconfig.json; then
-            echo 'tsconfig.json: strict mode not enabled'
+        if grep -qE '\"strict\"[[:space:]]*:[[:space:]]*true' tsconfig.json 2>/dev/null; then
+            STRICT_FOUND=true
+        fi
+    fi
+
+    # Check tsconfig.app.json (Vite projects use this for app-specific config)
+    if [ -f tsconfig.app.json ]; then
+        if grep -qE '\"strict\"[[:space:]]*:[[:space:]]*true' tsconfig.app.json 2>/dev/null; then
+            STRICT_FOUND=true
+        fi
+    fi
+
+    # Only warn if at least one tsconfig exists but neither has strict:true
+    if [ \"\$STRICT_FOUND\" = false ]; then
+        if [ -f tsconfig.json ] || [ -f tsconfig.app.json ]; then
+            echo 'No tsconfig file has strict: true enabled'
         fi
     fi
     "

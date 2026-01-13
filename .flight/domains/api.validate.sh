@@ -68,6 +68,34 @@ fi
 
 printf 'API files: %d\n\n' "${#FILES[@]}"
 
+# Filter to actual API endpoint files for API-specific checks (M3, S2, S4, S6, S7)
+# These checks don't apply to service/utility files that happen to be in the file list
+is_api_file() {
+    local f="$1"
+    # Path-based detection
+    if [[ "$f" =~ (api/|routes/|endpoints/|handlers/|controllers/) ]]; then
+        return 0
+    fi
+    # Content-based detection: HTTP method handlers
+    if grep -qEi "(app|router)\.(get|post|put|patch|delete)\(|NextResponse|Response\.json|@(Get|Post|Put|Delete|Patch)\(" "$f" 2>/dev/null; then
+        return 0
+    fi
+    return 1
+}
+
+API_ENDPOINT_FILES=()
+for f in "${FILES[@]}"; do
+    if is_api_file "$f"; then
+        API_ENDPOINT_FILES+=("$f")
+    fi
+done
+
+if [[ ${#API_ENDPOINT_FILES[@]} -gt 0 ]]; then
+    printf 'API endpoint files: %d\n\n' "${#API_ENDPOINT_FILES[@]}"
+else
+    printf 'API endpoint files: 0 (some checks will be skipped)\n\n'
+fi
+
 printf '%s\n' "## NEVER Rules"
 
 # N1: Verbs in URI paths (create, delete, get, update, etc.)
@@ -120,8 +148,14 @@ warn "M2: API versioning present" \
     bash -c 'grep -qEi "/v[0-9]+/|version.*header|api-version" "$@" || echo "No API versioning detected"' _ "${FILES[@]}"
 
 # M3: Error response structure (should have type/title/status pattern)
-warn "M3: Consistent error response format (RFC 7807 pattern)" \
-    bash -c 'grep -l "application/problem\+json\|type.*title.*status\|ProblemDetails" "$@" >/dev/null || echo "No RFC 7807 Problem Details pattern found"' _ "${FILES[@]}"
+# Only applies to actual API endpoint files
+if [[ ${#API_ENDPOINT_FILES[@]} -gt 0 ]]; then
+    warn "M3: Consistent error response format (RFC 7807 pattern)" \
+        bash -c 'grep -l "application/problem\+json\|type.*title.*status\|ProblemDetails" "$@" >/dev/null || echo "No RFC 7807 Problem Details pattern found"' _ "${API_ENDPOINT_FILES[@]}"
+else
+    green "✅ M3: Consistent error response format (skipped - no API endpoint files)"
+    ((PASS++)) || true
+fi
 
 # M4: Rate limit headers
 warn "M4: Rate limit headers present" \
@@ -150,8 +184,14 @@ warn "S1: Use HTTPS (no plain HTTP URLs)" \
     bash -c 'grep -Ein "http://[a-zA-Z]" "$@" | grep -v "localhost\|127\.0\.0\.1"' _ "${FILES[@]}"
 
 # S2: ISO 8601 date handling
-warn "S2: Use ISO 8601 dates (toISOString pattern present)" \
-    bash -c 'grep -l "toISOString\|ISO.*8601\|datetime\|DateTimeFormatter" "$@" >/dev/null || echo "No ISO 8601 date handling detected"' _ "${FILES[@]}"
+# Only applies to actual API endpoint files
+if [[ ${#API_ENDPOINT_FILES[@]} -gt 0 ]]; then
+    warn "S2: Use ISO 8601 dates (toISOString pattern present)" \
+        bash -c 'grep -l "toISOString\|ISO.*8601\|datetime\|DateTimeFormatter" "$@" >/dev/null || echo "No ISO 8601 date handling detected"' _ "${API_ENDPOINT_FILES[@]}"
+else
+    green "✅ S2: Use ISO 8601 dates (skipped - no API endpoint files)"
+    ((PASS++)) || true
+fi
 
 # S3: Consistent casing (detect mixed snake_case and camelCase in same file)
 warn "S3: Consistent field naming (no mixed casing)" \
@@ -164,8 +204,14 @@ warn "S3: Consistent field naming (no mixed casing)" \
     ' _ "${FILES[@]}"
 
 # S4: CORS headers for browser clients
-warn "S4: CORS headers present (for browser clients)" \
-    bash -c 'grep -qEi "access-control-allow|cors\(|cors\.enable" "$@" || echo "No CORS handling detected"' _ "${FILES[@]}"
+# Only applies to actual API endpoint files
+if [[ ${#API_ENDPOINT_FILES[@]} -gt 0 ]]; then
+    warn "S4: CORS headers present (for browser clients)" \
+        bash -c 'grep -qEi "access-control-allow|cors\(|cors\.enable" "$@" || echo "No CORS handling detected"' _ "${API_ENDPOINT_FILES[@]}"
+else
+    green "✅ S4: CORS headers present (skipped - no API endpoint files)"
+    ((PASS++)) || true
+fi
 
 # S5: 202 Accepted for long-running operations
 warn "S5: Consider 202 Accepted for async operations" \
@@ -186,16 +232,28 @@ warn "S5: Consider 202 Accepted for async operations" \
     ' _ "${FILES[@]}"
 
 # S6: Idempotency keys for POST operations
-warn "S6: Idempotency keys for non-idempotent operations" \
-    bash -c 'grep -qEi "idempotency|idempotent" "$@" || echo "No idempotency handling detected"' _ "${FILES[@]}"
+# Only applies to actual API endpoint files
+if [[ ${#API_ENDPOINT_FILES[@]} -gt 0 ]]; then
+    warn "S6: Idempotency keys for non-idempotent operations" \
+        bash -c 'grep -qEi "idempotency|idempotent" "$@" || echo "No idempotency handling detected"' _ "${API_ENDPOINT_FILES[@]}"
+else
+    green "✅ S6: Idempotency keys (skipped - no API endpoint files)"
+    ((PASS++)) || true
+fi
 
 # S7: OpenAPI/Swagger spec exists
-warn "S7: OpenAPI specification present" \
-    bash -c '
-        if ! ls openapi.yaml openapi.json swagger.yaml swagger.json api-spec.yaml api-spec.json docs/openapi.* docs/swagger.* 2>/dev/null | head -1 | grep -q .; then
-            echo "No OpenAPI/Swagger spec found (openapi.yaml, swagger.json, etc.)"
-        fi
-    '
+# Only applies if there are actual API endpoint files
+if [[ ${#API_ENDPOINT_FILES[@]} -gt 0 ]]; then
+    warn "S7: OpenAPI specification present" \
+        bash -c '
+            if ! ls openapi.yaml openapi.json swagger.yaml swagger.json api-spec.yaml api-spec.json docs/openapi.* docs/swagger.* 2>/dev/null | head -1 | grep -q .; then
+                echo "No OpenAPI/Swagger spec found (openapi.yaml, swagger.json, etc.)"
+            fi
+        '
+else
+    green "✅ S7: OpenAPI specification (skipped - no API endpoint files)"
+    ((PASS++)) || true
+fi
 
 # S8: Hardcoded URLs (should use config/env)
 warn "S8: No hardcoded API URLs (use config)" \
