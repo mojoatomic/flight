@@ -131,6 +131,7 @@ If MCP tools aren't available, fall back to web search.
 | `nextjs` | Next.js projects |
 | `python` | .py files |
 | `sql` | Database queries, migrations |
+| `sms-twilio` | SMS messaging, Twilio integration |
 | `embedded-c-p10` | Safety-critical C |
 | `rp2040-pico` | RP2040 microcontroller |
 
