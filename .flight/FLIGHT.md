@@ -109,6 +109,8 @@ If MCP tools aren't available, fall back to web search.
 |------|---------|
 | `.flight/domains/*.md` | Domain rules (read these!) |
 | `.flight/domains/*.validate.sh` | Executable validators |
+| `.flight/validate-all.sh` | Auto-detect and run all relevant validators |
+| `update.sh` | Update Flight (preserves customizations) |
 | `PRIME.md` | Output of /flight-prime |
 | `PROMPT.md` | Output of /flight-compile (what to execute) |
 | `PRD.md` | Output of /flight-prd (product vision) |
@@ -132,6 +134,7 @@ If MCP tools aren't available, fall back to web search.
 | `python` | .py files |
 | `sql` | Database queries, migrations |
 | `sms-twilio` | SMS messaging, Twilio integration |
+| `scaffold` | Project scaffolding (create-vite, etc.) |
 | `embedded-c-p10` | Safety-critical C |
 | `rp2040-pico` | RP2040 microcontroller |
 
@@ -148,7 +151,70 @@ If MCP tools aren't available, fall back to web search.
 
 ---
 
+## Project Setup (Local CI)
+
+Set this up **before starting work** on a project. Flight validators act as local CI - catching issues before they hit remote CI or code review.
+
+### Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mojoatomic/flight/main/install.sh | bash
+```
+
+This automatically:
+- Copies `.flight/`, `.claude/`, and `update.sh`
+- Makes validators executable
+- Adds `validate` and `preflight` scripts to package.json (if exists and jq installed)
+
+To update Flight later: `./update.sh` (preserves your customizations)
+
+### Manual Setup (if needed)
+
+If package.json wasn't updated, add:
+
+```json
+{
+  "scripts": {
+    "validate": ".flight/validate-all.sh",
+    "preflight": "npm run validate && npm run lint",
+    "lint": "eslint ."
+  }
+}
+```
+
+### (Optional) Git pre-commit hook
+
+Create `.git/hooks/pre-commit`:
+
+```bash
+#!/bin/bash
+npm run validate || exit 1
+```
+
+Or use with husky/lint-staged for staged files only.
+
+### 4. CI Integration
+
+Add to your CI pipeline (GitHub Actions example):
+
+```yaml
+- name: Flight Validation
+  run: npm run validate
+```
+
+### Workflow
+
+```
+Write code → npm run preflight → Fix failures → Commit → Push
+```
+
+Run `npm run preflight` before every commit. If it passes locally, CI will pass.
+
+---
+
 ## Validation Output
+
+### Output Format
 
 ```
 ═══════════════════════════════════════════
