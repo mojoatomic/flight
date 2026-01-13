@@ -14,29 +14,40 @@ mkdir -p .claude/commands .flight/domains
 # Update commands (always safe to overwrite)
 cp -r "$TMP/.claude/commands/"* .claude/commands/ 2>/dev/null || true
 
-# Update core domains (overwrite stock ones, preserve custom)
-for domain in api bash code-hygiene embedded-c-p10 javascript nextjs python react react-line-formulas rp2040-pico scaffold sms-twilio sql testing typescript webhooks; do
-    [ -f "$TMP/.flight/domains/${domain}.md" ] && cp "$TMP/.flight/domains/${domain}.md" .flight/domains/
-    [ -f "$TMP/.flight/domains/${domain}.validate.sh" ] && cp "$TMP/.flight/domains/${domain}.validate.sh" .flight/domains/
-done
+# Update FLIGHT.md (core methodology)
+[ -f "$TMP/.flight/FLIGHT.md" ] && cp "$TMP/.flight/FLIGHT.md" .flight/FLIGHT.md
 
 # Update validate-all.sh
 [ -f "$TMP/.flight/validate-all.sh" ] && cp "$TMP/.flight/validate-all.sh" .flight/validate-all.sh
 
+# Update all domain files from source (preserves custom domains not in source)
+# This copies both .md and .validate.sh files - no hardcoded list needed
+for file in "$TMP/.flight/domains/"*.md "$TMP/.flight/domains/"*.sh; do
+    [ -f "$file" ] && cp "$file" .flight/domains/
+done
+
+# Update examples, exercises, templates (learning resources)
+[ -d "$TMP/.flight/examples" ] && cp -r "$TMP/.flight/examples" .flight/
+[ -d "$TMP/.flight/exercises" ] && cp -r "$TMP/.flight/exercises" .flight/
+[ -d "$TMP/.flight/templates" ] && cp -r "$TMP/.flight/templates" .flight/
+
 # Make scripts executable
 chmod +x .flight/validate-all.sh 2>/dev/null || true
 chmod +x .flight/domains/*.validate.sh 2>/dev/null || true
+chmod +x .flight/domains/*.sh 2>/dev/null || true
 
 rm -rf "$TMP"
 
 echo "✅ Flight updated"
 echo ""
 echo "Updated:"
-echo "  - .claude/commands/*"
-echo "  - .flight/domains/ (core domains only)"
+echo "  - .claude/commands/* (all slash commands)"
+echo "  - .flight/FLIGHT.md (core methodology)"
 echo "  - .flight/validate-all.sh"
+echo "  - .flight/domains/* (all stock domains)"
+echo "  - .flight/examples/, exercises/, templates/"
 echo ""
 echo "Preserved:"
-echo "  - CLAUDE.md"
-echo "  - PROMPT.md"
-echo "  - Custom domains"
+echo "  - CLAUDE.md (your project description)"
+echo "  - PROMPT.md, PRIME.md (your working files)"
+echo "  - Custom domains (any .md/.sh not in Flight repo)"

@@ -36,7 +36,9 @@ PROMPT.md
     ↓
 [Claude executes atomic task]
     ↓
-/flight-validate
+npm run preflight          # Local CI (validate + lint)
+    ↓
+/flight-validate           # Full Flight validation
     ↓
 [Human reviews, approves]
     ↓
@@ -62,6 +64,32 @@ PROMPT.md
 ---
 
 ## Process
+
+### 0. Load Flight Context (MANDATORY - before any research)
+
+**⚠️ CRITICAL: Do this FIRST, before any external research.**
+
+Flight domain files contain project-specific rules that override external documentation. Missing them can result in destructive operations (e.g., scaffold.md prevents overwriting project infrastructure).
+
+1. **Read `.flight/FLIGHT.md`** - understand methodology and domain quick reference table
+2. **Scan available domains**:
+   ```bash
+   ls .flight/domains/*.md
+   ```
+3. **Match domains to planned tech stack**. For this PRD, identify which domains will apply:
+   - `code-hygiene.md` - ALWAYS (every task)
+   - `scaffold.md` - if project setup uses create-vite, create-next-app, npm init, etc.
+   - `react.md` - if React components
+   - `typescript.md` - if TypeScript
+   - `nextjs.md` - if Next.js
+   - `python.md` - if Python
+   - etc.
+4. **Read matched domain files** to understand constraints BEFORE external research
+
+**Why this order matters:**
+- Priority: Domain files > Codebase patterns > External docs
+- Domain MUST/NEVER rules are non-negotiable
+- External research may contradict domain rules; domains win
 
 ### 1. Understand the Request
 
@@ -143,14 +171,17 @@ Create THREE outputs:
 ## M1: Foundation (Tasks 001-003)
 Project setup, database schema, basic auth.
 **Exit Criteria**: Can log in and see empty dashboard.
+**Validation**: `.flight/validate-all.sh` should pass after each task.
 
 ## M2: Core Feature (Tasks 004-007)
 [The main thing the product does]
 **Exit Criteria**: [Specific testable outcome]
+**Validation**: `.flight/validate-all.sh` should pass after each task.
 
 ## M3: Polish (Tasks 008-010)
 Error handling, edge cases, UX improvements.
 **Exit Criteria**: Ready for beta users.
+**Validation**: `.flight/validate-all.sh` should pass after each task.
 ```
 
 #### C. `tasks/` - Atomic Task Files
@@ -178,10 +209,12 @@ Create 8-15 task files, each following this structure:
 - [ ] [Testable criterion 1]
 - [ ] [Testable criterion 2]
 - [ ] [Testable criterion 3]
+- [ ] `.flight/validate-all.sh` passes (local CI)
 
 ## Domain Constraints
 Load these before starting:
 - code-hygiene.md (always)
+- [relevant-domain].md
 - [relevant-domain].md
 
 ## Context
@@ -191,6 +224,12 @@ Don't repeat the whole PRD. Just what's relevant.]
 ## Technical Notes
 [Any specific technical decisions or patterns to follow.
 Reference prior tasks if building on them.]
+
+## Validation
+Run after implementing:
+```bash
+.flight/validate-all.sh    # Must pass before moving to next task
+```
 ```
 
 ---
@@ -211,6 +250,66 @@ Reference prior tasks if building on them.]
 - **"NOT In Scope" is the most important section**
 - Be explicit about what's adjacent but excluded
 - Reference which task WILL handle deferred items
+
+### Domain Constraints Discovery
+
+For each task, the "Domain Constraints" section MUST:
+1. Always include `code-hygiene.md`
+2. Include domains matching the task's tech (from FLIGHT.md Domain Quick Reference table)
+3. Include `scaffold.md` for ANY task that creates/initializes project structure
+4. Be based on actual `.flight/domains/` contents, not assumptions
+
+**Anti-pattern:** Guessing domains based on keywords
+**Correct:** Reading FLIGHT.md table + scanning `.flight/domains/`
+
+### Key Domain Mappings
+
+| Task Type | Required Domains |
+|-----------|------------------|
+| Project setup (create-vite, npm init, etc.) | `code-hygiene.md`, `scaffold.md` |
+| React components | `code-hygiene.md`, `react.md` |
+| TypeScript files | `code-hygiene.md`, `typescript.md` |
+| Next.js routes/pages | `code-hygiene.md`, `nextjs.md`, `react.md` |
+| Database/SQL | `code-hygiene.md`, `sql.md` |
+| API endpoints | `code-hygiene.md`, `api.md` (if exists) |
+| Python code | `code-hygiene.md`, `python.md` |
+
+Always verify against actual `.flight/domains/` contents.
+
+### Flight Local CI Setup (Task 001 MUST include)
+
+Every `001-project-setup` task MUST configure Flight as local CI:
+
+1. **Use scaffolding tools with linting enabled**:
+   ```bash
+   # Next.js - include --eslint flag
+   npx create-next-app my-app --typescript --tailwind --app --eslint
+
+   # Vite - add ESLint after
+   npm create vite@latest my-app -- --template react-ts
+   npm install -D eslint @eslint/js typescript-eslint
+   npx eslint --init
+   ```
+
+2. **Add scripts to package.json**:
+   ```json
+   {
+     "scripts": {
+       "lint": "eslint .",
+       "validate": ".flight/validate-all.sh",
+       "preflight": "npm run validate && npm run lint"
+     }
+   }
+   ```
+   Note: `lint` script may already exist from scaffolding. Verify it works.
+
+3. **Include in acceptance criteria**:
+   - `npm run lint` works (ESLint configured)
+   - `package.json has validate and preflight scripts`
+   - `npm run validate passes`
+   - `npm run preflight passes`
+
+This ensures both linting and Flight validation are available as local CI.
 
 ### Naming Convention
 ```
@@ -241,10 +340,12 @@ tasks/
 - None (first task)
 
 ## Delivers
-- Next.js 14 project with App Router
+- Next.js 14 project with App Router (use --eslint flag)
 - Supabase project connected
 - Environment variables configured
 - Basic layout component
+- ESLint configured and working
+- Flight local CI configured in package.json
 
 ## NOT In Scope
 - Authentication (Task 003)
@@ -257,11 +358,43 @@ tasks/
 - [ ] `/` route renders "Hello World"
 - [ ] `supabase status` shows connection
 - [ ] .env.local has SUPABASE_URL and SUPABASE_ANON_KEY
+- [ ] `npm run lint` works (ESLint configured)
+- [ ] package.json has `validate` and `preflight` scripts
+- [ ] `npm run validate` passes
+- [ ] `npm run preflight` passes
 
 ## Domain Constraints
-- code-hygiene.md
+- code-hygiene.md (always)
+- scaffold.md (project initialization)
 - nextjs.md
 - typescript.md
+
+## Flight Setup (REQUIRED for Task 001)
+
+1. Use scaffolding with ESLint:
+```bash
+npx create-next-app my-app --typescript --tailwind --app --eslint
+```
+
+2. Add/verify scripts in package.json:
+```json
+{
+  "scripts": {
+    "lint": "next lint",
+    "validate": ".flight/validate-all.sh",
+    "preflight": "npm run validate && npm run lint"
+  }
+}
+```
+
+This makes Flight validation available as `npm run validate`.
+Run `npm run preflight` before commits to catch all issues.
+
+## Validation
+Run after implementing:
+```bash
+npm run preflight    # Must pass before moving to next task
+```
 ```
 
 ### tasks/002-database-schema.md
@@ -289,13 +422,20 @@ tasks/
 - [ ] RLS enabled on all tables
 - [ ] Can insert test row via SQL editor
 - [ ] Foreign key indexes exist
+- [ ] `.flight/validate-all.sh` passes
 
 ## Domain Constraints
-- code-hygiene.md
+- code-hygiene.md (always)
 - sql.md
 
 ## Technical Notes
 Use snake_case for columns. user_id references auth.users().
+
+## Validation
+Run after implementing:
+```bash
+.flight/validate-all.sh    # Must pass before moving to next task
+```
 ```
 
 ### tasks/003-auth-basic.md
@@ -324,12 +464,19 @@ Use snake_case for columns. user_id references auth.users().
 - [ ] Can log in at /login
 - [ ] /dashboard redirects to /login if not authenticated
 - [ ] Logout clears session
+- [ ] `.flight/validate-all.sh` passes
 
 ## Domain Constraints
-- code-hygiene.md
+- code-hygiene.md (always)
 - nextjs.md
 - react.md
 - typescript.md
+
+## Validation
+Run after implementing:
+```bash
+.flight/validate-all.sh    # Must pass before moving to next task
+```
 ```
 
 *[Continue for all tasks...]*
@@ -338,25 +485,38 @@ Use snake_case for columns. user_id references auth.users().
 
 ## Critical Rules
 
-1. **Research BEFORE decomposing** - Understand the problem space first
+1. **Read Flight context FIRST** - Load FLIGHT.md and scan domains before any research
 
-2. **Tasks must be atomic** - If you can't do it in 2 hours, split it
+2. **Research AFTER domain discovery** - External docs may conflict; domains are authoritative
 
-3. **"NOT In Scope" is sacred** - This prevents Claude from scope creeping
+3. **Tasks must be atomic** - If you can't do it in 2 hours, split it
 
-4. **Dependencies flow forward** - Task 005 can depend on 001-004, not on 006
+4. **"NOT In Scope" is sacred** - This prevents Claude from scope creeping
 
-5. **Each task is self-contained** - Include enough context to execute without re-reading PRD
+5. **Dependencies flow forward** - Task 005 can depend on 001-004, not on 006
 
-6. **Acceptance criteria are testable** - "Works well" is bad. "Returns 200 on GET /api/users" is good.
+6. **Each task is self-contained** - Include enough context to execute without re-reading PRD
 
-7. **Always include domain constraints** - Tell Claude which .md files to load
+7. **Acceptance criteria are testable** - "Works well" is bad. "Returns 200 on GET /api/users" is good.
 
-8. **Number tasks with padding** - 001, 002... not 1, 2 (sorting matters)
+8. **Always include domain constraints** - Based on FLIGHT.md table and actual `.flight/domains/` contents
+
+9. **Include scaffold.md for project setup** - Prevents destructive overwrites of project infrastructure
+
+10. **Number tasks with padding** - 001, 002... not 1, 2 (sorting matters)
+
+11. **validate-all.sh in acceptance criteria** - Local CI must pass before moving to next task
+
+12. **Task 001 configures Flight CI** - ESLint + validate/preflight scripts in package.json
 
 ---
 
 ## Checklist Before Finishing
+
+### Flight Context
+- [ ] Read `.flight/FLIGHT.md` first
+- [ ] Scanned `.flight/domains/*.md` to discover available domains
+- [ ] Matched domains to tech stack before external research
 
 ### Research
 - [ ] At least 3 competitors analyzed
@@ -372,12 +532,16 @@ Use snake_case for columns. user_id references auth.users().
 ### Task Quality
 - [ ] Each task has 3-5 acceptance criteria
 - [ ] All acceptance criteria are testable
-- [ ] Domain constraints specified for each task
+- [ ] All tasks include `.flight/validate-all.sh` passes in acceptance criteria
+- [ ] Domain constraints based on actual `.flight/domains/` contents
+- [ ] `scaffold.md` included for project setup tasks
+- [ ] Task 001 includes Flight CI setup (ESLint + validate/preflight scripts)
 - [ ] Context section is minimal but sufficient
 
 ### Workflow Ready
 - [ ] tasks/ directory created
 - [ ] User knows to run `/flight-prime tasks/001-*.md` next
+- [ ] User knows to run `.flight/validate-all.sh` after each task
 - [ ] MILESTONES.md shows the journey
 
 ---
@@ -395,11 +559,17 @@ Created:
     002-database-schema.md
     ...
 
-Next step:
-  /flight-prime tasks/001-project-setup.md
-
-Then after each task:
-  /flight-validate
+Workflow for each task:
+  /flight-prime tasks/001-project-setup.md   # Research & compile
+  /flight-compile                             # Create atomic prompt
+  [implement]
+  npm run preflight                           # Local CI (validate + lint)
+  /flight-validate                            # Full Flight validation
   [review and approve]
-  /flight-prime tasks/002-[next].md
+  /flight-prime tasks/002-[next].md           # Next task
+
+Notes:
+- Task 001 will configure local CI: ESLint + Flight validation
+- After Task 001: use `npm run preflight` (runs validate + lint)
+- This catches issues before they hit remote CI or code review
 ```
