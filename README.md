@@ -295,6 +295,7 @@ This domain runs automatically on every validation. You don't need to explicitly
 | `api` | REST/HTTP APIs | Resource URIs, status codes, versioning |
 | `bash` | Shell scripts | Strict mode, quoting, error handling |
 | `code-hygiene` | **Universal** | Naming, redundant logic, semantic clarity |
+| `clerk` | Clerk auth (TS/Next.js) | clerkMiddleware, organizations, multi-tenant patterns |
 | `docker` | Container config | Multi-stage builds, non-root users, layer caching |
 | `embedded-c-p10` | Safety-critical C | NASA Power of 10 rules |
 | `go` | Go source files | Error handling, defer patterns, concurrency |
