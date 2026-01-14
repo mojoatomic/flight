@@ -1,0 +1,1093 @@
+# kubernetes.flight - Kubernetes YAML manifest best practices
+# Flight domain for Kubernetes resource validation
+# Sources: Pod Security Standards, NSA/CISA Hardening Guide, kube-score, Polaris
+
+domain: kubernetes
+version: 1.0.0
+description: |
+  Kubernetes YAML manifest best practices. Covers security, reliability,
+  resource management, and operational excellence. Framework-agnostic.
+
+file_patterns:
+  - "**/*.yaml"
+  - "**/*.yml"
+
+exclude_patterns:
+  - "**/node_modules/**"
+  - "**/.git/**"
+  - "**/vendor/**"
+
+# Detection: Only validate files containing Kubernetes resources
+detection:
+  required_patterns:
+    - "apiVersion:"
+    - "kind:"
+
+suppression:
+  comment: "flight:ok"
+  documentation: |
+    Add `# flight:ok` comment on the same line to suppress a specific check.
+    Use sparingly. Document why the suppression is acceptable.
+
+    ```yaml
+    # System daemon requiring host network access
+    hostNetwork: true  # flight:ok
+    ```
+
+rules:
+  # ============================================================================
+  # NEVER Rules - Security Vulnerabilities (validator will reject)
+  # ============================================================================
+
+  N1:
+    title: Privileged Containers
+    severity: NEVER
+    mechanical: true
+    description: |
+      Do not run privileged containers. Privileged mode disables most security
+      mechanisms and grants full host access. Container escape becomes trivial.
+    check:
+      type: grep
+      pattern: 'privileged:\s*true'
+      flags: -Ein
+      exclude: flight:ok
+    note: |
+      From Pod Security Standards (Baseline): "Privileged Pods disable most
+      security mechanisms and must be disallowed."
+    examples:
+      bad:
+        - "privileged: true"
+      good:
+        - "privileged: false"
+        - |
+          securityContext:
+            privileged: false
+
+  N2:
+    title: Host Namespace Sharing
+    severity: NEVER
+    mechanical: true
+    description: |
+      Do not share host namespaces (hostPID, hostIPC, hostNetwork). This breaks
+      container isolation and allows access to host processes, IPC, and network.
+    check:
+      type: grep
+      pattern: 'host(PID|IPC|Network):\s*true'
+      flags: -Ein
+      exclude: flight:ok
+    note: |
+      From Pod Security Standards (Baseline): "Sharing the host namespaces must
+      be disallowed." Only CNI plugins and system daemons may need these.
+    examples:
+      bad:
+        - "hostPID: true"
+        - "hostIPC: true"
+        - "hostNetwork: true"
+      good:
+        - "hostPID: false"
+        - "hostNetwork: false"
+
+  N3:
+    title: Dangerous Capabilities
+    severity: NEVER
+    mechanical: true
+    description: |
+      Do not add dangerous capabilities like SYS_ADMIN, NET_ADMIN, or ALL.
+      These capabilities enable privilege escalation and container escape.
+    check:
+      type: grep
+      pattern: 'capabilities:[\s\S]*?add:[\s\S]*?(SYS_ADMIN|NET_ADMIN|SYS_PTRACE|NET_RAW|SYS_MODULE|DAC_READ_SEARCH|ALL)\b'
+      flags: -Eiz
+      exclude: flight:ok
+    note: |
+      SYS_ADMIN is particularly dangerous - it's essentially root. NET_ADMIN
+      allows network config changes. ALL grants every capability.
+    examples:
+      bad:
+        - |
+          capabilities:
+            add: ["SYS_ADMIN"]
+        - |
+          capabilities:
+            add: ["ALL"]
+      good:
+        - |
+          capabilities:
+            drop: ["ALL"]
+            add: ["NET_BIND_SERVICE"]
+
+  N4:
+    title: HostPath Volume Mounts
+    severity: NEVER
+    mechanical: true
+    description: |
+      Do not mount host filesystem paths. HostPath volumes allow container escape
+      by accessing sensitive host files like /etc/shadow or Docker socket.
+    check:
+      type: grep
+      pattern: 'hostPath:'
+      flags: -Ein
+      exclude: flight:ok
+    note: |
+      From Pod Security Standards (Baseline): "HostPath volumes must be forbidden."
+      Use PersistentVolumeClaims or ConfigMaps/Secrets instead.
+    examples:
+      bad:
+        - |
+          volumes:
+          - name: docker-sock
+            hostPath:
+              path: /var/run/docker.sock
+      good:
+        - |
+          volumes:
+          - name: config
+            configMap:
+              name: app-config
+
+  N5:
+    title: Privilege Escalation Allowed
+    severity: NEVER
+    mechanical: true
+    description: |
+      Explicitly disable privilege escalation. When allowPrivilegeEscalation is
+      true or unset, processes can gain more privileges than their parent.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Check for explicit true setting
+          if grep -qE 'allowPrivilegeEscalation:\s*true' "$f" 2>/dev/null; then
+            grep -HnE 'allowPrivilegeEscalation:\s*true' "$f" | grep -v 'flight:ok'
+          fi
+        done
+    note: |
+      From Pod Security Standards (Restricted): "Privilege escalation should not
+      be allowed." Always set allowPrivilegeEscalation: false.
+    examples:
+      bad:
+        - "allowPrivilegeEscalation: true"
+      good:
+        - "allowPrivilegeEscalation: false"
+
+  N6:
+    title: Running as Root User
+    severity: NEVER
+    mechanical: true
+    description: |
+      Do not run containers as root (UID 0). Root inside a container has the
+      same UID as root on the host, enabling privilege escalation.
+    check:
+      type: grep
+      pattern: 'runAsUser:\s*0\s*$'
+      flags: -En
+      exclude: flight:ok
+    note: |
+      From Pod Security Standards (Restricted): "Containers must not set runAsUser
+      to 0." Use runAsNonRoot: true and specify a non-root UID.
+    examples:
+      bad:
+        - "runAsUser: 0"
+      good:
+        - "runAsUser: 1000"
+        - "runAsNonRoot: true"
+
+  N7:
+    title: Secrets in Environment Variables
+    severity: NEVER
+    mechanical: true
+    description: |
+      Do not hardcode secrets in environment variables. Secrets in env vars are
+      visible in pod specs, logs, and kubectl describe output.
+    check:
+      type: grep
+      pattern: 'name:\s*(PASSWORD|SECRET|API_KEY|TOKEN|PRIVATE_KEY|CREDENTIAL|AUTH_TOKEN)\s*\n\s*value:\s*["\x27]?[^"\x27\n]+'
+      flags: -Eiz
+      exclude: flight:ok
+    note: |
+      Use Kubernetes Secrets with secretKeyRef, or external secret managers.
+      Environment variables with secrets are logged and exposed in multiple ways.
+    examples:
+      bad:
+        - |
+          env:
+          - name: DATABASE_PASSWORD
+            value: "secret123"
+      good:
+        - |
+          env:
+          - name: DATABASE_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: db-secrets
+                key: password
+
+  N8:
+    title: Default ServiceAccount
+    severity: NEVER
+    mechanical: true
+    description: |
+      Do not use the default ServiceAccount for workloads. The default account
+      may have excessive permissions. Create dedicated ServiceAccounts.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet|Job|CronJob|Pod)' "$f" 2>/dev/null; then
+            if grep -qE 'serviceAccountName:\s*default\s*$' "$f" 2>/dev/null; then
+              grep -HnE 'serviceAccountName:\s*default\s*$' "$f" | grep -v 'flight:ok'
+            fi
+          fi
+        done
+    note: |
+      Create a dedicated ServiceAccount for each workload with minimal permissions.
+      This limits blast radius if the workload is compromised.
+    examples:
+      bad:
+        - "serviceAccountName: default"
+      good:
+        - "serviceAccountName: my-app-sa"
+        - "automountServiceAccountToken: false"
+
+  # ============================================================================
+  # MUST Rules - Reliability Requirements (validator will reject)
+  # ============================================================================
+
+  M1:
+    title: Container Image Tag Required
+    severity: MUST
+    mechanical: true
+    description: |
+      Always specify explicit image tags. Using :latest or no tag causes
+      unpredictable deployments and makes rollbacks impossible.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Match image: without tag or with :latest
+          grep -HnE 'image:\s*["\x27]?[a-zA-Z0-9._/-]+(:latest)?\s*["\x27]?\s*$' "$f" 2>/dev/null | \
+            grep -v ':[0-9]' | \
+            grep -v '@sha256:' | \
+            grep -v 'flight:ok'
+        done
+    note: |
+      From kube-score: "Makes sure that an explicit non-latest tag is used."
+      Pin to specific versions or SHA digests for reproducibility.
+    examples:
+      bad:
+        - "image: nginx"
+        - "image: nginx:latest"
+      good:
+        - "image: nginx:1.25.3"
+        - "image: nginx@sha256:abc123..."
+
+  M2:
+    title: Resource Requests Required
+    severity: MUST
+    mechanical: true
+    description: |
+      Always set resource requests for CPU and memory. Without requests,
+      the scheduler cannot make informed decisions and autoscaling fails.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet|Job|Pod)' "$f" 2>/dev/null; then
+            if grep -qE 'containers:' "$f" 2>/dev/null; then
+              if ! grep -qE 'requests:' "$f" 2>/dev/null; then
+                echo "$f: containers found but no resource requests defined"
+              fi
+            fi
+          fi
+        done | grep -v 'flight:ok'
+    note: |
+      From Polaris: "Setting appropriate resource requests will ensure that all
+      your applications have sufficient compute resources."
+    examples:
+      bad:
+        - |
+          containers:
+          - name: app
+            image: myapp:1.0
+      good:
+        - |
+          containers:
+          - name: app
+            image: myapp:1.0
+            resources:
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+
+  M3:
+    title: Resource Limits Required
+    severity: MUST
+    mechanical: true
+    description: |
+      Always set resource limits for memory. Without limits, a single
+      misbehaving container can consume all node resources.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet|Job|Pod)' "$f" 2>/dev/null; then
+            if grep -qE 'containers:' "$f" 2>/dev/null; then
+              if ! grep -qE 'limits:' "$f" 2>/dev/null; then
+                echo "$f: containers found but no memory limits defined"
+              fi
+            fi
+          fi
+        done | grep -v 'flight:ok'
+    note: |
+      Memory limits are essential to prevent OOM situations affecting other pods.
+      CPU limits are recommended but can cause throttling issues.
+    examples:
+      bad:
+        - |
+          resources:
+            requests:
+              memory: "128Mi"
+      good:
+        - |
+          resources:
+            requests:
+              memory: "128Mi"
+            limits:
+              memory: "256Mi"
+
+  M4:
+    title: Liveness Probe Required
+    severity: MUST
+    mechanical: true
+    description: |
+      Define liveness probes for long-running containers. Without liveness
+      probes, Kubernetes cannot detect and restart deadlocked applications.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet)' "$f" 2>/dev/null; then
+            if grep -qE 'containers:' "$f" 2>/dev/null; then
+              if ! grep -qE 'livenessProbe:' "$f" 2>/dev/null; then
+                echo "$f: long-running workload without livenessProbe"
+              fi
+            fi
+          fi
+        done | grep -v 'flight:ok'
+    note: |
+      From kube-score: "Liveness probes are designed to ensure that an application
+      stays in a healthy state. When a liveness probe fails, the pod will be restarted."
+    examples:
+      bad:
+        - |
+          containers:
+          - name: app
+            image: myapp:1.0
+      good:
+        - |
+          containers:
+          - name: app
+            image: myapp:1.0
+            livenessProbe:
+              httpGet:
+                path: /healthz
+                port: 8080
+              initialDelaySeconds: 30
+              periodSeconds: 10
+
+  M5:
+    title: Readiness Probe Required
+    severity: MUST
+    mechanical: true
+    description: |
+      Define readiness probes for services. Without readiness probes, traffic
+      is sent to pods before they're ready, causing errors.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet)' "$f" 2>/dev/null; then
+            if grep -qE 'containers:' "$f" 2>/dev/null; then
+              if ! grep -qE 'readinessProbe:' "$f" 2>/dev/null; then
+                echo "$f: workload without readinessProbe"
+              fi
+            fi
+          fi
+        done | grep -v 'flight:ok'
+    note: |
+      From Polaris: "Readiness probes are designed to ensure that an application
+      has reached a ready state before receiving traffic."
+    examples:
+      bad:
+        - |
+          containers:
+          - name: app
+            image: myapp:1.0
+      good:
+        - |
+          containers:
+          - name: app
+            image: myapp:1.0
+            readinessProbe:
+              httpGet:
+                path: /ready
+                port: 8080
+              initialDelaySeconds: 5
+              periodSeconds: 5
+
+  M6:
+    title: Deployment Replicas
+    severity: MUST
+    mechanical: true
+    description: |
+      Deployments should have at least 2 replicas for high availability.
+      Single replica deployments have no redundancy during updates or failures.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qE 'kind:\s*Deployment' "$f" 2>/dev/null; then
+            if grep -qE 'replicas:\s*1\s*$' "$f" 2>/dev/null; then
+              grep -HnE 'replicas:\s*1\s*$' "$f" | grep -v 'flight:ok'
+            fi
+          fi
+        done
+    note: |
+      From kube-score: "Makes sure that Deployment has multiple replicas."
+      Single replicas mean zero availability during rolling updates.
+    examples:
+      bad:
+        - "replicas: 1"
+      good:
+        - "replicas: 2"
+        - "replicas: 3"
+
+  M7:
+    title: Labels Required
+    severity: MUST
+    mechanical: true
+    description: |
+      Pods must have standard labels for identification and selection.
+      Missing labels break service discovery and monitoring.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet|Pod)' "$f" 2>/dev/null; then
+            if ! grep -qE 'labels:' "$f" 2>/dev/null; then
+              echo "$f: workload without labels defined"
+            fi
+          fi
+        done | grep -v 'flight:ok'
+    note: |
+      Use standard Kubernetes labels: app.kubernetes.io/name, app.kubernetes.io/instance,
+      app.kubernetes.io/version, app.kubernetes.io/component.
+    examples:
+      bad:
+        - |
+          metadata:
+            name: my-app
+      good:
+        - |
+          metadata:
+            name: my-app
+            labels:
+              app.kubernetes.io/name: my-app
+              app.kubernetes.io/version: "1.0.0"
+
+  M8:
+    title: Namespace Required
+    severity: MUST
+    mechanical: true
+    description: |
+      Specify namespace explicitly. Relying on kubectl context can deploy
+      to wrong namespace. Never use 'default' namespace for applications.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet|Service|ConfigMap|Secret|Pod)' "$f" 2>/dev/null; then
+            if ! grep -qE 'namespace:' "$f" 2>/dev/null; then
+              echo "$f: resource without explicit namespace"
+            elif grep -qE 'namespace:\s*default\s*$' "$f" 2>/dev/null; then
+              grep -HnE 'namespace:\s*default\s*$' "$f" | grep -v 'flight:ok'
+            fi
+          fi
+        done
+    note: |
+      The default namespace should be reserved for system resources.
+      Always specify namespace to avoid accidental deployments.
+    examples:
+      bad:
+        - "namespace: default"
+        - |
+          metadata:
+            name: my-app
+      good:
+        - |
+          metadata:
+            name: my-app
+            namespace: my-app-prod
+
+  # ============================================================================
+  # SHOULD Rules - Best Practices (validator warns)
+  # ============================================================================
+
+  S1:
+    title: Run as Non-Root
+    severity: SHOULD
+    mechanical: true
+    description: |
+      Set runAsNonRoot: true in securityContext. This provides defense in depth
+      even if the container image runs as non-root by default.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet|Pod)' "$f" 2>/dev/null; then
+            if ! grep -qE 'runAsNonRoot:\s*true' "$f" 2>/dev/null; then
+              echo "$f: securityContext.runAsNonRoot not set to true"
+            fi
+          fi
+        done | grep -v 'flight:ok'
+    note: |
+      From Pod Security Standards (Restricted): "Containers must be required to
+      run as non-root users."
+    examples:
+      bad:
+        - |
+          securityContext: {}
+      good:
+        - |
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+
+  S2:
+    title: Read-Only Root Filesystem
+    severity: SHOULD
+    mechanical: true
+    description: |
+      Set readOnlyRootFilesystem: true. This prevents attackers from modifying
+      container binaries or installing malware.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet|Pod)' "$f" 2>/dev/null; then
+            if grep -qE 'containers:' "$f" 2>/dev/null; then
+              if ! grep -qE 'readOnlyRootFilesystem:\s*true' "$f" 2>/dev/null; then
+                echo "$f: securityContext.readOnlyRootFilesystem not set to true"
+              fi
+            fi
+          fi
+        done | grep -v 'flight:ok'
+    note: |
+      Use emptyDir volumes for directories that need write access (e.g., /tmp).
+      This significantly reduces attack surface.
+    examples:
+      bad:
+        - |
+          securityContext:
+            runAsNonRoot: true
+      good:
+        - |
+          securityContext:
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+
+  S3:
+    title: Drop All Capabilities
+    severity: SHOULD
+    mechanical: true
+    description: |
+      Drop all Linux capabilities and only add back what's needed.
+      By default, containers get several capabilities that are rarely needed.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet|Pod)' "$f" 2>/dev/null; then
+            if grep -qE 'containers:' "$f" 2>/dev/null; then
+              # Check for drop: ["ALL"] or drop: - ALL patterns
+              if ! grep -qE 'drop:' "$f" 2>/dev/null || ! grep -qE '(- ALL|\["ALL"\]|"ALL")' "$f" 2>/dev/null; then
+                echo "$f: capabilities.drop does not include ALL"
+              fi
+            fi
+          fi
+        done | grep -v 'flight:ok'
+    note: |
+      From Pod Security Standards (Restricted): "Containers must drop ALL
+      capabilities, and are only permitted to add back NET_BIND_SERVICE."
+    examples:
+      bad:
+        - |
+          securityContext:
+            capabilities: {}
+      good:
+        - |
+          securityContext:
+            capabilities:
+              drop: ["ALL"]
+              add: ["NET_BIND_SERVICE"]
+
+  S4:
+    title: PodDisruptionBudget Required
+    severity: SHOULD
+    mechanical: true
+    description: |
+      Create PodDisruptionBudgets for critical deployments. PDBs ensure minimum
+      availability during voluntary disruptions like node drains.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qE 'kind:\s*(Deployment|StatefulSet)' "$f" 2>/dev/null; then
+            name=$(grep -A1 'metadata:' "$f" 2>/dev/null | grep 'name:' | head -1 | sed 's/.*name:\s*//' | tr -d '"\x27 ')
+            if [ -n "$name" ]; then
+              # Check if PDB exists in same file or directory
+              dir=$(dirname "$f")
+              if ! grep -rqE "kind:\s*PodDisruptionBudget" "$dir" 2>/dev/null; then
+                echo "$f: Deployment/StatefulSet '$name' has no PodDisruptionBudget"
+              fi
+            fi
+          fi
+        done | grep -v 'flight:ok'
+    note: |
+      From kube-score: "Makes sure that all StatefulSets and Deployments are
+      targeted by a PDB."
+    examples:
+      bad:
+        - |
+          # Only Deployment, no PDB
+          kind: Deployment
+      good:
+        - |
+          kind: PodDisruptionBudget
+          spec:
+            minAvailable: 1
+            selector:
+              matchLabels:
+                app: my-app
+
+  S5:
+    title: Pod Anti-Affinity
+    severity: SHOULD
+    mechanical: true
+    description: |
+      Configure pod anti-affinity to spread replicas across nodes.
+      Without anti-affinity, all replicas may run on the same node.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qE 'kind:\s*(Deployment|StatefulSet)' "$f" 2>/dev/null; then
+            if grep -qE 'replicas:\s*[2-9]' "$f" 2>/dev/null; then
+              if ! grep -qE 'podAntiAffinity:' "$f" 2>/dev/null; then
+                echo "$f: multi-replica workload without podAntiAffinity"
+              fi
+            fi
+          fi
+        done | grep -v 'flight:ok'
+    note: |
+      From kube-score: "Makes sure that a podAntiAffinity has been set that
+      prevents multiple pods from being scheduled on the same node."
+    examples:
+      bad:
+        - |
+          replicas: 3
+          template:
+            spec:
+              containers: []
+      good:
+        - |
+          replicas: 3
+          template:
+            spec:
+              affinity:
+                podAntiAffinity:
+                  preferredDuringSchedulingIgnoredDuringExecution:
+                  - weight: 100
+                    podAffinityTerm:
+                      topologyKey: kubernetes.io/hostname
+
+  S6:
+    title: Image Pull Policy Always
+    severity: SHOULD
+    mechanical: true
+    description: |
+      Set imagePullPolicy to Always. This ensures fresh images are pulled
+      and ImagePullSecrets are always validated.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet|Pod)' "$f" 2>/dev/null; then
+            if grep -qE 'imagePullPolicy:\s*(Never|IfNotPresent)' "$f" 2>/dev/null; then
+              grep -HnE 'imagePullPolicy:\s*(Never|IfNotPresent)' "$f" | grep -v 'flight:ok'
+            fi
+          fi
+        done
+    note: |
+      From kube-score: "Makes sure that the pullPolicy is set to Always."
+      This prevents using cached images that may be outdated or compromised.
+    examples:
+      bad:
+        - "imagePullPolicy: IfNotPresent"
+        - "imagePullPolicy: Never"
+      good:
+        - "imagePullPolicy: Always"
+
+  S7:
+    title: Seccomp Profile
+    severity: SHOULD
+    mechanical: true
+    description: |
+      Configure a Seccomp profile to restrict system calls.
+      Seccomp significantly reduces the kernel attack surface.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet|Pod)' "$f" 2>/dev/null; then
+            if ! grep -qE 'seccompProfile:' "$f" 2>/dev/null; then
+              echo "$f: no seccompProfile configured"
+            fi
+          fi
+        done | grep -v 'flight:ok'
+    note: |
+      From Pod Security Standards (Restricted): "Seccomp profile must be
+      explicitly set to RuntimeDefault or Localhost."
+    examples:
+      bad:
+        - |
+          securityContext: {}
+      good:
+        - |
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault
+
+  S8:
+    title: Service Account Token Automount
+    severity: SHOULD
+    mechanical: true
+    description: |
+      Disable automatic mounting of ServiceAccount tokens when not needed.
+      Most applications don't need Kubernetes API access.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet|Pod)' "$f" 2>/dev/null; then
+            # Only warn if automountServiceAccountToken is not explicitly set
+            if ! grep -qE 'automountServiceAccountToken:' "$f" 2>/dev/null; then
+              echo "$f: automountServiceAccountToken not explicitly configured"
+            fi
+          fi
+        done | grep -v 'flight:ok'
+    note: |
+      From Polaris: "Fails when automountServiceAccountToken is automounted."
+      Set to false unless the workload needs to interact with the Kubernetes API.
+    examples:
+      bad:
+        - |
+          spec:
+            containers: []
+      good:
+        - |
+          spec:
+            automountServiceAccountToken: false
+            containers: []
+
+  S9:
+    title: Network Policy
+    severity: SHOULD
+    mechanical: true
+    description: |
+      Create NetworkPolicies to restrict pod-to-pod communication.
+      By default, all pods can communicate with each other.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet)' "$f" 2>/dev/null; then
+            dir=$(dirname "$f")
+            if ! grep -rqE "kind:\s*NetworkPolicy" "$dir" 2>/dev/null; then
+              echo "$f: no NetworkPolicy found in directory"
+            fi
+          fi
+        done | grep -v 'flight:ok'
+    note: |
+      From kube-score: "Makes sure that all Pods are targeted by a NetworkPolicy."
+      NetworkPolicies implement zero-trust networking within the cluster.
+    examples:
+      bad:
+        - |
+          # Deployment without NetworkPolicy
+      good:
+        - |
+          kind: NetworkPolicy
+          spec:
+            podSelector:
+              matchLabels:
+                app: my-app
+            policyTypes:
+            - Ingress
+            - Egress
+
+  S10:
+    title: Probes Must Differ
+    severity: SHOULD
+    mechanical: true
+    description: |
+      Liveness and readiness probes should not be identical.
+      Identical probes can cause cascading failures during startup.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qE 'livenessProbe:' "$f" 2>/dev/null && grep -qE 'readinessProbe:' "$f" 2>/dev/null; then
+            liveness=$(grep -A5 'livenessProbe:' "$f" 2>/dev/null | head -6)
+            readiness=$(grep -A5 'readinessProbe:' "$f" 2>/dev/null | head -6)
+            # Simple check - if paths/ports are same
+            liveness_path=$(echo "$liveness" | grep -oE 'path:\s*\S+' | head -1)
+            readiness_path=$(echo "$readiness" | grep -oE 'path:\s*\S+' | head -1)
+            if [ -n "$liveness_path" ] && [ "$liveness_path" = "$readiness_path" ]; then
+              echo "$f: liveness and readiness probes appear identical"
+            fi
+          fi
+        done | grep -v 'flight:ok'
+    note: |
+      From kube-score: "Makes sure that readiness and liveness probes are not
+      identical." Use different endpoints or different timing settings.
+    examples:
+      bad:
+        - |
+          livenessProbe:
+            httpGet:
+              path: /health
+          readinessProbe:
+            httpGet:
+              path: /health
+      good:
+        - |
+          livenessProbe:
+            httpGet:
+              path: /healthz
+            initialDelaySeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /ready
+            initialDelaySeconds: 5
+
+  # ============================================================================
+  # GUIDANCE Rules - Design Principles (not mechanically checked)
+  # ============================================================================
+
+  G1:
+    title: Stateless Applications
+    severity: GUIDANCE
+    mechanical: false
+    description: |
+      Design applications to be stateless where possible. Stateless apps are
+      easier to scale, update, and recover from failures.
+    note: |
+      Store state in external databases, caches, or object storage.
+      Use StatefulSets only when truly needed (databases, message queues).
+    examples:
+      bad:
+        - "Storing session data in container filesystem"
+        - "Using local SQLite database"
+      good:
+        - "Using Redis for session storage"
+        - "Using managed database service"
+
+  G2:
+    title: Horizontal Pod Autoscaler
+    severity: GUIDANCE
+    mechanical: false
+    description: |
+      Use HorizontalPodAutoscaler for variable workloads. HPA automatically
+      adjusts replica count based on CPU, memory, or custom metrics.
+    note: |
+      When using HPA, don't set replicas in the Deployment spec.
+      Configure appropriate min/max replicas and scaling metrics.
+    examples:
+      good:
+        - |
+          kind: HorizontalPodAutoscaler
+          spec:
+            minReplicas: 2
+            maxReplicas: 10
+            metrics:
+            - type: Resource
+              resource:
+                name: cpu
+                target:
+                  type: Utilization
+                  averageUtilization: 70
+
+  G3:
+    title: Pod Topology Spread Constraints
+    severity: GUIDANCE
+    mechanical: false
+    description: |
+      Use topologySpreadConstraints for multi-zone deployments. This ensures
+      pods are distributed across availability zones for resilience.
+    note: |
+      From Polaris: "The scheduler prefers bin-packing over precise spreading.
+      Use topologySpreadConstraints to ensure multi-AZ distribution."
+    examples:
+      good:
+        - |
+          topologySpreadConstraints:
+          - maxSkew: 1
+            topologyKey: topology.kubernetes.io/zone
+            whenUnsatisfiable: DoNotSchedule
+            labelSelector:
+              matchLabels:
+                app: my-app
+
+  G4:
+    title: Resource Quality of Service
+    severity: GUIDANCE
+    mechanical: false
+    description: |
+      Understand QoS classes and configure resources accordingly.
+      Guaranteed (requests=limits), Burstable, or BestEffort.
+    note: |
+      Critical workloads should use Guaranteed QoS (requests=limits for all
+      resources). This prevents CPU throttling and OOM kills during pressure.
+    examples:
+      good:
+        - |
+          # Guaranteed QoS
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "500m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+
+  G5:
+    title: Graceful Shutdown
+    severity: GUIDANCE
+    mechanical: false
+    description: |
+      Configure preStop hooks and terminationGracePeriodSeconds for graceful
+      shutdown. This allows in-flight requests to complete.
+    note: |
+      Default terminationGracePeriodSeconds is 30. Increase for long-running
+      operations. Use preStop hooks to deregister from load balancers.
+    examples:
+      good:
+        - |
+          terminationGracePeriodSeconds: 60
+          containers:
+          - lifecycle:
+              preStop:
+                exec:
+                  command: ["/bin/sh", "-c", "sleep 10"]
+
+  G6:
+    title: Init Containers for Dependencies
+    severity: GUIDANCE
+    mechanical: false
+    description: |
+      Use init containers to wait for dependencies. This is cleaner than
+      retry loops in application code.
+    note: |
+      Init containers run sequentially before main containers start.
+      Use them for database migrations, config fetching, or dependency checks.
+    examples:
+      good:
+        - |
+          initContainers:
+          - name: wait-for-db
+            image: busybox:1.36
+            command: ['sh', '-c', 'until nc -z db 5432; do sleep 2; done']
+
+info:
+  deployment_count:
+    pattern: "kind:\\s*Deployment"
+    flags: -cE
+    label: "Deployments"
+
+  statefulset_count:
+    pattern: "kind:\\s*StatefulSet"
+    flags: -cE
+    label: "StatefulSets"
+
+  service_count:
+    pattern: "kind:\\s*Service"
+    flags: -cE
+    label: "Services"
+
+  configmap_count:
+    pattern: "kind:\\s*ConfigMap"
+    flags: -cE
+    label: "ConfigMaps"
+
+  secret_count:
+    pattern: "kind:\\s*Secret"
+    flags: -cE
+    label: "Secrets"
+
+anti_patterns:
+  - pattern: "Privileged containers"
+    example: "privileged: true"
+    fix: "Use privileged: false"
+
+  - pattern: "Host namespace sharing"
+    example: "hostNetwork: true"
+    fix: "Remove hostPID, hostIPC, hostNetwork"
+
+  - pattern: "Running as root"
+    example: "runAsUser: 0"
+    fix: "Use runAsNonRoot: true, runAsUser: 1000+"
+
+  - pattern: "Latest image tag"
+    example: "image: nginx:latest"
+    fix: "Pin specific version: nginx:1.25.3"
+
+  - pattern: "Missing resource limits"
+    example: "No resources section"
+    fix: "Set requests and limits for CPU/memory"
+
+  - pattern: "Missing probes"
+    example: "No livenessProbe"
+    fix: "Configure liveness and readiness probes"
+
+  - pattern: "Single replica"
+    example: "replicas: 1"
+    fix: "Use replicas: 2+ for HA"
+
+  - pattern: "Default namespace"
+    example: "namespace: default"
+    fix: "Use dedicated namespace per app"
+
+  - pattern: "Secrets in env vars"
+    example: "env: PASSWORD=secret"
+    fix: "Use secretKeyRef or external secrets"
+
+  - pattern: "HostPath volumes"
+    example: "hostPath: /var/run"
+    fix: "Use PVC, ConfigMap, or Secret volumes"
+
+sources:
+  - title: "Kubernetes Pod Security Standards"
+    url: "https://kubernetes.io/docs/concepts/security/pod-security-standards/"
+
+  - title: "NSA/CISA Kubernetes Hardening Guide"
+    url: "https://media.defense.gov/2022/Aug/29/2003066362/-1/-1/0/CTR_KUBERNETES_HARDENING_GUIDANCE_1.2_20220829.PDF"
+
+  - title: "kube-score - Static analysis for Kubernetes"
+    url: "https://github.com/zegl/kube-score"
+
+  - title: "Polaris - Best practices validation"
+    url: "https://polaris.docs.fairwinds.com/"
+
+  - title: "CIS Kubernetes Benchmark"
+    url: "https://www.cisecurity.org/benchmark/kubernetes"
