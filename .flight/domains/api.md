@@ -61,6 +61,9 @@ Use sparingly. Document why the suppression is acceptable.
    ```
 
 4. **Breaking Changes Without Versioning** - Existing clients must not break
+
+   > ⚠️ Not mechanically validated. Enforced via code review.
+
    ```
    Breaking changes:
    - Removing or renaming fields
@@ -118,23 +121,7 @@ Use sparingly. Document why the suppression is acceptable.
    }
    ```
 
-8. **Missing Request IDs** - Impossible to trace issues across services
-   ```javascript
-   // BAD - no way to correlate logs
-   { "error": "Something failed" }
-
-   // GOOD - every response includes trace ID
-   {
-     "error": "Something failed",
-     "request_id": "req_abc123",
-     "trace_id": "trace_xyz789"
-   }
-
-   // Generate on entry, propagate through, return in response
-   X-Request-ID: req_abc123
-   ```
-
-9. **CORS Wildcard with Credentials** - Security vulnerability
+8. **CORS Wildcard with Credentials** - Security vulnerability
    ```javascript
    // BAD - allows any origin to send credentials
    Access-Control-Allow-Origin: *
@@ -458,6 +445,22 @@ Use sparingly. Document why the suppression is acceptable.
 
     // Exception: localhost in development is OK
     const devUrl = "http://localhost:3000/api"
+    ```
+
+13. **Include Request IDs** - Enable tracing across services
+    ```javascript
+    // BAD - no way to correlate logs
+    { "error": "Something failed" }
+
+    // GOOD - every response includes trace ID
+    {
+      "error": "Something failed",
+      "request_id": "req_abc123",
+      "trace_id": "trace_xyz789"
+    }
+
+    // Generate on entry, propagate through, return in response
+    X-Request-ID: req_abc123
     ```
 
 ### GUIDANCE (not mechanically checked)
