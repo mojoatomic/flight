@@ -1,0 +1,809 @@
+domain: api
+version: 1.0.0
+description: REST/HTTP API design patterns. Framework-agnostic. Prevents common integration failures.
+
+file_patterns:
+  - "**/routes*.{js,ts}"
+  - "**/controller*.{js,ts}"
+  - "**/api/**/*.{js,ts}"
+  - "**/*Router*.java"
+  - "**/*Controller*.java"
+  - "**/views.py"
+  - "**/urls.py"
+
+api_file_detection:
+  paths:
+    - "api/"
+    - "routes/"
+    - "endpoints/"
+    - "handlers/"
+    - "controllers/"
+  patterns:
+    - '(app|router|server|fastify|hono)\.(get|post|put|patch|delete|on)\('
+    - 'NextResponse|\bResponse\.json'
+    - 'export\s+(async\s+)?function\s+(GET|POST|PUT|PATCH|DELETE)'
+    - '@(Get|Post|Put|Delete|Patch|RequestMapping|GetMapping|PostMapping|api_view|action)\('
+    - '@(app|blueprint)\.route\('
+    - 'http\.HandleFunc|func\s+\w*Handler'
+
+suppression:
+  comment: "flight:ok"
+  documentation: |
+    Add `// flight:ok` comment on the same line to suppress a specific check.
+    Use sparingly. Document why the suppression is acceptable.
+
+# ===========================================================================
+# RULES
+# ===========================================================================
+# ID format: {severity_prefix}{number}
+#   N = NEVER (check - fails build)
+#   M = MUST (check - fails build)
+#   S = SHOULD (warn - advisory)
+#   G = GUIDANCE (not checked)
+#
+# mechanical: true  = validator implements this
+# mechanical: false = code review only, skip in validator
+# api_files_only: true = only check files matching api_file_detection
+# ===========================================================================
+
+rules:
+
+  # =========================================================================
+  # NEVER - Validator will reject (check)
+  # =========================================================================
+
+  N1:
+    title: Verbs in URIs
+    severity: NEVER
+    mechanical: true
+    description: URIs identify resources, HTTP methods define actions
+    check:
+      type: grep
+      pattern: '[''"]/?)(create|delete|remove|update|get|fetch|add|edit|modify)([A-Z]|[_-][a-z])'
+      flags: -En
+      exclude: flight:ok
+    examples:
+      bad:
+        - "POST /createUser"
+        - "POST /users/delete/123"
+        - "GET /getUsers"
+      good:
+        - "POST /users"
+        - "DELETE /users/123"
+        - "GET /users"
+
+  N2:
+    title: 200 OK with Error Body
+    severity: NEVER
+    mechanical: true
+    description: Status code must reflect outcome
+    check:
+      type: grep
+      pattern: 'status\(200\).*[''"]?error[''"]?\s*:|\.ok\(.*[''"]?error[''"]?\s*:|status.*200.*success.*false'
+      flags: -Ein
+    examples:
+      bad:
+        - 'HTTP/1.1 200 OK\n{ "success": false, "error": "User not found" }'
+      good:
+        - 'HTTP/1.1 404 Not Found\n{ "error": { "code": "USER_NOT_FOUND" } }'
+
+  N3:
+    title: Exposing Internal IDs in Pagination
+    severity: NEVER
+    mechanical: true
+    description: Auto-increment IDs leak data (record count, sequence)
+    check:
+      type: grep
+      pattern: 'after_id|before_id|since_id|last_id|start_id'
+      flags: -Ein
+    examples:
+      bad:
+        - '{ "next_page": "/users?after_id=84729" }'
+      good:
+        - '{ "next_cursor": "eyJ1cGRhdGVkX2F0Ijo..." }'
+
+  N4:
+    title: Breaking Changes Without Versioning
+    severity: NEVER
+    mechanical: false
+    description: Existing clients must not break
+    note: "⚠️ Not mechanically validated. Enforced via code review and semantic versioning."
+    examples:
+      breaking:
+        - "Removing or renaming fields"
+        - "Changing field types"
+        - "Removing endpoints"
+        - "Changing required/optional status"
+        - "Changing authentication"
+      non_breaking:
+        - "Adding new optional fields"
+        - "Adding new endpoints"
+        - "Adding new optional query params"
+
+  N5:
+    title: Sensitive Data in Query Strings
+    severity: NEVER
+    mechanical: true
+    description: URLs are logged everywhere (proxies, browsers, servers)
+    check:
+      type: grep
+      pattern: 'req\.(query|params)(\.(password|secret|api_key|token|auth)|\[[''"]?(password|secret|api_key|token|auth))|(\{[^}]*(password|secret|api_key|token|auth)[^}]*\})\s*=\s*req\.(query|params)'
+      flags: -Ein
+    examples:
+      bad:
+        - "GET /api/users?api_key=sk_live_abc123"
+        - "GET /api/auth?password=hunter2"
+      good:
+        - "Authorization: Bearer sk_live_abc123"
+        - 'POST /api/auth { "password": "..." }'
+
+  N6:
+    title: Offset Pagination for Large Datasets
+    severity: NEVER
+    mechanical: true
+    description: Performance degrades at scale (database scans and discards rows)
+    check:
+      type: grep
+      pattern: 'offset.*limit|page.*per_page|skip.*take'
+      flags: -Ein
+    note: This is a heuristic - small datasets may legitimately use offset pagination
+    examples:
+      bad:
+        - "GET /transactions?limit=20&offset=10000"
+      good:
+        - "GET /transactions?limit=20&after=eyJ0cyI6..."
+
+  N7:
+    title: 500 for Client Errors
+    severity: NEVER
+    mechanical: true
+    description: Server errors mask validation failures
+    check:
+      type: grep
+      pattern: 'catch.*\{[^}]*(status\(500\)|res\.status\s*=\s*500)|(ValidationError|validate|invalid).*500|500.*(validation|invalid)'
+      flags: -Ein
+    examples:
+      bad:
+        - 'catch (e) { res.status(500).json({ error: e.message }) }'
+      good:
+        - 'if (e instanceof ValidationError) { res.status(400)... }'
+
+  N8:
+    title: CORS Wildcard with Credentials
+    severity: NEVER
+    mechanical: true
+    description: Security vulnerability - allows any origin to send credentials
+    check:
+      type: multi-condition
+      logic: AND
+      conditions:
+        - pattern: 'origin.*\*|Allow-Origin.*\*'
+          flags: -Ei
+        - pattern: 'credentials.*true|withCredentials'
+          flags: -Ei
+    examples:
+      bad:
+        - "Access-Control-Allow-Origin: *\nAccess-Control-Allow-Credentials: true"
+      good:
+        - "Access-Control-Allow-Origin: https://app.example.com\nAccess-Control-Allow-Credentials: true"
+
+  # =========================================================================
+  # MUST - Validator will reject (check)
+  # =========================================================================
+
+  M1:
+    title: Use Correct HTTP Methods for Operations
+    severity: MUST
+    mechanical: false
+    description: GET=read, POST=create, PUT=replace, PATCH=update, DELETE=remove
+    note: Semantic check - requires understanding intent, not mechanically validatable
+    examples:
+      reference:
+        - "GET     - Read (safe, idempotent, cacheable)"
+        - "POST    - Create (not idempotent)"
+        - "PUT     - Replace entire resource (idempotent)"
+        - "PATCH   - Partial update (idempotent)"
+        - "DELETE  - Remove (idempotent)"
+
+  M2:
+    title: Use Correct Status Codes
+    severity: MUST
+    mechanical: false
+    description: Status codes must semantically match the response
+    note: Semantic check - requires understanding context, not mechanically validatable
+    examples:
+      2xx:
+        - "200 OK - Successful GET/PUT/PATCH/DELETE"
+        - "201 Created - Successful POST (include Location header)"
+        - "204 No Content - Successful DELETE with no body"
+      4xx:
+        - "400 Bad Request - Malformed syntax, validation failure"
+        - "401 Unauthorized - Missing/invalid authentication"
+        - "403 Forbidden - Authenticated but not authorized"
+        - "404 Not Found - Resource doesn't exist"
+        - "409 Conflict - State conflict"
+        - "422 Unprocessable - Valid syntax but semantic errors"
+        - "429 Too Many - Rate limited (include Retry-After)"
+      5xx:
+        - "500 Internal - Unexpected server failure"
+        - "502 Bad Gateway - Upstream service failure"
+        - "503 Unavailable - Temporarily unavailable"
+        - "504 Timeout - Upstream timeout"
+
+  M3:
+    title: Consistent Error Response Format (RFC 7807)
+    severity: MUST
+    mechanical: true
+    api_files_only: true
+    description: Use Problem Details for HTTP APIs
+    check:
+      type: presence
+      pattern: 'application/problem\+json|type.*title.*status|ProblemDetails'
+      flags: -l
+      invert: true
+      message: "No RFC 7807 Problem Details pattern found"
+    examples:
+      good:
+        - |
+          {
+            "type": "https://api.example.com/errors/validation",
+            "title": "Validation Error",
+            "status": 400,
+            "detail": "Email address is not properly formatted",
+            "instance": "/users/123",
+            "traceId": "abc123-def456"
+          }
+
+  M4:
+    title: Plural Nouns for Collection URIs
+    severity: MUST
+    mechanical: true
+    description: Collections should use plural nouns
+    check:
+      type: grep
+      pattern: '[''"]/(user|product|order|item|account|customer|payment)(/|[''""])'
+      flags: -Ein
+    examples:
+      bad:
+        - "GET /user/123"
+        - "POST /order"
+      good:
+        - "GET /users/123"
+        - "POST /orders"
+
+  M5:
+    title: Include Pagination Metadata in Response
+    severity: MUST
+    mechanical: true
+    description: Paginated responses must include navigation metadata
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qEi "cursor|offset.*limit|page.*per_page|after_id|before_id" "$f" 2>/dev/null; then
+            if ! grep -qEi "has_more|next_cursor|prev_cursor|total_pages|total_count|page_info" "$f" 2>/dev/null; then
+              echo "$f: pagination patterns found but no response metadata"
+            fi
+          fi
+        done
+    examples:
+      cursor_based:
+        - |
+          {
+            "data": [...],
+            "pagination": {
+              "next_cursor": "eyJ...",
+              "prev_cursor": "eyJ...",
+              "has_more": true
+            }
+          }
+      offset_based:
+        - |
+          {
+            "data": [...],
+            "pagination": {
+              "page": 3,
+              "per_page": 20,
+              "total": 156
+            }
+          }
+
+  M6:
+    title: Version Your API from Day One
+    severity: MUST
+    mechanical: true
+    description: APIs must be versioned
+    check:
+      type: presence
+      pattern: '/v[0-9]+([/''"?]|$)|version.*header|api-version'
+      flags: -Ei
+      invert: true
+      message: "No API versioning detected"
+    examples:
+      uri_path:
+        - "/v1/users"
+        - "/v2/users"
+      header:
+        - "Accept: application/vnd.api+json; version=1"
+        - "X-API-Version: 2"
+
+  M7:
+    title: Rate Limit Headers
+    severity: MUST
+    mechanical: true
+    description: Include rate limiting information in responses
+    check:
+      type: presence
+      pattern: 'x-ratelimit|rate.?limit|retry-after'
+      flags: -Ei
+      invert: true
+      message: "No rate limiting headers detected"
+    examples:
+      headers:
+        - "X-RateLimit-Limit: 1000"
+        - "X-RateLimit-Remaining: 456"
+        - "X-RateLimit-Reset: 1704067200"
+        - "Retry-After: 60"
+
+  M8:
+    title: Location Header on 201 Created
+    severity: MUST
+    mechanical: true
+    description: Created responses must include Location header
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qEi "status\(201\)|\.created\(" "$f" 2>/dev/null; then
+            if ! grep -qEi "location.*header|header.*location|\.header\(.location" "$f" 2>/dev/null; then
+              echo "$f: 201 responses found but no Location header"
+            fi
+          fi
+        done
+    examples:
+      bad:
+        - 'res.status(201).json(newUser)'
+      good:
+        - 'res.status(201).header("Location", `/users/${id}`).json(newUser)'
+
+  M9:
+    title: Content-Type Header on All Responses
+    severity: MUST
+    mechanical: true
+    description: All responses must have explicit Content-Type
+    check:
+      type: presence
+      pattern: 'content-type|\.type\(|\.json\('
+      flags: -Ei
+      invert: true
+      message: "No explicit Content-Type handling detected"
+    examples:
+      good:
+        - 'res.type("application/json").json(data)'
+        - 'res.type("application/problem+json").json(errorDetails)'
+
+  # =========================================================================
+  # SHOULD - Validator warns (warn)
+  # =========================================================================
+
+  S1:
+    title: Use HTTPS Always
+    severity: SHOULD
+    mechanical: true
+    description: Never expose APIs over plain HTTP
+    check:
+      type: grep
+      pattern: 'http://[a-zA-Z]'
+      flags: -Ein
+      exclude: 'localhost|127\.0\.0\.1'
+    examples:
+      bad:
+        - "http://api.example.com/users"
+      good:
+        - "https://api.example.com/users"
+
+  S2:
+    title: Support Content Negotiation
+    severity: SHOULD
+    mechanical: false
+    description: Support Accept header for content type negotiation
+    note: Complex to validate mechanically
+    examples:
+      request:
+        - "Accept: application/json"
+      response:
+        - "Content-Type: application/json"
+
+  S3:
+    title: Use ISO 8601 for Dates
+    severity: SHOULD
+    mechanical: true
+    api_files_only: true
+    description: Use standard date format with timezone
+    check:
+      type: presence
+      pattern: 'toISOString|ISO.*8601|datetime|DateTimeFormatter'
+      flags: -l
+      invert: true
+      message: "No ISO 8601 date handling detected"
+    examples:
+      bad:
+        - '{ "created": "01/02/2024" }'
+        - '{ "created": 1704067200 }'
+      good:
+        - '{ "created_at": "2024-01-01T12:00:00Z" }'
+
+  S4:
+    title: Consistent Field Naming Convention
+    severity: SHOULD
+    mechanical: true
+    description: Use snake_case or camelCase consistently, never mix
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qE '"[a-z]+_[a-z]+"' "$f" 2>/dev/null && grep -qE '"[a-z]+[A-Z][a-z]+"' "$f" 2>/dev/null; then
+            echo "$f: mixed snake_case and camelCase"
+          fi
+        done
+    examples:
+      bad:
+        - '{ "user_id": 123, "createdAt": "..." }'
+      good:
+        - '{ "user_id": 123, "created_at": "..." }'
+        - '{ "userId": 123, "createdAt": "..." }'
+
+  S5:
+    title: Nest Related Resources Appropriately
+    severity: SHOULD
+    mechanical: false
+    description: Use sub-resources for direct relationships, max 2 levels deep
+    note: Semantic check - requires understanding resource relationships
+    examples:
+      good:
+        - "GET /users/123/orders"
+        - "GET /orders/456/items"
+      bad:
+        - "GET /users/123/orders/456/items/789/reviews"
+
+  S6:
+    title: Support Filtering, Sorting, Field Selection
+    severity: SHOULD
+    mechanical: false
+    description: Collection endpoints should support query operations
+    note: Feature completeness check - not mechanically validatable
+    examples:
+      filtering:
+        - "GET /users?status=active&role=admin"
+      sorting:
+        - "GET /users?sort=-created_at"
+      fields:
+        - "GET /users?fields=id,name,email"
+
+  S7:
+    title: Cache Headers for GET Requests
+    severity: SHOULD
+    mechanical: false
+    description: Include caching headers for cacheable responses
+    note: Context-dependent - not all GETs should be cached
+    examples:
+      headers:
+        - "Cache-Control: public, max-age=3600"
+        - 'ETag: "9f62089e"'
+        - "Last-Modified: Wed, 24 Apr 2024 10:12:00 GMT"
+
+  S8:
+    title: Idempotency Keys for Non-Idempotent Operations
+    severity: SHOULD
+    mechanical: true
+    api_files_only: true
+    description: POST operations should support idempotency keys
+    check:
+      type: presence
+      pattern: 'idempotency|idempotent'
+      flags: -Ei
+      invert: true
+      message: "No idempotency handling detected"
+    examples:
+      good:
+        - "POST /payments\nIdempotency-Key: a1b2c3d4-e5f6-7890"
+
+  S9:
+    title: CORS Headers for Browser Clients
+    severity: SHOULD
+    mechanical: true
+    api_files_only: true
+    description: Include CORS headers for browser-based API consumers
+    check:
+      type: presence
+      pattern: 'access-control-allow|cors\(|cors\.enable'
+      flags: -Ei
+      invert: true
+      message: "No CORS handling detected"
+    examples:
+      headers:
+        - "Access-Control-Allow-Origin: https://app.example.com"
+        - "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS"
+        - "Access-Control-Allow-Headers: Content-Type, Authorization"
+
+  S10:
+    title: 202 Accepted for Long-Running Operations
+    severity: SHOULD
+    mechanical: true
+    description: Use async pattern for operations > 10 seconds
+    check:
+      type: script
+      code: |
+        has_async=false
+        has_202=false
+        for f in "$@"; do
+          if grep -qEi "job|queue|worker|async.*process|background" "$f" 2>/dev/null; then
+            has_async=true
+          fi
+          if grep -qEi "status\(202\)|\.accepted\(" "$f" 2>/dev/null; then
+            has_202=true
+          fi
+        done
+        if $has_async && ! $has_202; then
+          echo "Async/background patterns found but no 202 Accepted responses"
+        fi
+    examples:
+      response:
+        - |
+          HTTP/1.1 202 Accepted
+          Location: /reports/jobs/abc123
+          { "job_id": "abc123", "status": "pending" }
+
+  S11:
+    title: OpenAPI/Swagger Specification
+    severity: SHOULD
+    mechanical: true
+    api_files_only: true
+    description: Maintain machine-readable API documentation
+    check:
+      type: file_exists
+      paths:
+        - "openapi.yaml"
+        - "openapi.json"
+        - "swagger.yaml"
+        - "swagger.json"
+        - "api-spec.yaml"
+        - "api-spec.json"
+        - "docs/openapi.*"
+        - "docs/swagger.*"
+      message: "No OpenAPI/Swagger spec found"
+    examples:
+      benefits:
+        - "Auto-generated client libraries"
+        - "Interactive documentation (Swagger UI)"
+        - "Contract testing"
+
+  S12:
+    title: No Hardcoded URLs
+    severity: SHOULD
+    mechanical: true
+    description: Use configuration/environment for external URLs
+    check:
+      type: grep
+      pattern: 'https?://[a-zA-Z0-9][a-zA-Z0-9.-]+\.(com|io|net|org|dev|app)'
+      flags: -EHn
+      exclude: 'localhost|127\.0\.0\.1|example\.com|^\s*(//|#|/\*|\*)'
+    examples:
+      bad:
+        - 'const apiUrl = "https://api.stripe.com/v1/charges"'
+      good:
+        - 'const apiUrl = process.env.STRIPE_API_URL'
+        - 'fetch("/api/users")'
+
+  S13:
+    title: Include Request IDs
+    severity: SHOULD
+    mechanical: true
+    description: Enable tracing across services with request/trace IDs
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qEi "res\.(status\(4|status\(5|json\(.*error" "$f" 2>/dev/null; then
+            if ! grep -qEi "request_id|trace_id|requestId|traceId|x-request-id" "$f" 2>/dev/null; then
+              echo "$f: error responses found but no request/trace ID handling"
+            fi
+          fi
+        done
+    examples:
+      bad:
+        - '{ "error": "Something failed" }'
+      good:
+        - '{ "error": "Something failed", "request_id": "req_abc123" }'
+
+  # =========================================================================
+  # GUIDANCE - Not mechanically checked
+  # =========================================================================
+
+  G1:
+    title: Design for Consumers, Not Your Database
+    severity: GUIDANCE
+    mechanical: false
+    description: API should reflect domain model, not database schema
+    examples:
+      bad:
+        - "Expose database schema directly"
+        - "Table names as resources"
+        - "Internal IDs everywhere"
+      good:
+        - "Domain-driven resources"
+        - "Only relevant fields"
+        - "Stable external identifiers"
+
+  G2:
+    title: Fail Fast with Clear Messages
+    severity: GUIDANCE
+    mechanical: false
+    description: Validate early, return specific errors
+    examples:
+      validate_order:
+        - "Authentication before processing"
+        - "Required fields before business logic"
+        - "Format validation before database calls"
+      error_format:
+        - "Which field failed"
+        - "Why it failed"
+        - "How to fix it"
+
+  G3:
+    title: Document Everything
+    severity: GUIDANCE
+    mechanical: false
+    description: OpenAPI spec should be comprehensive
+    examples:
+      include:
+        - "All endpoints with examples"
+        - "Request/response schemas"
+        - "Error codes and meanings"
+        - "Authentication methods"
+        - "Rate limits"
+        - "Deprecation notices"
+
+  G4:
+    title: Handle Partial Failures Gracefully
+    severity: GUIDANCE
+    mechanical: false
+    description: Batch operations should report individual success/failure
+    examples:
+      response:
+        - |
+          {
+            "succeeded": [{ "id": "1" }, { "id": "2" }],
+            "failed": [{ "id": "3", "error": { ... } }]
+          }
+
+# ===========================================================================
+# PATTERNS - Decision trees and reference tables (documentation only)
+# ===========================================================================
+
+patterns:
+  resource_naming:
+    - "Collection: /users"
+    - "Item: /users/{id}"
+    - "Sub-collection: /users/{id}/orders"
+    - "Sub-item: /users/{id}/orders/{order_id}"
+    - "Action: /users/{id}/activate (POST)"
+
+  pagination_decision_tree:
+    - "Dataset < 10K records → Offset OK"
+    - "Dataset changes frequently → Cursor required"
+    - "Users need jump to page → Offset (accept tradeoffs)"
+    - "Infinite scroll → Cursor"
+    - "Performance critical → Cursor always"
+
+  http_method_decision_tree:
+    - "Reading data → GET"
+    - "Creating resource → POST (returns 201 + Location)"
+    - "Replacing resource → PUT"
+    - "Partial update → PATCH"
+    - "Removing resource → DELETE"
+    - "Action that doesn't fit CRUD → POST to action sub-resource"
+
+# ===========================================================================
+# INFO CHECKS - Statistics for reporting (not pass/fail)
+# ===========================================================================
+
+info:
+  endpoint_count:
+    pattern: '(get|post|put|patch|delete)\s*\('
+    flags: -cEi
+    label: "Endpoint definitions"
+
+  status_codes:
+    pattern: 'status\([0-9]{3}\)|\.status\s*=\s*[0-9]{3}'
+    flags: -ohE
+    label: "Distinct status codes used"
+    aggregate: unique_count
+
+  pagination_files:
+    pattern: 'pagination|cursor|next_page|page_token|has_more'
+    flags: -l
+    label: "Files with pagination"
+    aggregate: file_count
+
+  auth_files:
+    pattern: 'authorization|authenticate|bearer|jwt|api.?key'
+    flags: -l
+    label: "Files with auth handling"
+    aggregate: file_count
+
+  validation_files:
+    pattern: 'validate|schema|joi|yup|zod|class-validator'
+    flags: -l
+    label: "Files with validation"
+    aggregate: file_count
+
+  request_id_files:
+    pattern: 'request.?id|trace.?id|correlation.?id|x-request-id'
+    flags: -li
+    label: "Files with request ID handling"
+    aggregate: file_count
+
+# ===========================================================================
+# ANTI-PATTERNS - Quick reference table (documentation only)
+# ===========================================================================
+
+anti_patterns:
+  - pattern: "Verbs in URIs"
+    example: "POST /createUser"
+    fix: "POST /users"
+  - pattern: "200 with error"
+    example: "200 OK + error body"
+    fix: "Use 4xx/5xx codes"
+  - pattern: "500 for validation"
+    example: "Server error for bad input"
+    fix: "400 for client errors"
+  - pattern: "RPC over REST"
+    example: "Single endpoint, action in body"
+    fix: "Resource-oriented design"
+  - pattern: "Chatty API"
+    example: "Many calls for one task"
+    fix: "Aggregate endpoints"
+  - pattern: "Exposed internals"
+    example: "DB IDs, table structure"
+    fix: "Domain-driven design"
+  - pattern: "No pagination"
+    example: "Return all records"
+    fix: "Always paginate collections"
+  - pattern: "Offset at scale"
+    example: "OFFSET 100000"
+    fix: "Cursor/keyset pagination"
+  - pattern: "Inconsistent naming"
+    example: "Mix snake_case and camelCase"
+    fix: "Pick one, enforce it"
+  - pattern: "Missing rate limits"
+    example: "No throttling"
+    fix: "429 + headers"
+  - pattern: "Plain HTTP"
+    example: "No TLS"
+    fix: "HTTPS always"
+  - pattern: "No request ID"
+    example: "Can't trace errors"
+    fix: "X-Request-ID header"
+  - pattern: "CORS * + creds"
+    example: "Wildcard origin with credentials"
+    fix: "Explicit origin allowlist"
+
+# ===========================================================================
+# RESEARCH SOURCES
+# ===========================================================================
+
+sources:
+  - title: "RFC 7807 - Problem Details for HTTP APIs"
+    url: "https://datatracker.ietf.org/doc/html/rfc7807"
+  - title: "RFC 7231 - HTTP Semantics and Content"
+    url: "https://datatracker.ietf.org/doc/html/rfc7231"
+  - title: "Microsoft REST API Guidelines"
+    url: "https://github.com/microsoft/api-guidelines"
+  - title: "Google API Design Guide"
+    url: "https://cloud.google.com/apis/design"
+  - title: "Stripe API Reference"
+    url: "https://stripe.com/docs/api"
+    note: "Gold standard"
+  - title: "Richardson Maturity Model"
+    url: "https://martinfowler.com/articles/richardsonMaturityModel.html"

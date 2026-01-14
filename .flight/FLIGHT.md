@@ -85,6 +85,151 @@ If it's in NEVER/MUST, there's a validator check. If there's no check possible, 
 
 ---
 
+## Domain Compiler (flight-compile.py)
+
+The domain compiler generates both `.md` and `.validate.sh` from a single `.flight` YAML source file. This eliminates drift between specs and validators.
+
+### Prerequisites
+
+```bash
+# Create virtual environment (one-time setup)
+python3 -m venv .venv
+.venv/bin/pip install pyyaml
+```
+
+The wrapper script auto-detects `.venv/` in project root or `.flight/.venv/`.
+
+### Usage
+
+```bash
+# Compile a single domain
+.flight/bin/flight-compile api.flight
+
+# Compile all .flight files in domains/
+.flight/bin/flight-compile --all
+
+# Check syntax only (no output)
+.flight/bin/flight-compile --check api.flight
+
+# Generate only .md or .sh
+.flight/bin/flight-compile --md-only api.flight
+.flight/bin/flight-compile --sh-only api.flight
+
+# Debug mode (show parsed structure)
+.flight/bin/flight-compile --debug api.flight
+```
+
+### YAML Format
+
+```yaml
+domain: api
+description: REST/HTTP API design patterns
+default_patterns:
+  - "**/routes*.{js,ts}"
+  - "**/controller*.{js,ts}"
+  - "**/api/**/*.{js,ts}"
+
+rules:
+  - id: N1
+    severity: NEVER
+    title: Verbs in URIs
+    description: URIs identify resources, HTTP methods define actions
+    mechanical: true          # Generate validator check
+    api_files_only: false     # Apply to all matched files
+    check_type: grep          # See check types below
+    pattern: "['\"]/?)?(create|delete|remove|update|get|fetch|add|edit|modify)([A-Z]|[_-][a-z])"
+    supports_ok_comment: true # Allow // flight:ok suppression
+    examples:
+      bad:
+        - "POST /createUser"
+        - "GET /getUsers"
+      good:
+        - "POST /users"
+        - "GET /users"
+```
+
+### Severity Levels
+
+| Level | Validator | Blocks Build |
+|-------|-----------|--------------|
+| NEVER | `check()` | Yes |
+| MUST | `check()` | Yes |
+| SHOULD | `warn()` | No (warning only) |
+| GUIDANCE | None | No (not mechanical) |
+
+### Check Types
+
+**1. grep** - Pattern matching with optional flight:ok suppression
+```yaml
+check_type: grep
+pattern: "after_id|before_id|since_id"
+supports_ok_comment: true
+```
+
+**2. presence** - Check if pattern exists in codebase
+```yaml
+check_type: presence
+pattern: "/v[0-9]+([/'\"?]|$)|version.*header"
+presence_mode: require  # or "forbid"
+error_message: "No API versioning detected"
+```
+
+**3. script** - Custom bash script
+```yaml
+check_type: script
+script: |
+  for f in "$@"; do
+    if grep -qEi "status\\(201\\)" "$f"; then
+      if ! grep -qEi "location.*header" "$f"; then
+        echo "$f: 201 responses found but no Location header"
+      fi
+    fi
+  done
+```
+
+**4. multi_condition** - Multiple conditions on same file
+```yaml
+check_type: multi_condition
+conditions:
+  - pattern: "origin.*\\*|Allow-Origin.*\\*"
+    description: "wildcard origin"
+  - pattern: "credentials.*true|withCredentials"
+    description: "credentials enabled"
+error_message: "{file}: CORS wildcard with credentials"
+```
+
+**5. file_exists** - Check for required files
+```yaml
+check_type: file_exists
+files:
+  - "openapi.yaml"
+  - "openapi.json"
+  - "swagger.yaml"
+error_message: "No OpenAPI/Swagger spec found"
+```
+
+### Workflow
+
+```
+1. Create/edit .flight/domains/foo.flight
+2. Run: .flight/bin/flight-compile foo.flight
+3. Outputs: foo.md + foo.validate.sh
+4. Test: bash -n foo.validate.sh  # Syntax check
+5. Run: .flight/validate-all.sh   # Full validation
+```
+
+### Key Flags
+
+| Flag | Effect |
+|------|--------|
+| `mechanical: false` | Skip validator check (for GUIDANCE rules) |
+| `api_files_only: true` | Only check API endpoint files |
+| `supports_ok_comment: true` | Allow `// flight:ok` inline suppression |
+| `presence_mode: require` | Fail if pattern NOT found |
+| `presence_mode: forbid` | Fail if pattern IS found |
+
+---
+
 ## Research Tools
 
 Use these during `/flight-prime` and `/flight-prd`:
@@ -107,12 +252,14 @@ If MCP tools aren't available, fall back to web search.
 
 | File | Purpose |
 |------|---------|
-| `.flight/domains/*.md` | Domain rules (read these!) |
-| `.flight/domains/*.validate.sh` | Executable validators |
+| `.flight/domains/*.flight` | Domain source (YAML) - single source of truth |
+| `.flight/domains/*.md` | Domain rules (generated from .flight) |
+| `.flight/domains/*.validate.sh` | Executable validators (generated from .flight) |
+| `.flight/bin/flight-compile.py` | Domain compiler (generates .md + .sh) |
 | `.flight/validate-all.sh` | Auto-detect and run all relevant validators |
 | `update.sh` | Update Flight (preserves customizations) |
 | `PRIME.md` | Output of /flight-prime |
-| `PROMPT.md` | Output of /flight-compile (what to execute) |
+| `PROMPT.md` | Output of /flight-compile command (what to execute) |
 | `PRD.md` | Output of /flight-prd (product vision) |
 | `tasks/*.md` | Atomic task files from /flight-prd |
 
@@ -245,8 +392,10 @@ Run `npm run preflight` before every commit. If it passes locally, CI will pass.
 
 | Problem | Solution |
 |---------|----------|
-| Validator false positive | Refine grep pattern or move rule to GUIDANCE |
-| Missing domain | Create with `/flight-create-validator` |
+| Validator false positive | Edit `.flight` YAML, recompile with `flight-compile.py` |
+| Spec/validator drift | Use single `.flight` source, regenerate both files |
+| Missing domain | Create `.flight` file, compile with `flight-compile.py` |
 | Task too big | Break into smaller atomic tasks |
 | Context lost | Re-run `/flight-prime` |
 | Rules unclear | Check domain file examples |
+| Bash syntax errors | Run `bash -n file.validate.sh` to find issues |
