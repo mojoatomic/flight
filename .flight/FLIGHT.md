@@ -270,6 +270,7 @@ If MCP tools aren't available, fall back to web search.
 | Domain | When to Load |
 |--------|--------------|
 | `code-hygiene` | **ALWAYS** - applies to all code |
+| `clerk` | Clerk auth, organizations, multi-tenant SaaS (TypeScript/Next.js) |
 | `api` | REST/HTTP API routes, controllers |
 | `bash` | Shell scripts (.sh) |
 | `docker` | Dockerfiles, container configuration |
