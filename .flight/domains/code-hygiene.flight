@@ -472,7 +472,7 @@ rules:
       code: |
         for f in "$@"; do
           # Find short/generic error messages (less than 15 chars)
-          grep -HnE "throw.*Error\(['\"][^'\"]{0,15}['\"]|raise.*Exception\(['\"][^'\"]{0,15}['\"]" "$f" 2>/dev/null | \
+          grep -HnE "throw\s+new\s+Error\(['\"][^'\"]{0,15}['\"]|raise\s+.*Exception\(['\"][^'\"]{0,15}['\"]" "$f" 2>/dev/null | \
             grep -v "flight:ok"
         done
     note: |
@@ -503,7 +503,7 @@ rules:
         for f in "$@"; do
           # Find function names that don't start with common verb prefixes
           grep -HnE '^(export\s+)?(async\s+)?function\s+[a-z]+\s*\(' "$f" 2>/dev/null | \
-            grep -vE 'function\s+(get|set|fetch|load|save|send|create|update|delete|remove|add|find|check|validate|is|has|can|should|handle|process|render|init|start|stop|on|do|make|build|parse|format|convert|to|from|ensure|assert|verify|compute|calculate|generate|transform|map|filter|reduce|sort|merge|split|join|open|close|read|write|run|execute|apply|reset|clear|register|subscribe|unsubscribe|publish|emit|dispatch|trigger|mount|unmount|connect|disconnect|enable|disable|show|hide|toggle|select|deselect|activate|deactivate)[A-Z]' | \
+            grep -vE 'function\s+(get|set|fetch|load|save|send|create|update|delete|remove|add|find|check|validate|is|has|can|should|handle|process|render|init|start|stop|on|do|make|build|parse|format|convert|to|from|ensure|assert|verify|compute|calculate|generate|transform|map|filter|reduce|sort|merge|split|join|open|close|read|write|run|execute|apply|reset|clear|register|subscribe|unsubscribe|publish|emit|dispatch|trigger|mount|unmount|connect|disconnect|enable|disable|show|hide|toggle|select|deselect|activate|deactivate|delay|wait|sleep|pause|retry|poll|defer|schedule|queue|batch|throttle|debounce)([A-Z]|\s*\()' | \
             grep -v "flight:ok"
         done
     note: |
@@ -608,6 +608,7 @@ rules:
       Conversion: to, from, parse, format, transform, convert, map
       Boolean:    is, has, can, should, will, was, did, does
       Lifecycle:  start, stop, begin, end, open, close, init, cleanup
+      Async/Time: delay, wait, sleep, pause, retry, poll, defer, schedule, queue, batch, throttle, debounce
 
   G3:
     title: Domain Term Examples
