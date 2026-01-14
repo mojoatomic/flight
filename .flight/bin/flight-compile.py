@@ -823,7 +823,7 @@ def compile_domain(domain: str, args) -> int:
             else:
                 print(f"\n{md_path} would be created")
         else:
-            md_path.write_text(md_content)
+            md_path.write_text(md_content, encoding='utf-8')
             print(f"\nWrote {md_path}")
 
     if not args.md_only:
@@ -841,7 +841,7 @@ def compile_domain(domain: str, args) -> int:
             else:
                 print(f"{sh_path} would be created")
         else:
-            sh_path.write_text(sh_content)
+            sh_path.write_text(sh_content, encoding='utf-8')
             sh_path.chmod(0o755)  # Make executable
             print(f"Wrote {sh_path}")
 

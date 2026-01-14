@@ -1,0 +1,1111 @@
+domain: go
+version: 1.0.0
+description: Go (Golang) development patterns. Covers error handling, naming, concurrency, and common footguns.
+
+file_patterns:
+  - "**/*.go"
+
+exclude_patterns:
+  - "**/*_test.go"
+  - "**/vendor/**"
+  - "**/.git/**"
+
+suppression:
+  comment: "flight:ok"
+  documentation: |
+    Add `// flight:ok` comment on the same line to suppress a specific check.
+    Use sparingly. Document why the suppression is acceptable.
+
+# ===========================================================================
+# RULES
+# ===========================================================================
+# ID format: {severity_prefix}{number}
+#   N = NEVER (check - fails build)
+#   M = MUST (check - fails build)
+#   S = SHOULD (warn - advisory)
+#   G = GUIDANCE (not checked)
+#
+# mechanical: true  = validator implements this
+# mechanical: false = code review only, skip in validator
+# ===========================================================================
+
+rules:
+
+  # =========================================================================
+  # NEVER - Validator will reject (check)
+  # =========================================================================
+
+  N1:
+    title: Ignored Errors
+    severity: NEVER
+    mechanical: true
+    description: Do not discard errors using _ variables. Handle, return, or log them.
+    check:
+      type: grep
+      pattern: '[^_]\s*,\s*_\s*:?=\s*\w+\s*\([^)]*\)|_\s*=\s*\w+\.\w+\s*\('
+      flags: -En
+      exclude: flight:ok
+    note: |
+      From Go Code Review Comments: "Do not discard errors using _ variables.
+      If a function returns an error, check it to make sure the function succeeded."
+    examples:
+      bad:
+        - "result, _ := SomeFunction()"
+        - "_ = file.Close()"
+        - "data, _ = json.Marshal(obj)"
+      good:
+        - |
+          result, err := SomeFunction()
+          if err != nil {
+              return fmt.Errorf("SomeFunction: %w", err)
+          }
+        - |
+          if err := file.Close(); err != nil {
+              log.Printf("close file: %v", err)
+          }
+
+  N2:
+    title: Panic for Normal Error Handling
+    severity: NEVER
+    mechanical: true
+    description: Don't use panic for normal error handling. Use error returns.
+    check:
+      type: grep
+      pattern: 'panic\s*\(\s*(err|fmt\.Errorf|errors\.New|"[^"]*error|"[^"]*fail|"[^"]*invalid)'
+      flags: -Ein
+      exclude: flight:ok
+    note: |
+      From Effective Go: "The usual way to report an error to a caller is to
+      return an error as an extra return value."
+    examples:
+      bad:
+        - 'panic(err)'
+        - 'panic(fmt.Errorf("invalid input: %v", x))'
+        - 'panic("validation failed")'
+      good:
+        - 'return fmt.Errorf("invalid input: %w", err)'
+        - 'if err != nil { return nil, err }'
+
+  N3:
+    title: math/rand for Security
+    severity: NEVER
+    mechanical: true
+    description: Do not use math/rand for cryptographic purposes. Use crypto/rand.
+    check:
+      type: grep
+      pattern: 'math/rand["/v2]*"'
+      flags: -E
+    note: |
+      From Go Code Review Comments: "Do not use package math/rand to generate keys,
+      even throwaway ones. Use crypto/rand instead."
+    examples:
+      bad:
+        - 'import "math/rand"'
+        - 'rand.Intn(100) // for token generation'
+      good:
+        - 'import "crypto/rand"'
+        - 'rand.Read(bytes)'
+        - 'rand.Text()'
+
+  N4:
+    title: Defer in Loop
+    severity: NEVER
+    mechanical: true
+    description: Defer in loops can cause resource leaks - defers don't run until function returns
+    check:
+      type: grep
+      pattern: 'for\s+[^{]*\{[^}]*defer\s+'
+      flags: -Ezn
+      exclude: flight:ok
+    note: |
+      Deferred calls are executed when the surrounding function returns, not when
+      the loop iteration ends. This causes resource accumulation.
+    examples:
+      bad:
+        - |
+          for _, file := range files {
+              f, _ := os.Open(file)
+              defer f.Close()  // Won't close until function returns!
+          }
+      good:
+        - |
+          for _, file := range files {
+              func() {
+                  f, _ := os.Open(file)
+                  defer f.Close()
+              }()
+          }
+        - |
+          for _, file := range files {
+              f, _ := os.Open(file)
+              // ... use f ...
+              f.Close()
+          }
+
+  N5:
+    title: Goroutine without Lifetime Management
+    severity: NEVER
+    mechanical: true
+    description: Goroutines must have clear termination conditions to prevent leaks
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Look for goroutines without context, done channel, or WaitGroup
+          if grep -qE 'go\s+func\s*\(' "$f" 2>/dev/null; then
+            if ! grep -qE 'context\.|<-done|<-ctx\.Done|sync\.WaitGroup|errgroup\.' "$f" 2>/dev/null; then
+              echo "$f: goroutine found but no lifetime management (context, done channel, or WaitGroup)"
+            fi
+          fi
+        done
+    note: |
+      From Go Code Review Comments: "When you spawn goroutines, make it clear
+      when - or whether - they exit."
+    examples:
+      bad:
+        - |
+          go func() {
+              for {
+                  doWork()  // Runs forever, no way to stop
+              }
+          }()
+      good:
+        - |
+          go func() {
+              for {
+                  select {
+                  case <-ctx.Done():
+                      return
+                  case work := <-workChan:
+                      process(work)
+                  }
+              }
+          }()
+
+  N6:
+    title: Unbuffered Channel in Select with Default
+    severity: NEVER
+    mechanical: true
+    description: Sending to unbuffered channel in select with default may silently drop messages
+    check:
+      type: grep
+      pattern: 'select\s*\{[^}]*case\s+[^<]*<-[^:]*:[^}]*default:'
+      flags: -Ezn
+      exclude: flight:ok
+    note: |
+      When select has a default case and the channel isn't ready, the default
+      executes immediately - the send/receive is silently skipped.
+    examples:
+      bad:
+        - |
+          select {
+          case ch <- msg:  // May be skipped!
+          default:
+              // Message silently dropped
+          }
+      good:
+        - |
+          select {
+          case ch <- msg:
+          case <-ctx.Done():
+              return ctx.Err()
+          }
+
+  N7:
+    title: Nil Map Write
+    severity: NEVER
+    mechanical: true
+    description: Writing to a nil map causes a panic
+    check:
+      type: grep
+      pattern: 'var\s+\w+\s+map\[[^\]]+\][^\n=]*$'
+      flags: -En
+      exclude: flight:ok
+    note: |
+      A nil map behaves like an empty map when reading, but writing to it
+      causes a runtime panic.
+    examples:
+      bad:
+        - |
+          var m map[string]int
+          m["key"] = 1  // panic: assignment to entry in nil map
+      good:
+        - 'var m map[string]int = make(map[string]int)'
+        - 'm := make(map[string]int)'
+        - 'm := map[string]int{}'
+
+  N8:
+    title: Range Loop Variable Capture (Pre-Go 1.22)
+    severity: NEVER
+    mechanical: true
+    description: Loop variable capture in goroutines/closures - all share the same variable
+    check:
+      type: grep
+      pattern: 'for\s+[^,]+,?\s*(\w+)\s*:?=\s*range[^{]*\{[^}]*go\s+func\s*\([^)]*\)\s*\{[^}]*\1'
+      flags: -Ezn
+      exclude: flight:ok
+    note: |
+      Before Go 1.22, loop variables were reused across iterations. Capturing
+      them in goroutines or closures caused race conditions.
+    examples:
+      bad:
+        - |
+          for _, v := range values {
+              go func() {
+                  fmt.Println(v)  // All goroutines see the same v!
+              }()
+          }
+      good:
+        - |
+          for _, v := range values {
+              v := v  // Shadow the variable (pre-1.22 fix)
+              go func() {
+                  fmt.Println(v)
+              }()
+          }
+        - |
+          for _, v := range values {
+              go func(val string) {
+                  fmt.Println(val)
+              }(v)
+          }
+
+  # =========================================================================
+  # MUST - Validator will reject (check)
+  # =========================================================================
+
+  M1:
+    title: MixedCaps Naming
+    severity: MUST
+    mechanical: true
+    description: Go uses MixedCaps or mixedCaps, not underscores
+    check:
+      type: grep
+      pattern: '(func|var|const|type)\s+[a-z]+_[a-z]+\s*[=(]'
+      flags: -En
+      exclude: flight:ok|_test\.go
+    note: |
+      From Effective Go: "The convention in Go is to use MixedCaps or mixedCaps
+      rather than underscores to write multiword names."
+    examples:
+      bad:
+        - 'func get_user_name() string'
+        - 'var user_count int'
+        - 'const max_size = 100'
+      good:
+        - 'func getUserName() string'
+        - 'var userCount int'
+        - 'const maxSize = 100'
+
+  M2:
+    title: Initialisms Must Be Consistent Case
+    severity: MUST
+    mechanical: true
+    description: Initialisms like URL, HTTP, ID should be all caps or all lower
+    check:
+      type: grep
+      pattern: '(Url|Http|Api|Sql|Json|Xml|Html|Css|Tcp|Udp|Ip|Dns|Cpu|Gpu|Ram|Ssd|Hdd|Usb|Pdf|Csv)[A-Z]|(Url|Http|Api|Sql|Json|Xml|Html|Css|Tcp|Udp|Ip|Dns|Cpu|Gpu|Ram|Ssd|Hdd|Usb|Pdf|Csv)\s*[=:(]'
+      flags: -En
+      exclude: flight:ok
+    note: |
+      From Go Code Review Comments: Words in names that are initialisms should
+      have a consistent case. "URL" should appear as "URL" or "url", never "Url".
+    examples:
+      bad:
+        - 'type HttpClient struct'
+        - 'func GetUserId() int'
+        - 'var xmlHttpRequest'
+      good:
+        - 'type HTTPClient struct'
+        - 'func GetUserID() int'
+        - 'var xmlHTTPRequest'
+
+  M3:
+    title: Exported Names Must Have Doc Comments
+    severity: MUST
+    mechanical: true
+    description: All exported names should have doc comments
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Find exported functions/types without preceding comment
+          awk '
+            /^func [A-Z]/ && prev !~ /^\/\// { print FILENAME ":" NR ": " $0 }
+            /^type [A-Z]/ && prev !~ /^\/\// { print FILENAME ":" NR ": " $0 }
+            /^var [A-Z]/ && prev !~ /^\/\// { print FILENAME ":" NR ": " $0 }
+            /^const [A-Z]/ && prev !~ /^\/\// { print FILENAME ":" NR ": " $0 }
+            { prev = $0 }
+          ' "$f" 2>/dev/null
+        done
+    note: |
+      From Go Code Review Comments: "All top-level, exported names should have
+      doc comments."
+    examples:
+      bad:
+        - |
+          func ProcessData(d []byte) error {
+      good:
+        - |
+          // ProcessData validates and transforms the input bytes.
+          func ProcessData(d []byte) error {
+
+  M4:
+    title: Context as First Parameter
+    severity: MUST
+    mechanical: true
+    description: Functions using Context should accept it as their first parameter
+    check:
+      type: grep
+      pattern: 'func\s+\w+\([^)]*,\s*ctx\s+context\.Context|func\s+\w+\([^)]*context\.Context[^)]*,[^)]+\)\s*[^{]*\{'
+      flags: -En
+      exclude: flight:ok
+    note: |
+      From Go Code Review Comments: "Most functions that use a Context should
+      accept it as their first parameter."
+    examples:
+      bad:
+        - 'func DoWork(id int, ctx context.Context) error'
+        - 'func Process(data []byte, ctx context.Context, opts Options) error'
+      good:
+        - 'func DoWork(ctx context.Context, id int) error'
+        - 'func Process(ctx context.Context, data []byte, opts Options) error'
+
+  M5:
+    title: Error Variable Naming
+    severity: MUST
+    mechanical: true
+    description: Error variables should be named err or have Err prefix for package-level
+    check:
+      type: grep
+      pattern: 'var\s+[A-Z][a-z]+Error\s*='
+      flags: -En
+      exclude: 'Err[A-Z]|flight:ok'
+    note: |
+      Package-level error variables should follow the pattern ErrFoo, not FooError.
+    examples:
+      bad:
+        - 'var NotFoundError = errors.New("not found")'
+        - 'var ValidationError = errors.New("invalid")'
+      good:
+        - 'var ErrNotFound = errors.New("not found")'
+        - 'var ErrValidation = errors.New("invalid")'
+
+  M6:
+    title: Package Names Must Be Lowercase
+    severity: MUST
+    mechanical: true
+    description: Package names should be lowercase, single words without underscores
+    check:
+      type: grep
+      pattern: '^package\s+[A-Z_]|^package\s+\w+_\w+'
+      flags: -En
+    note: |
+      From Effective Go: "By convention, packages are given lower case,
+      single-word names."
+    examples:
+      bad:
+        - 'package myPackage'
+        - 'package my_utils'
+        - 'package MyService'
+      good:
+        - 'package mypackage'
+        - 'package utils'
+        - 'package service'
+
+  M7:
+    title: Receiver Name Consistency
+    severity: MUST
+    mechanical: true
+    description: Receiver names should be short and consistent across methods
+    check:
+      type: grep
+      pattern: 'func\s*\(\s*(this|self|me|my)\s+'
+      flags: -Ein
+    note: |
+      From Go Code Review Comments: "Don't use generic names such as 'me', 'this'
+      or 'self'. The name should be a short abbreviation of the type."
+    examples:
+      bad:
+        - 'func (this *Client) Connect() error'
+        - 'func (self *Server) Listen() error'
+        - 'func (me User) Name() string'
+      good:
+        - 'func (c *Client) Connect() error'
+        - 'func (s *Server) Listen() error'
+        - 'func (u User) Name() string'
+
+  M8:
+    title: Error Strings Lowercase
+    severity: MUST
+    mechanical: true
+    description: Error strings should not be capitalized or end with punctuation
+    check:
+      type: grep
+      pattern: 'errors\.New\s*\(\s*"[A-Z]|fmt\.Errorf\s*\(\s*"[A-Z]|errors\.New\s*\([^)]*\.\s*"\s*\)|fmt\.Errorf\s*\([^)]*\.\s*"\s*\)'
+      flags: -En
+      exclude: flight:ok
+    note: |
+      From Go Code Review Comments: "Error strings should not be capitalized or
+      end with punctuation, since they are usually printed following other context."
+    examples:
+      bad:
+        - 'errors.New("Something bad happened.")'
+        - 'fmt.Errorf("Invalid input: %v", x)'
+      good:
+        - 'errors.New("something bad happened")'
+        - 'fmt.Errorf("invalid input: %v", x)'
+
+  M9:
+    title: Interface in Consumer Package
+    severity: MUST
+    mechanical: false
+    description: Interfaces belong in the package that uses them, not the implementing package
+    note: |
+      From Go Code Review Comments: "Go interfaces generally belong in the package
+      that uses values of the interface type, not the package that implements those values."
+    examples:
+      bad:
+        - |
+          // In package producer
+          type Thinger interface { Thing() bool }
+          type defaultThinger struct{}
+          func NewThinger() Thinger { return defaultThinger{} }
+      good:
+        - |
+          // In package producer - return concrete type
+          type Thinger struct{}
+          func NewThinger() *Thinger { return &Thinger{} }
+
+          // In package consumer - define interface there
+          type ThingDoer interface { Thing() bool }
+
+  # =========================================================================
+  # SHOULD - Validator warns (warn)
+  # =========================================================================
+
+  S1:
+    title: Wrap Errors with Context
+    severity: SHOULD
+    mechanical: true
+    description: Errors should be wrapped with context using fmt.Errorf and %w
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Look for bare error returns without wrapping
+          if grep -qE 'return\s+(nil,\s*)?err\s*$' "$f" 2>/dev/null; then
+            if ! grep -qE 'fmt\.Errorf.*%w|errors\.Wrap|errors\.WithMessage' "$f" 2>/dev/null; then
+              echo "$f: bare error returns found but no error wrapping"
+            fi
+          fi
+        done
+    note: |
+      Wrapping errors with context makes debugging much easier by providing
+      a stack trace of what operations led to the failure.
+    examples:
+      bad:
+        - |
+          if err != nil {
+              return err  // No context
+          }
+      good:
+        - |
+          if err != nil {
+              return fmt.Errorf("process user %d: %w", id, err)
+          }
+
+  S2:
+    title: Table-Driven Tests
+    severity: SHOULD
+    mechanical: true
+    description: Use table-driven tests for multiple test cases
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if [[ "$f" == *"_test.go" ]]; then
+            # Multiple similar test functions suggest table-driven would be better
+            count=$(grep -cE '^func Test\w+\(' "$f" 2>/dev/null || echo 0)
+            if [[ "$count" -gt 5 ]]; then
+              if ! grep -qE 'tests?\s*:?=\s*\[\]struct|for\s+.*,\s*tt\s*:=\s*range' "$f" 2>/dev/null; then
+                echo "$f: $count test functions - consider table-driven tests"
+              fi
+            fi
+          fi
+        done
+    note: |
+      Table-driven tests reduce code duplication and make it easy to add new
+      test cases. They're the standard Go testing pattern.
+    examples:
+      good:
+        - |
+          func TestAdd(t *testing.T) {
+              tests := []struct {
+                  name     string
+                  a, b     int
+                  expected int
+              }{
+                  {"positive", 1, 2, 3},
+                  {"negative", -1, -2, -3},
+                  {"zero", 0, 0, 0},
+              }
+              for _, tt := range tests {
+                  t.Run(tt.name, func(t *testing.T) {
+                      if got := Add(tt.a, tt.b); got != tt.expected {
+                          t.Errorf("Add(%d, %d) = %d; want %d", tt.a, tt.b, got, tt.expected)
+                      }
+                  })
+              }
+          }
+
+  S3:
+    title: Prefer var for Zero Values
+    severity: SHOULD
+    mechanical: true
+    description: Use var declaration for zero-value slices and maps
+    check:
+      type: grep
+      pattern: ':=\s*\[\][a-zA-Z]+\{\s*\}|:=\s*make\s*\(\s*\[\][a-zA-Z]+\s*,\s*0\s*\)'
+      flags: -En
+      exclude: flight:ok
+    note: |
+      From Go Code Review Comments: "The nil slice is the preferred style."
+      var t []string is preferred over t := []string{}.
+    examples:
+      bad:
+        - 't := []string{}'
+        - 's := make([]int, 0)'
+      good:
+        - 'var t []string'
+        - 's := make([]int, 0, expectedSize)  // OK if capacity needed'
+
+  S4:
+    title: Synchronous Functions Preferred
+    severity: SHOULD
+    mechanical: true
+    description: Prefer synchronous functions over asynchronous ones
+    check:
+      type: grep
+      pattern: 'func\s+\w+\([^)]*chan\s*<-[^)]*\)\s*\{[^}]*go\s+func'
+      flags: -Ezn
+      exclude: flight:ok
+    note: |
+      From Go Code Review Comments: "Prefer synchronous functions - functions which
+      return their results directly - over asynchronous ones."
+    examples:
+      bad:
+        - |
+          func Process(data []byte, result chan<- Result) {
+              go func() {
+                  // process...
+                  result <- res
+              }()
+          }
+      good:
+        - |
+          func Process(data []byte) (Result, error) {
+              // process...
+              return res, nil
+          }
+          // Caller adds concurrency if needed:
+          go func() { result <- Process(data) }()
+
+  S5:
+    title: Project Structure
+    severity: SHOULD
+    mechanical: true
+    description: Follow standard Go project layout conventions
+    check:
+      type: script
+      code: |
+        # Only check if this looks like a project root (has go.mod)
+        if [[ -f "go.mod" ]]; then
+          issues=""
+          # Check for proper cmd/ structure for multiple binaries
+          if ls cmd/*/main.go 2>/dev/null | wc -l | grep -q '^0$'; then
+            if ls *.go 2>/dev/null | grep -v _test.go | wc -l | grep -qv '^[01]$'; then
+              : # OK - single binary project
+            fi
+          fi
+          # Check for internal/ misuse
+          if [[ -d "internal" ]] && ls internal/*.go 2>/dev/null | grep -q .; then
+            : # OK
+          fi
+          # Warn about pkg/ antipattern
+          if [[ -d "pkg" ]]; then
+            echo "pkg/ directory found - consider using internal/ instead"
+          fi
+        fi
+    note: |
+      Standard layout: cmd/ for binaries, internal/ for private packages,
+      pkg/ is controversial - internal/ is usually preferred.
+    examples:
+      good:
+        - |
+          myproject/
+            cmd/
+              myapp/
+                main.go
+            internal/
+              server/
+                server.go
+              database/
+                db.go
+            go.mod
+
+  S6:
+    title: Use t.Helper in Test Helpers
+    severity: SHOULD
+    mechanical: true
+    description: Test helper functions should call t.Helper()
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if [[ "$f" == *"_test.go" ]]; then
+            # Find functions that take *testing.T but don't call t.Helper()
+            awk '
+              /func [a-z]\w*\([^)]*\*testing\.(T|B)/ && !/t\.Helper\(\)/ {
+                # Read until end of function
+                start = NR
+                while ((getline line) > 0) {
+                  if (line ~ /t\.Helper\(\)/) { next }
+                  if (line ~ /^}$/) {
+                    print FILENAME ":" start ": test helper missing t.Helper()"
+                    break
+                  }
+                }
+              }
+            ' "$f" 2>/dev/null
+          fi
+        done
+    note: |
+      t.Helper() marks a function as a test helper. When the test fails,
+      the stack trace points to the test, not the helper.
+    examples:
+      bad:
+        - |
+          func assertEqual(t *testing.T, got, want int) {
+              if got != want {
+                  t.Errorf("got %d; want %d", got, want)
+              }
+          }
+      good:
+        - |
+          func assertEqual(t *testing.T, got, want int) {
+              t.Helper()
+              if got != want {
+                  t.Errorf("got %d; want %d", got, want)
+              }
+          }
+
+  S7:
+    title: Avoid Global State
+    severity: SHOULD
+    mechanical: true
+    description: Avoid package-level variables; pass dependencies explicitly
+    check:
+      type: grep
+      pattern: '^var\s+\w+\s*=\s*&?\w+\{|^var\s+\w+\s+\*\w+\s*$'
+      flags: -En
+      exclude: 'Err[A-Z]|flight:ok|_test\.go'
+    note: |
+      Global state makes code harder to test and reason about. Pass
+      dependencies explicitly instead.
+    examples:
+      bad:
+        - |
+          var db *sql.DB
+          var config Config
+
+          func GetUser(id int) (*User, error) {
+              return db.Query(...)  // Uses global
+          }
+      good:
+        - |
+          type Service struct {
+              db     *sql.DB
+              config Config
+          }
+
+          func (s *Service) GetUser(id int) (*User, error) {
+              return s.db.Query(...)
+          }
+
+  S8:
+    title: Mutex Field Naming
+    severity: SHOULD
+    mechanical: true
+    description: Mutex fields should be named mu and placed above the fields they protect
+    check:
+      type: grep
+      pattern: 'sync\.(Mutex|RWMutex)\s*$'
+      flags: -En
+      exclude: 'mu\s+sync\.|flight:ok'
+    note: |
+      Convention is to name mutex fields 'mu' and place them directly above
+      the fields they protect, with a comment if the protected fields aren't obvious.
+    examples:
+      bad:
+        - |
+          type Cache struct {
+              data map[string]string
+              lock sync.Mutex
+          }
+      good:
+        - |
+          type Cache struct {
+              mu   sync.Mutex
+              data map[string]string  // protected by mu
+          }
+
+  S9:
+    title: Check Errors Before Using Defer
+    severity: SHOULD
+    mechanical: true
+    description: Check resource creation errors before deferring cleanup
+    check:
+      type: grep
+      pattern: '\w+,\s*_\s*:?=\s*\w+\.[^)]+\)\s*\n\s*defer'
+      flags: -Ezn
+      exclude: flight:ok
+    note: |
+      Deferring Close() on a nil resource will panic. Always check the error
+      from Open/Create before setting up the defer.
+    examples:
+      bad:
+        - |
+          f, _ := os.Open(path)
+          defer f.Close()  // May panic if f is nil
+      good:
+        - |
+          f, err := os.Open(path)
+          if err != nil {
+              return err
+          }
+          defer f.Close()
+
+  S10:
+    title: Indent Error Flow
+    severity: SHOULD
+    mechanical: true
+    description: Keep normal code path at minimal indentation, handle errors first
+    check:
+      type: grep
+      pattern: 'if\s+err\s*==\s*nil\s*\{[^}]+\}\s*else\s*\{'
+      flags: -Ezn
+      exclude: flight:ok
+    note: |
+      From Go Code Review Comments: "Try to keep the normal code path at a
+      minimal indentation, and indent the error handling."
+    examples:
+      bad:
+        - |
+          if err == nil {
+              // normal code
+          } else {
+              return err
+          }
+      good:
+        - |
+          if err != nil {
+              return err
+          }
+          // normal code
+
+  S11:
+    title: Avoid Init Functions
+    severity: SHOULD
+    mechanical: true
+    description: Prefer explicit initialization over init() functions
+    check:
+      type: grep
+      pattern: '^func init\s*\(\s*\)'
+      flags: -En
+      exclude: flight:ok|_test\.go
+    note: |
+      init() functions make testing difficult, hide dependencies, and can
+      cause surprising behavior. Prefer explicit initialization.
+    examples:
+      bad:
+        - |
+          func init() {
+              db = connectDB()
+              config = loadConfig()
+          }
+      good:
+        - |
+          func main() {
+              db, err := connectDB()
+              config, err := loadConfig()
+          }
+
+  S12:
+    title: Use Meaningful Test Names
+    severity: SHOULD
+    mechanical: true
+    description: Test names should describe what is being tested
+    check:
+      type: grep
+      pattern: 'func Test[A-Z][a-z]*\s*\('
+      flags: -En
+    note: |
+      Test names like TestFoo don't convey what's being tested. Use descriptive
+      names like TestFoo_ReturnsErrorOnInvalidInput.
+    examples:
+      bad:
+        - 'func TestProcess(t *testing.T)'
+        - 'func Test1(t *testing.T)'
+      good:
+        - 'func TestProcess_ValidInput_ReturnsSuccess(t *testing.T)'
+        - 'func TestProcess_EmptyInput_ReturnsError(t *testing.T)'
+
+  # =========================================================================
+  # GUIDANCE - Not mechanically checked
+  # =========================================================================
+
+  G1:
+    title: Accept Interfaces, Return Structs
+    severity: GUIDANCE
+    mechanical: false
+    description: Functions should accept interfaces and return concrete types
+    note: |
+      This pattern maximizes flexibility for callers while keeping the API
+      simple. New methods can be added to returned types without breaking changes.
+    examples:
+      bad:
+        - |
+          func NewUserService() UserServiceInterface {
+              return &userService{}
+          }
+      good:
+        - |
+          func NewUserService() *UserService {
+              return &UserService{}
+          }
+
+          // Consumer defines the interface they need
+          type UserFinder interface {
+              FindUser(id int) (*User, error)
+          }
+
+  G2:
+    title: Small, Focused Packages
+    severity: GUIDANCE
+    mechanical: false
+    description: Packages should be small and focused on a single responsibility
+    note: |
+      Avoid utility/common/misc packages. Each package should have a clear purpose
+      that can be explained in one sentence.
+    examples:
+      bad:
+        - 'package utils  // What does this do?'
+        - 'package common  // Too vague'
+        - 'package helpers  // No clear purpose'
+      good:
+        - 'package auth  // Authentication logic'
+        - 'package cache  // Caching functionality'
+        - 'package httputil  // HTTP utilities'
+
+  G3:
+    title: Make Zero Values Useful
+    severity: GUIDANCE
+    mechanical: false
+    description: Design types so their zero value is immediately useful
+    note: |
+      From Effective Go: "The zero value of a sync.Mutex is a valid, unlocked mutex.
+      This means you can use mutexes without explicit initialization."
+    examples:
+      good:
+        - |
+          type Counter struct {
+              mu    sync.Mutex
+              count int  // zero value (0) is valid
+          }
+
+          func (c *Counter) Increment() {
+              c.mu.Lock()  // Works without initialization
+              c.count++
+              c.mu.Unlock()
+          }
+
+  G4:
+    title: Don't Stutter
+    severity: GUIDANCE
+    mechanical: false
+    description: Avoid repeating the package name in type/function names
+    note: |
+      From Effective Go: "Since everything in a package is imported with the
+      package name, don't repeat it in identifiers."
+    examples:
+      bad:
+        - 'chubby.ChubbyFile'
+        - 'http.HTTPClient'
+        - 'user.UserService'
+      good:
+        - 'chubby.File'
+        - 'http.Client'
+        - 'user.Service'
+
+  G5:
+    title: Keep Concurrency Localized
+    severity: GUIDANCE
+    mechanical: false
+    description: Hide concurrency details inside packages; expose synchronous APIs
+    note: |
+      Let callers add concurrency if needed. It's easier to add concurrency
+      at the call site than to remove it from a library.
+    examples:
+      bad:
+        - |
+          // Library forces concurrency on callers
+          func ProcessAll(items []Item, resultCh chan<- Result) {
+              for _, item := range items {
+                  go process(item, resultCh)
+              }
+          }
+      good:
+        - |
+          // Library is synchronous
+          func Process(item Item) (Result, error) {
+              // ...
+          }
+
+          // Caller adds concurrency if needed
+          for _, item := range items {
+              go func(i Item) {
+                  result, _ := Process(i)
+                  resultCh <- result
+              }(item)
+          }
+
+  G6:
+    title: Use Functional Options for Complex APIs
+    severity: GUIDANCE
+    mechanical: false
+    description: Use functional options pattern for APIs with many optional parameters
+    note: |
+      Functional options provide a clean API that's easy to extend without
+      breaking changes.
+    examples:
+      good:
+        - |
+          type Option func(*Server)
+
+          func WithTimeout(d time.Duration) Option {
+              return func(s *Server) { s.timeout = d }
+          }
+
+          func WithLogger(l Logger) Option {
+              return func(s *Server) { s.logger = l }
+          }
+
+          func NewServer(addr string, opts ...Option) *Server {
+              s := &Server{addr: addr}
+              for _, opt := range opts {
+                  opt(s)
+              }
+              return s
+          }
+
+          // Usage
+          srv := NewServer(":8080",
+              WithTimeout(30*time.Second),
+              WithLogger(logger),
+          )
+
+# ===========================================================================
+# INFO CHECKS - Statistics for reporting (not pass/fail)
+# ===========================================================================
+
+info:
+  goroutine_count:
+    pattern: 'go\s+func|go\s+\w+\('
+    flags: -cE
+    label: "Goroutine spawns"
+
+  channel_count:
+    pattern: 'make\s*\(\s*chan\s|chan\s+\w+'
+    flags: -cE
+    label: "Channel declarations"
+
+  error_handling:
+    pattern: 'if\s+err\s*!=\s*nil'
+    flags: -cE
+    label: "Error checks"
+
+  test_count:
+    pattern: '^func Test\w+\('
+    flags: -cE
+    label: "Test functions"
+
+  interface_count:
+    pattern: 'type\s+\w+\s+interface\s*\{'
+    flags: -cE
+    label: "Interface definitions"
+
+  struct_count:
+    pattern: 'type\s+\w+\s+struct\s*\{'
+    flags: -cE
+    label: "Struct definitions"
+
+# ===========================================================================
+# ANTI-PATTERNS - Quick reference table (documentation only)
+# ===========================================================================
+
+anti_patterns:
+  - pattern: "Ignored errors"
+    example: "result, _ := Foo()"
+    fix: "Handle, return, or log all errors"
+  - pattern: "Panic for errors"
+    example: "panic(err)"
+    fix: "Return errors instead"
+  - pattern: "math/rand for crypto"
+    example: 'import "math/rand"'
+    fix: "Use crypto/rand for security"
+  - pattern: "Defer in loop"
+    example: "for { defer f.Close() }"
+    fix: "Use closure or explicit close"
+  - pattern: "Goroutine leak"
+    example: "go func() { for {} }()"
+    fix: "Use context for cancellation"
+  - pattern: "snake_case names"
+    example: "func get_user()"
+    fix: "Use MixedCaps: getUser"
+  - pattern: "this/self receiver"
+    example: "func (this *T)"
+    fix: "Use short name: func (t *T)"
+  - pattern: "Global state"
+    example: "var db *sql.DB"
+    fix: "Pass dependencies explicitly"
+  - pattern: "Bare error returns"
+    example: "return err"
+    fix: 'return fmt.Errorf("context: %w", err)'
+  - pattern: "Empty slice literal"
+    example: "s := []int{}"
+    fix: "var s []int"
+  - pattern: "Interface in producer"
+    example: "func New() Interface"
+    fix: "func New() *ConcreteType"
+  - pattern: "Stuttering names"
+    example: "user.UserService"
+    fix: "user.Service"
+
+# ===========================================================================
+# RESEARCH SOURCES
+# ===========================================================================
+
+sources:
+  - title: "Effective Go"
+    url: "https://go.dev/doc/effective_go"
+  - title: "Go Code Review Comments"
+    url: "https://go.dev/wiki/CodeReviewComments"
+  - title: "Uber Go Style Guide"
+    url: "https://github.com/uber-go/guide"
+  - title: "Go Test Comments"
+    url: "https://go.dev/wiki/TestComments"
+  - title: "Google Go Style Guide"
+    url: "https://google.github.io/styleguide/go/"
+  - title: "Standard Go Project Layout"
+    url: "https://github.com/golang-standards/project-layout"
