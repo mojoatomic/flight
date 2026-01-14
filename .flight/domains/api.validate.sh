@@ -77,7 +77,8 @@ is_api_file() {
         return 0
     fi
     # Content-based detection: HTTP method handlers
-    if grep -qEi "(app|router)\.(get|post|put|patch|delete)\(|NextResponse|Response\.json|@(Get|Post|Put|Delete|Patch)\(" "$f" 2>/dev/null; then
+    # Note: case-sensitive to avoid matching response.json() from fetch calls
+    if grep -qE "(app|router)\.(get|post|put|patch|delete)\(|NextResponse|Response\.json|@(Get|Post|Put|Delete|Patch)\(" "$f" 2>/dev/null; then
         return 0
     fi
     return 1
