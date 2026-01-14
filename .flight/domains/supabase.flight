@@ -1,0 +1,624 @@
+# supabase.flight - Supabase patterns for TypeScript/Next.js
+# Source: Official Supabase docs, migration guides, community best practices
+
+domain: supabase
+version: 1.0.0
+description: >
+  Supabase patterns for TypeScript/Next.js applications. Covers client
+  instantiation with @supabase/ssr, auth patterns (getSession vs getUser),
+  RLS security, query error handling, and realtime subscriptions.
+
+file_patterns:
+  - "**/*.ts"
+  - "**/*.tsx"
+
+exclude_patterns:
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/.git/**"
+  - "**/*.d.ts"
+
+suppression:
+  comment: "flight:ok"
+  guidance: |
+    Add `// flight:ok` comment on the same line to suppress.
+    Use sparingly. Document why the suppression is acceptable.
+
+# ===========================================================================
+# RULES
+# ===========================================================================
+# Supabase-SPECIFIC rules for Next.js/TypeScript applications.
+# These catch common AI mistakes with Supabase client setup, auth, and queries.
+#
+# ID format: {severity_prefix}{number}
+#   N = NEVER (check - fails build)
+#   M = MUST (check - currently implemented as warn)
+#   S = SHOULD (warn - advisory)
+#   G = GUIDANCE (not checked)
+# ===========================================================================
+
+rules:
+
+  # =========================================================================
+  # NEVER - Security and correctness violations (validator will reject)
+  # =========================================================================
+
+  N1:
+    title: service_role Key in Client Code
+    severity: NEVER
+    mechanical: true
+    description: >
+      The service_role key bypasses RLS. NEVER use it in browser-accessible
+      code. Only use in server-side code that is never bundled to client.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Check for service_role in any client-accessible file
+          # Skip files that are clearly server-only (api/, server/, actions/)
+          if [[ "$f" != *"/api/"* ]] && [[ "$f" != *"/server/"* ]] && [[ "$f" != *".server."* ]] && [[ "$f" != *"/actions/"* ]]; then
+            grep -HnE 'service_role|SERVICE_ROLE' "$f" 2>/dev/null | grep -v 'flight:ok'
+          fi
+        done
+    note: |
+      The service_role key has admin privileges and bypasses Row Level Security.
+      If exposed to the browser, attackers can read/write any data.
+      Only use service_role in:
+      - API routes (pages/api/ or app/api/)
+      - Server actions
+      - Server-only files (.server.ts)
+    examples:
+      bad:
+        - "const supabase = createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY)"
+        - "const supabase = createClient(url, process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY)"
+      good:
+        - |
+          // In app/api/admin/route.ts (server-only)
+          const supabase = createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY)
+
+  N2:
+    title: Deprecated @supabase/auth-helpers-nextjs
+    severity: NEVER
+    mechanical: true
+    description: >
+      @supabase/auth-helpers-nextjs is deprecated. Use @supabase/ssr instead.
+      The auth-helpers package has known issues with Next.js 13+ App Router.
+    check:
+      type: grep
+      pattern: '@supabase/auth-helpers-nextjs|@supabase/auth-helpers-react|@supabase/auth-helpers-shared'
+      flags: -En
+    note: |
+      The auth-helpers packages are deprecated as of 2024. They don't properly
+      handle cookies in Next.js App Router. Migrate to @supabase/ssr:
+      - createClientComponentClient → createBrowserClient
+      - createServerComponentClient → createServerClient
+      - createRouteHandlerClient → createServerClient
+    examples:
+      bad:
+        - "import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'"
+        - "import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'"
+      good:
+        - "import { createBrowserClient } from '@supabase/ssr'"
+        - "import { createServerClient } from '@supabase/ssr'"
+
+  N3:
+    title: Raw @supabase/supabase-js in Next.js App Router
+    severity: NEVER
+    mechanical: true
+    description: >
+      In Next.js App Router, use @supabase/ssr for proper cookie handling.
+      Raw @supabase/supabase-js doesn't handle SSR cookies correctly.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Only flag if it's importing createClient from supabase-js directly
+          # AND it looks like a Next.js app (has 'use client' or next imports)
+          if grep -q "from ['\"]@supabase/supabase-js['\"]" "$f" 2>/dev/null; then
+            if grep -qE "'use client'|\"use client\"|from ['\"]next" "$f" 2>/dev/null; then
+              grep -Hn "from ['\"]@supabase/supabase-js['\"]" "$f" | grep -v 'flight:ok'
+            fi
+          fi
+        done
+    note: |
+      @supabase/supabase-js doesn't handle cookies for SSR. In Next.js:
+      - Use createBrowserClient from @supabase/ssr in client components
+      - Use createServerClient from @supabase/ssr in server components
+      The raw supabase-js client is fine for non-Next.js apps or edge functions.
+    examples:
+      bad:
+        - |
+          'use client'
+          import { createClient } from '@supabase/supabase-js'
+      good:
+        - |
+          'use client'
+          import { createBrowserClient } from '@supabase/ssr'
+
+  N4:
+    title: Hardcoded Supabase Credentials
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never hardcode Supabase URLs or keys. Use environment variables.
+      Hardcoded credentials get committed and leaked.
+    check:
+      type: grep
+      pattern: "createClient\\(['\"][^'\"]*supabase[^'\"]*['\"]\\s*,\\s*['\"]ey"
+      flags: -En
+    note: |
+      Hardcoded credentials are a security risk. They get committed to git,
+      logged, and exposed. Always use environment variables:
+      - NEXT_PUBLIC_SUPABASE_URL
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY (safe for client)
+      - SUPABASE_SERVICE_ROLE_KEY (server only, never NEXT_PUBLIC_)
+    examples:
+      bad:
+        - "createClient('https://xxx.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...')"
+      good:
+        - |
+          createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+          )
+
+  N5:
+    title: .single() Without Error Handling
+    severity: NEVER
+    mechanical: true
+    description: >
+      .single() throws PGRST116 error if zero rows OR if multiple rows.
+      Always handle the error or use .maybeSingle() for optional data.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Find .single() calls that don't have error handling nearby
+          awk '
+          /\.single\(\)/ {
+            # Check if this line or next few lines have error handling
+            line = $0
+            getline next1
+            getline next2
+            combined = line next1 next2
+            if (combined !~ /error|Error|catch|PGRST|throw|if.*!|\.maybeSingle/) {
+              print FILENAME":"NR": "$0
+            }
+          }
+          ' "$f" 2>/dev/null | grep -v 'flight:ok'
+        done
+    note: |
+      .single() expects exactly one row. It returns error code PGRST116 if:
+      - No rows found (common case!)
+      - Multiple rows found
+      Use .maybeSingle() when the row might not exist.
+      Always destructure { data, error } and check error.
+    examples:
+      bad:
+        - "const { data } = await supabase.from('users').select().eq('id', id).single()"
+      good:
+        - |
+          const { data, error } = await supabase
+            .from('users')
+            .select()
+            .eq('id', id)
+            .single()
+          if (error) {
+            if (error.code === 'PGRST116') {
+              // No rows found
+            }
+            throw error
+          }
+        - |
+          // When row might not exist
+          const { data } = await supabase
+            .from('users')
+            .select()
+            .eq('id', id)
+            .maybeSingle()
+
+  N6:
+    title: Realtime Subscription Without Cleanup
+    severity: NEVER
+    mechanical: true
+    description: >
+      Realtime subscriptions must be cleaned up on component unmount.
+      Leaked subscriptions cause memory leaks and stale callbacks.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Find files with realtime subscriptions
+          if grep -q "\.channel\|\.on.*postgres_changes\|\.subscribe()" "$f" 2>/dev/null; then
+            # Check if there's cleanup (removeChannel, unsubscribe, or cleanup return)
+            if ! grep -qE "removeChannel|\.unsubscribe\(\)|return.*=>.*remove|return.*\(\).*=>|cleanup" "$f" 2>/dev/null; then
+              # Skip files with flight:ok marker
+              if ! grep -q "flight:ok" "$f" 2>/dev/null; then
+                echo "$f: realtime subscription without cleanup"
+              fi
+            fi
+          fi
+        done
+    note: |
+      Realtime subscriptions persist until explicitly removed. In React:
+      - Create channel and subscribe in useEffect
+      - Return cleanup function that calls supabase.removeChannel(channel)
+      Without cleanup, you get memory leaks and callbacks firing on unmounted components.
+    examples:
+      bad:
+        - |
+          useEffect(() => {
+            supabase.channel('changes')
+              .on('postgres_changes', { event: '*', schema: 'public' }, handler)
+              .subscribe()
+          }, [])
+      good:
+        - |
+          useEffect(() => {
+            const channel = supabase.channel('changes')
+              .on('postgres_changes', { event: '*', schema: 'public' }, handler)
+              .subscribe()
+            return () => {
+              supabase.removeChannel(channel)
+            }
+          }, [])
+
+  N7:
+    title: getSession() in Server Code for Auth Checks
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never trust getSession() in server code for authentication. It reads
+      from cookies which can be spoofed. Use getClaims() or getUser() instead.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Check server files (api routes, server components, middleware)
+          if [[ "$f" == *"/api/"* ]] || [[ "$f" == *".server."* ]] || [[ "$f" == *"middleware"* ]] || [[ "$f" == *"/actions/"* ]]; then
+            # Flag getSession used for auth decisions without getClaims/getUser
+            if grep -q "getSession" "$f" 2>/dev/null; then
+              if ! grep -qE "getClaims|getUser" "$f" 2>/dev/null; then
+                grep -Hn "getSession" "$f" | grep -v 'flight:ok'
+              fi
+            fi
+          fi
+        done
+    note: |
+      getSession() reads directly from cookies without validation. In server code:
+      - Use getClaims() - validates JWT signature, fast, recommended
+      - Use getUser() - makes network request to Supabase, slower but gets fresh data
+      getSession() is only safe in client code where the session is already validated.
+    examples:
+      bad:
+        - |
+          // In middleware.ts or API route
+          const { data: { session } } = await supabase.auth.getSession()
+          if (!session) return unauthorized()
+      good:
+        - |
+          // In middleware.ts or API route
+          const { data: { claims } } = await supabase.auth.getClaims()
+          if (!claims) return unauthorized()
+
+  # =========================================================================
+  # MUST - Important patterns (validator warns)
+  # =========================================================================
+
+  M1:
+    title: Type Database Schema
+    severity: MUST
+    mechanical: true
+    description: >
+      Use generated types for type-safe Supabase queries.
+      Without types, query results are `any`.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Find createBrowserClient or createServerClient without type param
+          grep -En "create(Browser|Server)Client\([^<]*\)" "$f" 2>/dev/null | \
+            grep -v "<Database>" | grep -v 'flight:ok' | head -3
+        done
+    note: |
+      Generate types with: supabase gen types typescript --project-id xxx > types/supabase.ts
+      Then use: createBrowserClient<Database>(url, key)
+      This gives you autocomplete and type checking on all queries.
+    examples:
+      bad:
+        - "const supabase = createBrowserClient(url, key)"
+      good:
+        - |
+          import { Database } from '@/types/supabase'
+          const supabase = createBrowserClient<Database>(url, key)
+
+  M2:
+    title: Handle Auth State Changes
+    severity: MUST
+    mechanical: true
+    description: >
+      Client components using auth should listen for auth state changes.
+      Without this, the UI won't update when user signs in/out.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Find client files that use auth but don't have onAuthStateChange
+          if grep -q "'use client'" "$f" 2>/dev/null; then
+            if grep -qE "supabase\.auth\.(getUser|getSession|signIn|signOut)" "$f" 2>/dev/null; then
+              if ! grep -q "onAuthStateChange" "$f" 2>/dev/null; then
+                # Skip files with flight:ok marker
+                if ! grep -q "flight:ok" "$f" 2>/dev/null; then
+                  echo "$f: uses auth without onAuthStateChange listener"
+                fi
+              fi
+            fi
+          fi
+        done
+    note: |
+      Auth state can change from other tabs, token refresh, or session expiry.
+      Listen with onAuthStateChange and clean up on unmount.
+    examples:
+      good:
+        - |
+          useEffect(() => {
+            const { data: { subscription } } = supabase.auth.onAuthStateChange(
+              (event, session) => {
+                setSession(session)
+              }
+            )
+            return () => subscription.unsubscribe()
+          }, [])
+
+  M3:
+    title: Use createServerClient in Server Components
+    severity: MUST
+    mechanical: false
+    description: >
+      Server Components, Server Actions, and Route Handlers must use
+      createServerClient from @supabase/ssr for proper cookie handling.
+    note: |
+      Server-side code needs createServerClient which properly handles
+      reading and writing cookies. createBrowserClient doesn't work on server.
+
+      // app/page.tsx (server component)
+      import { createServerClient } from '@supabase/ssr'
+      import { cookies } from 'next/headers'
+
+  M4:
+    title: Use createBrowserClient in Client Components
+    severity: MUST
+    mechanical: false
+    description: >
+      Client Components ('use client') must use createBrowserClient
+      from @supabase/ssr for proper cookie handling in browser.
+    note: |
+      'use client' components run in the browser and need createBrowserClient
+      which handles cookies via document.cookie.
+
+      // components/MyComponent.tsx
+      'use client'
+      import { createBrowserClient } from '@supabase/ssr'
+
+  # =========================================================================
+  # SHOULD - Best practices (not mechanically checked)
+  # =========================================================================
+
+  S1:
+    title: Use RLS Instead of Application-Level Filtering
+    severity: SHOULD
+    mechanical: false
+    description: >
+      Let Postgres enforce access control with Row Level Security (RLS).
+      Don't rely on application code to filter unauthorized data.
+    note: |
+      RLS policies run at the database level, making them impossible to bypass.
+      Application-level filtering can have bugs, and bypasses if someone
+      accesses the database directly.
+
+      -- Enable RLS
+      ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
+
+      -- Users can only see their own posts
+      CREATE POLICY "Users see own posts" ON posts
+        FOR SELECT USING (auth.uid() = user_id);
+
+  S2:
+    title: Select Specific Columns
+    severity: SHOULD
+    mechanical: false
+    description: >
+      Use .select('specific, columns') instead of .select('*').
+      Reduces payload size and improves performance.
+    examples:
+      bad:
+        - "supabase.from('users').select('*')"
+      good:
+        - "supabase.from('users').select('id, name, email')"
+
+  S3:
+    title: Use Supabase CLI for Type Generation
+    severity: SHOULD
+    mechanical: false
+    description: >
+      Generate TypeScript types from your database schema using Supabase CLI.
+      Keep types in sync by regenerating after schema changes.
+    note: |
+      npx supabase gen types typescript --project-id YOUR_PROJECT_ID > types/supabase.ts
+
+      Run this:
+      - After any schema migration
+      - In CI to verify types are up to date
+      - Add to package.json scripts: "gen:types": "supabase gen types..."
+
+  S4:
+    title: Handle PostgrestError Types
+    severity: SHOULD
+    mechanical: false
+    description: >
+      Import and use PostgrestError type for proper error handling.
+      Check error.code for specific error conditions.
+    note: |
+      import { PostgrestError } from '@supabase/supabase-js'
+
+      Common error codes:
+      - PGRST116: No rows returned (from .single())
+      - 23505: Unique constraint violation
+      - 23503: Foreign key constraint violation
+      - 42501: RLS policy violation
+
+  # =========================================================================
+  # GUIDANCE - Design principles (not mechanically checked)
+  # =========================================================================
+
+  G1:
+    title: Client Setup Pattern for Next.js
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Standard pattern for setting up Supabase clients in Next.js App Router.
+    note: |
+      Create utility files in lib/supabase/:
+
+      // lib/supabase/client.ts (for 'use client' components)
+      import { createBrowserClient } from '@supabase/ssr'
+      import { Database } from '@/types/supabase'
+
+      export function createClient() {
+        return createBrowserClient<Database>(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        )
+      }
+
+      // lib/supabase/server.ts (for server components/actions)
+      import { createServerClient } from '@supabase/ssr'
+      import { cookies } from 'next/headers'
+      import { Database } from '@/types/supabase'
+
+      export async function createClient() {
+        const cookieStore = await cookies()
+        return createServerClient<Database>(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
+        )
+      }
+
+  G2:
+    title: Auth Validation Hierarchy
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Understanding when to use getClaims vs getUser vs getSession.
+    note: |
+      SERVER CODE (API routes, middleware, server actions):
+      1. getClaims() - RECOMMENDED. Validates JWT locally, fast, secure.
+      2. getUser() - Makes network call. Use when you need fresh user data.
+      3. getSession() - DANGEROUS. Reads unvalidated cookie. Don't use for auth.
+
+      CLIENT CODE:
+      1. getSession() - OK. Session already validated by server.
+      2. getUser() - OK. Makes network call for fresh data.
+      3. onAuthStateChange() - Listen for changes.
+
+  G3:
+    title: Environment Variables Reference
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Standard environment variables for Supabase in Next.js.
+    note: |
+      # .env.local
+
+      # Safe for client (NEXT_PUBLIC_ prefix)
+      NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...  # Safe, RLS enforced
+
+      # Server only (no NEXT_PUBLIC_ prefix)
+      SUPABASE_SERVICE_ROLE_KEY=eyJ...  # DANGEROUS - bypasses RLS
+
+      Never use NEXT_PUBLIC_ with service_role key!
+
+# ===========================================================================
+# INFO CHECKS - Statistics for reporting (not pass/fail)
+# ===========================================================================
+
+info:
+  supabase_imports:
+    pattern: 'from .@supabase'
+    flags: -oE
+    label: "Supabase imports"
+
+  realtime_subscriptions:
+    pattern: '\.channel\(|\.on.*postgres_changes'
+    flags: -cE
+    label: "Realtime subscriptions"
+
+  auth_calls:
+    pattern: 'supabase\.auth\.'
+    flags: -cE
+    label: "Auth API calls"
+
+  single_calls:
+    pattern: '\.single\(\)'
+    flags: -cE
+    label: ".single() calls"
+
+# ===========================================================================
+# ANTI-PATTERNS - Quick reference table (documentation only)
+# ===========================================================================
+
+anti_patterns:
+  - pattern: "service_role in client"
+    description: "Bypasses RLS, security breach"
+    fix: "Only use in server-side API routes"
+
+  - pattern: "@supabase/auth-helpers-nextjs"
+    description: "Deprecated package"
+    fix: "Use @supabase/ssr"
+
+  - pattern: "createClient from supabase-js in Next.js"
+    description: "No cookie handling for SSR"
+    fix: "Use createBrowserClient/createServerClient from @supabase/ssr"
+
+  - pattern: "hardcoded credentials"
+    description: "Security risk, gets committed"
+    fix: "Use environment variables"
+
+  - pattern: ".single() without error handling"
+    description: "Throws on 0 or multiple rows"
+    fix: "Handle error or use .maybeSingle()"
+
+  - pattern: "realtime without cleanup"
+    description: "Memory leak, stale callbacks"
+    fix: "Return cleanup function in useEffect"
+
+  - pattern: "getSession() in server for auth"
+    description: "Cookie can be spoofed"
+    fix: "Use getClaims() or getUser()"
+
+  - pattern: "select('*')"
+    description: "Over-fetching data"
+    fix: "Select specific columns"
+
+# ===========================================================================
+# SOURCES
+# ===========================================================================
+
+sources:
+  - title: "Supabase SSR Auth Guide"
+    url: "https://supabase.com/docs/guides/auth/server-side/creating-a-client"
+
+  - title: "Migration from Auth Helpers to SSR"
+    url: "https://supabase.com/docs/guides/auth/server-side/migrating-to-ssr-from-auth-helpers"
+
+  - title: "Supabase Row Level Security"
+    url: "https://supabase.com/docs/guides/database/postgres/row-level-security"
+
+  - title: "Supabase JavaScript Reference"
+    url: "https://supabase.com/docs/reference/javascript/introduction"
+
+  - title: "Understanding API Keys"
+    url: "https://supabase.com/docs/guides/api/api-keys"
