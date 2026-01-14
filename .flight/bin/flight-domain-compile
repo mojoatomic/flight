@@ -1,5 +1,5 @@
 #!/bin/bash
-# Wrapper to run flight-compile.py with the correct Python environment
+# Wrapper to run flight-domain-compile.py with the correct Python environment
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FLIGHT_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_DIR="$(dirname "$FLIGHT_DIR")"
@@ -13,4 +13,4 @@ else
     PYTHON="python3"
 fi
 
-exec "$PYTHON" "$SCRIPT_DIR/flight-compile.py" "$@"
+exec "$PYTHON" "$SCRIPT_DIR/flight-domain-compile.py" "$@"

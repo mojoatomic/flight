@@ -85,7 +85,7 @@ If it's in NEVER/MUST, there's a validator check. If there's no check possible, 
 
 ---
 
-## Domain Compiler (flight-compile.py)
+## Domain Compiler (flight-domain-compile)
 
 The domain compiler generates both `.md` and `.validate.sh` from a single `.flight` YAML source file. This eliminates drift between specs and validators.
 
@@ -103,20 +103,20 @@ The wrapper script auto-detects `.venv/` in project root or `.flight/.venv/`.
 
 ```bash
 # Compile a single domain
-.flight/bin/flight-compile api.flight
+.flight/bin/flight-domain-compile api.flight
 
 # Compile all .flight files in domains/
-.flight/bin/flight-compile --all
+.flight/bin/flight-domain-compile --all
 
 # Check syntax only (no output)
-.flight/bin/flight-compile --check api.flight
+.flight/bin/flight-domain-compile --check api.flight
 
 # Generate only .md or .sh
-.flight/bin/flight-compile --md-only api.flight
-.flight/bin/flight-compile --sh-only api.flight
+.flight/bin/flight-domain-compile --md-only api.flight
+.flight/bin/flight-domain-compile --sh-only api.flight
 
 # Debug mode (show parsed structure)
-.flight/bin/flight-compile --debug api.flight
+.flight/bin/flight-domain-compile --debug api.flight
 ```
 
 ### YAML Format
@@ -212,7 +212,7 @@ error_message: "No OpenAPI/Swagger spec found"
 
 ```
 1. Create/edit .flight/domains/foo.flight
-2. Run: .flight/bin/flight-compile foo.flight
+2. Run: .flight/bin/flight-domain-compile foo.flight
 3. Outputs: foo.md + foo.validate.sh
 4. Test: bash -n foo.validate.sh  # Syntax check
 5. Run: .flight/validate-all.sh   # Full validation
@@ -255,7 +255,7 @@ If MCP tools aren't available, fall back to web search.
 | `.flight/domains/*.flight` | Domain source (YAML) - single source of truth |
 | `.flight/domains/*.md` | Domain rules (generated from .flight) |
 | `.flight/domains/*.validate.sh` | Executable validators (generated from .flight) |
-| `.flight/bin/flight-compile.py` | Domain compiler (generates .md + .sh) |
+| `.flight/bin/flight-domain-compile.py` | Domain compiler (generates .md + .sh) |
 | `.flight/validate-all.sh` | Auto-detect and run all relevant validators |
 | `update.sh` | Update Flight (preserves customizations) |
 | `PRIME.md` | Output of /flight-prime |
@@ -392,9 +392,9 @@ Run `npm run preflight` before every commit. If it passes locally, CI will pass.
 
 | Problem | Solution |
 |---------|----------|
-| Validator false positive | Edit `.flight` YAML, recompile with `flight-compile.py` |
+| Validator false positive | Edit `.flight` YAML, recompile with `flight-domain-compile` |
 | Spec/validator drift | Use single `.flight` source, regenerate both files |
-| Missing domain | Create `.flight` file, compile with `flight-compile.py` |
+| Missing domain | Create `.flight` file, compile with `flight-domain-compile` |
 | Task too big | Break into smaller atomic tasks |
 | Context lost | Re-run `/flight-prime` |
 | Rules unclear | Check domain file examples |

@@ -1,5 +1,5 @@
 # yaml.flight - YAML Best Practices and Footguns
-# Compiled by flight-compile.py into yaml.md + yaml.validate.sh
+# Compiled by flight-domain-compile into yaml.md + yaml.validate.sh
 
 domain: yaml
 version: "1.0"
