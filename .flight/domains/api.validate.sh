@@ -162,8 +162,9 @@ warn "M1: Use plural nouns for collections" \
     grep -Ein "['\"]/(user|product|order|item|account|customer|payment)(/|['\"])" "${FILES[@]}"
 
 # M2: Check for versioned API paths
+# Pattern matches /v1/ or /v1' or /v1" or /v1? or /v1 at EOL
 warn "M2: API versioning present" \
-    bash -c 'grep -qEi "/v[0-9]+/|version.*header|api-version" "$@" || echo "No API versioning detected"' _ "${FILES[@]}"
+    bash -c 'grep -qEi "/v[0-9]+([/'\''\"?]|$)|version.*header|api-version" "$@" || echo "No API versioning detected"' _ "${FILES[@]}"
 
 # M3: Error response structure (should have type/title/status pattern)
 # Only applies to actual API endpoint files
