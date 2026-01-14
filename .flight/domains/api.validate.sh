@@ -78,7 +78,17 @@ is_api_file() {
     fi
     # Content-based detection: HTTP method handlers
     # Note: case-sensitive to avoid matching response.json() from fetch calls
-    if grep -qE "(app|router)\.(get|post|put|patch|delete)\(|NextResponse|Response\.json|@(Get|Post|Put|Delete|Patch)\(" "$f" 2>/dev/null; then
+    # Frameworks detected:
+    #   Express/Koa:    (app|router|server).get(
+    #   Fastify:        fastify.get(
+    #   Hono:           hono.get( or app.on(
+    #   Next.js:        NextResponse, Response.json, export.*function.*(GET|POST|...)
+    #   NestJS:         @Get( @Post( etc.
+    #   Spring Boot:    @GetMapping @RequestMapping
+    #   Django REST:    @api_view @action
+    #   Flask:          @app.route @blueprint.route
+    #   Go net/http:    http.HandleFunc func.*Handler
+    if grep -qE "(app|router|server|fastify|hono)\.(get|post|put|patch|delete|on)\(|NextResponse|Response\.json|export\s+(async\s+)?function\s+(GET|POST|PUT|PATCH|DELETE)|@(Get|Post|Put|Delete|Patch|RequestMapping|GetMapping|PostMapping|api_view|action)\(|@(app|blueprint)\.route\(|http\.HandleFunc|func\s+\w*Handler" "$f" 2>/dev/null; then
         return 0
     fi
     return 1
@@ -167,6 +177,21 @@ fi
 # M4: Rate limit headers
 warn "M4: Rate limit headers present" \
     bash -c 'grep -qEi "x-ratelimit|rate.?limit|retry-after" "$@" || echo "No rate limiting headers detected"' _ "${FILES[@]}"
+
+# M4a: Pagination metadata in responses
+# Files with pagination should include metadata (has_more, next_cursor, total, etc.)
+warn "M4a: Pagination responses include metadata" \
+    bash -c '
+        for f in "$@"; do
+            # Check if file has pagination query patterns
+            if grep -qEi "cursor|offset.*limit|page.*per_page|after_id|before_id" "$f" 2>/dev/null; then
+                # Check if it also has pagination response metadata
+                if ! grep -qEi "has_more|next_cursor|prev_cursor|total_pages|total_count|page_info" "$f" 2>/dev/null; then
+                    echo "$f: pagination patterns found but no response metadata (has_more, next_cursor, etc.)"
+                fi
+            fi
+        done
+    ' _ "${FILES[@]}"
 
 # M5: Location header on 201 Created
 warn "M5: Location header on 201 responses" \

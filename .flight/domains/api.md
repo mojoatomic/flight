@@ -2,7 +2,18 @@
 
 REST/HTTP API design patterns. Framework-agnostic. Prevents common integration failures.
 
-**Validation:** `api_validate.sh` enforces NEVER/MUST rules. SHOULD rules trigger warnings. GUIDANCE is not mechanically checked.
+**Validation:** `api.validate.sh` enforces NEVER/MUST rules. SHOULD rules trigger warnings. GUIDANCE is not mechanically checked.
+
+### Suppressing Warnings
+
+Add `// flight:ok` comment on the same line to suppress a specific check:
+
+```javascript
+// Legacy endpoint, scheduled for deprecation in v3
+router.get('/getUser/:id', handler)  // flight:ok
+```
+
+Use sparingly. Document why the suppression is acceptable.
 
 ---
 
