@@ -65,8 +65,10 @@ check "N1: No unjustified 'any' (must have comment)" \
     for f in $FILES; do
         awk '
         /: any/ || /as any/ || /<any>/ {
+            # Check if previous line has justification
             if (prev !~ /TODO|FIXME|any.*because|legacy|migration|third.party|lib types/) {
-                if (\$0 !~ /\/\/.*any|\/\*.*any/) {
+                # Check if current line has justification in a comment
+                if (\$0 !~ /\/\/.*any|\/\*.*any|\/\/.*TODO|\/\/.*FIXME|\/\/.*legacy|\/\/.*migration|\/\/.*third.party|\/\/.*lib types/) {
                     print FILENAME\":\"NR\": \"\$0
                 }
             }
