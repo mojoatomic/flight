@@ -1,0 +1,763 @@
+# code-hygiene.flight - Universal code hygiene for ALL languages
+# THE most important Flight domain - catches AI code generation mistakes
+# Source: Migrated from code-hygiene.md and code-hygiene.validate.sh
+
+domain: code-hygiene
+version: 1.0.0
+description: >
+  Universal code quality patterns that apply to ALL languages. These are
+  AI-generated code smells that transcend syntax. The name should describe
+  WHAT it holds, not THAT it holds something.
+
+file_patterns:
+  - "**/*.js"
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.jsx"
+  - "**/*.py"
+  - "**/*.go"
+  - "**/*.rs"
+  - "**/*.java"
+  - "**/*.c"
+  - "**/*.cpp"
+  - "**/*.h"
+
+exclude_patterns:
+  - "**/node_modules/**"
+  - "**/vendor/**"
+  - "**/target/**"
+  - "**/.git/**"
+  - "**/dist/**"
+  - "**/build/**"
+
+suppression:
+  comment: "flight:ok"
+  guidance: |
+    Add `// flight:ok` or `# flight:ok` comment on the same line to suppress.
+    Use sparingly. Document why the suppression is acceptable.
+
+# ===========================================================================
+# RULES
+# ===========================================================================
+# These rules catch the most common AI code generation mistakes.
+# They apply across ALL programming languages.
+#
+# ID format: {severity_prefix}{number}
+#   N = NEVER (check - fails build)
+#   M = MUST (check - fails build, but currently implemented as warn)
+#   S = SHOULD (warn - advisory)
+#   G = GUIDANCE (not checked)
+# ===========================================================================
+
+rules:
+
+  # =========================================================================
+  # NEVER - AI killers (validator will reject)
+  # =========================================================================
+
+  N1:
+    title: Generic Variable Names
+    severity: NEVER
+    mechanical: true
+    description: >
+      Do not use generic names like data, result, temp, item, value, obj.
+      The name should describe WHAT it holds, not THAT it holds something.
+    check:
+      type: grep
+      pattern: '^\s*(const|let|var|)\s*(data|result|temp|tmp|info|item|value|val|obj|thing|stuff|ret|res|output|input|payload)\s*='
+      flags: -En
+      exclude: flight:ok
+    note: |
+      Generic names force readers to trace back to understand what the variable
+      contains. Domain-specific names are self-documenting.
+    examples:
+      bad:
+        - "const data = getUser();"
+        - "let result = calculate();"
+        - "const temp = items.filter(...);"
+        - "const item = response.body;"
+        - "let value = config.timeout;"
+        - "const obj = JSON.parse(str);"
+      good:
+        - "const user = getUser();"
+        - "const total = calculate();"
+        - "const activeUsers = items.filter(...);"
+        - "const orderDetails = response.body;"
+        - "let timeoutMs = config.timeout;"
+        - "const settings = JSON.parse(str);"
+
+  N2:
+    title: Redundant Conditional Returns
+    severity: NEVER
+    mechanical: true
+    description: >
+      Do not use if/else to return boolean literals. Return the condition directly.
+    check:
+      type: grep
+      pattern: 'if\s*\([^)]+\)\s*return\s+(true|false)\s*;\s*(else\s*)?(return\s+(true|false))?'
+      flags: -En
+      exclude: flight:ok
+    note: |
+      This pattern adds unnecessary complexity. The condition itself is the
+      boolean value you want to return.
+    examples:
+      bad:
+        - "if (condition) return true; else return false;"
+        - "if (condition) { return true; } return false;"
+        - "if (condition) return false; else return true;"
+      good:
+        - "return condition;"
+        - "return !condition;"
+
+  N3:
+    title: Ternary Returning Boolean Literals
+    severity: NEVER
+    mechanical: true
+    description: >
+      Do not use ternary operator to return true/false. Use the condition directly.
+    check:
+      type: grep
+      pattern: '\?\s*true\s*:\s*false|\?\s*false\s*:\s*true'
+      flags: -En
+      exclude: flight:ok
+    note: |
+      condition ? true : false is just condition with extra steps.
+      condition ? false : true is just !condition with extra steps.
+    examples:
+      bad:
+        - "condition ? true : false"
+        - "condition ? false : true"
+        - "x === y ? true : false"
+        - "isValid ? true : false"
+      good:
+        - "condition"
+        - "!condition"
+        - "x === y"
+        - "isValid"
+
+  N4:
+    title: Redundant Boolean Comparisons
+    severity: NEVER
+    mechanical: true
+    description: >
+      Do not compare booleans to true/false. Use the boolean directly.
+    check:
+      type: grep
+      pattern: '===?\s*true|===?\s*false|!==?\s*true|!==?\s*false'
+      flags: -En
+      exclude: flight:ok
+    note: |
+      Boolean values are already true or false. Comparing them to literals
+      is redundant and suggests the author doesn't understand booleans.
+    examples:
+      bad:
+        - "if (isValid === true)"
+        - "while (hasMore === false)"
+        - "if (x == true)"
+        - "if (x !== false)"
+      good:
+        - "if (isValid)"
+        - "while (!hasMore)"
+        - "if (x)"
+        - "if (x)"
+
+  N5:
+    title: Magic Number Calculations
+    severity: NEVER
+    mechanical: true
+    description: >
+      Do not use raw arithmetic for time/size calculations. Define named constants.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          grep -HnE '60\s*\*\s*60|24\s*\*\s*60|1000\s*\*\s*60|7\s*\*\s*24|1024\s*\*\s*1024' "$f" 2>/dev/null | \
+            grep -v '[A-Z_]\{2,\}\s*=' | grep -v "flight:ok"
+        done
+    note: |
+      Magic calculations are hard to understand and easy to get wrong.
+      Named constants document the intent and prevent errors.
+    examples:
+      bad:
+        - "sleep(86400)"
+        - "timeout = 60 * 60 * 1000"
+        - "maxAge = 7 * 24 * 60 * 60"
+        - "buffer = 1024 * 1024"
+      good:
+        - |
+          SECONDS_PER_DAY = 86400
+          sleep(SECONDS_PER_DAY)
+        - |
+          MILLISECONDS_PER_HOUR = 60 * 60 * 1000
+          timeout = MILLISECONDS_PER_HOUR
+        - |
+          ONE_WEEK_SECONDS = 7 * 24 * 60 * 60
+          maxAge = ONE_WEEK_SECONDS
+        - |
+          ONE_MEGABYTE = 1024 * 1024
+          buffer = ONE_MEGABYTE
+
+  N6:
+    title: Generic Function Names
+    severity: NEVER
+    mechanical: true
+    description: >
+      Function names should include the domain noun they operate on.
+      Avoid handleData, processItem, doSomething, etc.
+    check:
+      type: grep
+      pattern: 'function\s+(handleData|processItem|processItems|doSomething|getData|setData|updateValue|handleEvent|processResult|transformData|handleInput|processInput)\s*\(|def\s+(handle_data|process_item|do_something|get_data|set_data|update_value|handle_event|process_result|transform_data)\s*\('
+      flags: -En
+      exclude: flight:ok
+    note: |
+      Generic function names force readers to read the implementation to
+      understand what the function does. Domain-specific names are self-documenting.
+    examples:
+      bad:
+        - "function handleData() {}"
+        - "function processItem() {}"
+        - "function doSomething() {}"
+        - "def handle_data():"
+        - "def process_item():"
+      good:
+        - "function validateUserEmail() {}"
+        - "function processOrderPayment() {}"
+        - "function handleLoginSubmit() {}"
+        - "def validate_user_email():"
+        - "def process_order_payment():"
+
+  N7:
+    title: Single-Letter Variables Outside Loops
+    severity: NEVER
+    mechanical: true
+    description: >
+      Single-letter variables are only acceptable as loop counters (i, j, k)
+      or in very short lambdas. Otherwise use descriptive names.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Find single letter assignments not in for/while lines
+          # Exclude i, j for loops and x for simple lambdas
+          grep -HnE '^\s*(const|let|var|)\s+[a-hk-wyz]\s*=' "$f" 2>/dev/null | \
+            grep -v 'for\s*(' | grep -v 'while\s*(' | grep -v "flight:ok"
+        done
+    note: |
+      Single-letter names provide no context. They force readers to trace
+      back to understand what the variable represents.
+    examples:
+      bad:
+        - "const x = getUser();"
+        - "let n = items.length;"
+        - "const s = name.toLowerCase();"
+        - "const t = Date.now();"
+      good:
+        - "const user = getUser();"
+        - "let itemCount = items.length;"
+        - "const normalizedName = name.toLowerCase();"
+        - "const timestamp = Date.now();"
+        - "for (let i = 0; i < 10; i++)  // OK in loops"
+        - "items.map((x, i) => x * 2)  // OK in simple lambdas"
+
+  N8:
+    title: Console/Print Debugging in Production Code
+    severity: NEVER
+    mechanical: true
+    description: >
+      Do not leave console.log, print, or similar debugging statements in
+      production code. Use a proper logging framework.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Skip test files
+          if [[ "$f" == *"_test."* ]] || [[ "$f" == *".test."* ]] || \
+             [[ "$f" == *"test_"* ]] || [[ "$f" == *"/tests/"* ]] || \
+             [[ "$f" == *"_spec."* ]] || [[ "$f" == *".spec."* ]]; then
+            continue
+          fi
+          grep -HnE 'console\.(log|warn|error)\s*\(|print\s*\(|System\.out\.print|println!\s*\(|fmt\.Print' "$f" 2>/dev/null | \
+            grep -v "flight:ok"
+        done
+    note: |
+      Debug logging pollutes output and may leak sensitive information.
+      Use structured logging with appropriate log levels.
+    examples:
+      bad:
+        - "console.log('user:', user);"
+        - "console.log(data);"
+        - "print(f\"debug: {value}\")"
+        - "System.out.println(result);"
+        - "println!(\"debug: {:?}\", value);"
+        - "fmt.Println(data)"
+      good:
+        - "logger.debug('User fetched', { userId: user.id });"
+        - "logger.info('Processing order', { orderId });"
+        - "logging.debug(f\"Processing: {value}\")"
+        - "LOGGER.debug(\"Result: {}\", result);"
+        - "log::debug!(\"Processing: {:?}\", value);"
+        - "log.Debug(\"Processing\", \"data\", data)"
+
+  N9:
+    title: Negated Boolean Names
+    severity: NEVER
+    mechanical: true
+    description: >
+      Avoid boolean names with negative prefixes (isNot, hasNo, cannot).
+      They lead to confusing double negatives like !isNotValid.
+    check:
+      type: grep
+      pattern: '(is|has|can|should|will)(Not|No)[A-Z]'
+      flags: -En
+      exclude: flight:ok
+    note: |
+      Negated names lead to double negatives which are hard to understand.
+      Use positive names and negate when needed.
+    examples:
+      bad:
+        - "isNotValid"
+        - "isNotEmpty"
+        - "hasNoErrors"
+        - "cannotProceed"
+        - "if (!isNotValid)  // Double negative!"
+      good:
+        - "isValid"
+        - "isEmpty"
+        - "hasErrors"
+        - "canProceed"
+        - "if (isValid)"
+        - "if (!isEmpty)"
+
+  N10:
+    title: Inconsistent Naming Style
+    severity: NEVER
+    mechanical: true
+    description: >
+      Do not mix camelCase and snake_case in the same file. Pick one style
+      based on language conventions and use it consistently.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          camel=$(grep -oE '\b[a-z]+[A-Z][a-zA-Z]*\b' "$f" 2>/dev/null | wc -l)
+          snake=$(grep -oE '\b[a-z]+_[a-z]+\b' "$f" 2>/dev/null | wc -l)
+          # Only flag if significant usage of both styles
+          if [ "$camel" -gt 5 ] && [ "$snake" -gt 5 ]; then
+            echo "$f: mixed naming styles (camelCase: $camel, snake_case: $snake)"
+          fi
+        done | grep -v "flight:ok"
+    note: |
+      Inconsistent naming makes code harder to read and suggests careless
+      development. Follow language conventions consistently.
+    examples:
+      bad:
+        - |
+          // Mixed in same file
+          const user_name = "alice";
+          const userEmail = "alice@example.com";
+          const UserAge = 30;
+      good:
+        - |
+          // JavaScript - consistent camelCase
+          const userName = "alice";
+          const userEmail = "alice@example.com";
+          const userAge = 30;
+        - |
+          # Python - consistent snake_case
+          user_name = "alice"
+          user_email = "alice@example.com"
+          user_age = 30
+
+  # =========================================================================
+  # MUST - Important patterns (validator warns)
+  # =========================================================================
+
+  M1:
+    title: Boolean Variables Use Proper Prefixes
+    severity: MUST
+    mechanical: true
+    description: >
+      Boolean variables and functions should use is/has/can/should/will/was/did/does
+      prefixes to clearly indicate they return a boolean.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Find boolean assignments without proper prefix
+          grep -HnE '(const|let|var)\s+[a-z]+\s*=\s*(true|false)\s*;' "$f" 2>/dev/null | \
+            grep -vE '(is|has|can|should|will|was|did|does)[A-Z]' | grep -v "flight:ok"
+        done
+    note: |
+      Boolean prefixes make code self-documenting. Readers immediately know
+      the variable holds a true/false value.
+    examples:
+      bad:
+        - "const valid = checkInput();"
+        - "let active = true;"
+        - "const empty = list.length === 0;"
+      good:
+        - "const isValid = checkInput();"
+        - "let isActive = true;"
+        - "const isEmpty = list.length === 0;"
+        - "const hasPermission = user.role === 'admin';"
+        - "const canEdit = hasPermission && !isLocked;"
+        - "const shouldRefresh = cacheExpired || forceRefresh;"
+
+  M2:
+    title: Collections Use Plural Names
+    severity: MUST
+    mechanical: true
+    description: >
+      Arrays, lists, sets, and other collections should use plural names.
+      Singular names should be used for single items.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Find array literals assigned to singular names
+          grep -HnE '(const|let|var)\s+(user|item|order|product|result|file|row|record|entry)\s*=\s*\[' "$f" 2>/dev/null | \
+            grep -v "flight:ok"
+        done
+    note: |
+      Plural names for collections make iteration code read naturally:
+      for (const user of users) - not for (const users of user).
+    examples:
+      bad:
+        - "const user = getUsers();  // Returns array"
+        - "const item = [1, 2, 3];  // Is array"
+        - "for (const users of userList)  // Single item"
+      good:
+        - "const users = getUsers();"
+        - "const items = [1, 2, 3];"
+        - "for (const user of users)"
+
+  M3:
+    title: Constants Use UPPER_SNAKE_CASE
+    severity: MUST
+    mechanical: true
+    description: >
+      Constants (values that never change) should use UPPER_SNAKE_CASE
+      to distinguish them from mutable variables.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Find const with numeric value not in UPPER_CASE
+          grep -HnE 'const\s+[a-z][a-zA-Z]*\s*=\s*[0-9]+\s*;' "$f" 2>/dev/null | \
+            grep -vE 'const\s+[A-Z_]+\s*=' | grep -v "flight:ok"
+        done
+    note: |
+      UPPER_SNAKE_CASE immediately signals that a value is constant.
+      camelCase constants look like mutable variables.
+    examples:
+      bad:
+        - "const maxRetries = 3;  // Looks mutable"
+        - "const defaultTimeout = 30000;"
+        - "const apiBaseUrl = \"https://...\";"
+      good:
+        - "const MAX_RETRIES = 3;"
+        - "const DEFAULT_TIMEOUT = 30000;"
+        - "const API_BASE_URL = \"https://...\";"
+        - "const SECONDS_PER_DAY = 86400;"
+
+  M4:
+    title: Error Messages Include Context
+    severity: MUST
+    mechanical: true
+    description: >
+      Error messages should include enough context to understand what
+      failed and why. Generic messages like "Invalid" or "Failed" are useless.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Find short/generic error messages (less than 15 chars)
+          grep -HnE "throw.*Error\(['\"][^'\"]{0,15}['\"]|raise.*Exception\(['\"][^'\"]{0,15}['\"]" "$f" 2>/dev/null | \
+            grep -v "flight:ok"
+        done
+    note: |
+      When an error occurs in production, the message is often all you have
+      to diagnose the problem. Include relevant variable values and context.
+    examples:
+      bad:
+        - "throw new Error('Invalid');"
+        - "throw new Error('Failed');"
+        - "raise Exception('Error')"
+        - "throw new Error('Not found');"
+      good:
+        - "throw new Error(`Invalid email format: ${email}`);"
+        - "throw new Error(`Order ${orderId} not found`);"
+        - "raise ValueError(f\"User {user_id} does not have permission to {action}\")"
+        - "throw new Error(`Failed to connect to ${host}:${port} after ${retries} attempts`);"
+
+  M5:
+    title: Function Names Are Verb Phrases
+    severity: MUST
+    mechanical: true
+    description: >
+      Function names should start with a verb that describes the action.
+      Noun-only names don't describe what the function does.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Find function names that don't start with common verb prefixes
+          grep -HnE '^(export\s+)?(async\s+)?function\s+[a-z]+\s*\(' "$f" 2>/dev/null | \
+            grep -vE 'function\s+(get|set|fetch|load|save|send|create|update|delete|remove|add|find|check|validate|is|has|can|should|handle|process|render|init|start|stop|on|do|make|build|parse|format|convert|to|from|ensure|assert|verify|compute|calculate|generate|transform|map|filter|reduce|sort|merge|split|join|open|close|read|write|run|execute|apply|reset|clear|register|subscribe|unsubscribe|publish|emit|dispatch|trigger|mount|unmount|connect|disconnect|enable|disable|show|hide|toggle|select|deselect|activate|deactivate)[A-Z]' | \
+            grep -v "flight:ok"
+        done
+    note: |
+      Functions perform actions. Their names should describe what action they
+      perform. Nouns describe things, not actions.
+    examples:
+      bad:
+        - "function user() {}"
+        - "function validation() {}"
+        - "function email() {}"
+        - "function data() {}"
+      good:
+        - "function getUser() {}"
+        - "function validateInput() {}"
+        - "function sendEmail() {}"
+        - "function fetchData() {}"
+        - "function calculateTotal() {}"
+        - "function transformResponse() {}"
+
+  # =========================================================================
+  # SHOULD - Best practices (validator warns)
+  # =========================================================================
+
+  S1:
+    title: Async Functions Use Appropriate Verb Prefixes
+    severity: SHOULD
+    mechanical: false
+    description: >
+      Async functions should use verbs that imply I/O or waiting:
+      fetch, load, save, send. Or use the Async suffix.
+    note: |
+      Verbs like fetch, load, save clearly indicate the function performs
+      I/O. This helps readers understand the function's behavior.
+    examples:
+      good:
+        - "async function fetchUser() {}"
+        - "async function loadConfig() {}"
+        - "async function saveOrder() {}"
+        - "async function sendNotification() {}"
+        - "async function getUserAsync() {}"
+
+  S2:
+    title: Use Domain-Specific Nouns
+    severity: SHOULD
+    mechanical: false
+    description: >
+      Variable and function names should use domain-specific nouns
+      that describe the business concept, not generic programming terms.
+    note: |
+      Domain nouns make code self-documenting and align with how stakeholders
+      talk about the system.
+    examples:
+      bad:
+        - "const entity = getRecord();"
+        - "const collection = fetchList();"
+      good:
+        - "const customer = getCustomer();"
+        - "const orderHistory = fetchOrders();"
+        - "const invoiceItems = getLineItems();"
+
+  # =========================================================================
+  # GUIDANCE - Design principles (not mechanically checked)
+  # =========================================================================
+
+  G1:
+    title: Naming Decision Tree
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Use this decision tree for naming variables and functions.
+    note: |
+      Is it a boolean?
+        → Use is/has/can/should/will/was/did prefix
+
+      Is it a collection?
+        → Use plural noun (users, orders, items)
+
+      Is it a constant?
+        → Use UPPER_SNAKE_CASE
+
+      Is it a function?
+        → Start with verb (get, set, fetch, save, validate, etc.)
+
+      Is it async?
+        → Use fetch/load/save/send verb OR Async suffix
+
+      Everything else?
+        → Use domain-specific noun (user, order, invoice, NOT data, item, result)
+
+  G2:
+    title: Common Verb Prefixes
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Reference for choosing the right verb prefix for functions.
+    note: |
+      Retrieval:  get, fetch, load, find, query, read, retrieve
+      Creation:   create, make, build, generate, produce, init
+      Mutation:   set, update, modify, change, edit, save, write
+      Deletion:   delete, remove, clear, reset, destroy, drop
+      Validation: validate, check, verify, ensure, assert, confirm
+      Conversion: to, from, parse, format, transform, convert, map
+      Boolean:    is, has, can, should, will, was, did, does
+      Lifecycle:  start, stop, begin, end, open, close, init, cleanup
+
+  G3:
+    title: Domain Term Examples
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Examples of domain-specific terms for common application types.
+    note: |
+      E-commerce: order, product, cart, checkout, inventory, shipment, customer
+      Auth:       user, session, token, permission, role, credential, identity
+      Finance:    transaction, payment, invoice, balance, account, transfer
+      Content:    post, article, comment, author, category, tag, publication
+      Messaging:  message, thread, recipient, notification, channel, conversation
+
+  G4:
+    title: Language-Specific Conventions
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Follow the naming conventions of your language.
+    note: |
+      JavaScript/TypeScript:
+        - camelCase for variables/functions
+        - PascalCase for classes/components/types
+        - UPPER_SNAKE_CASE for constants
+
+      Python:
+        - snake_case for variables/functions
+        - PascalCase for classes
+        - UPPER_SNAKE_CASE for constants
+        - Prefix private with _
+
+      Go:
+        - camelCase for unexported, PascalCase for exported
+        - Short names OK for small scope (receiver s for short method)
+        - Avoid stuttering: user.User → user.Info
+
+      Rust:
+        - snake_case for variables/functions
+        - PascalCase for types/traits
+        - UPPER_SNAKE_CASE for constants
+        - Prefix unused with _
+
+      Java:
+        - camelCase for variables/methods
+        - PascalCase for classes
+        - UPPER_SNAKE_CASE for constants
+        - Prefix interfaces with I (if team requires)
+
+# ===========================================================================
+# INFO CHECKS - Statistics for reporting (not pass/fail)
+# ===========================================================================
+
+info:
+  generic_names:
+    pattern: '\b(data|result|temp|info|item|value|obj)\s*='
+    flags: -oE
+    label: "Generic name assignments"
+
+  boolean_prefixes:
+    pattern: '\b(is|has|can|should|will|was|did|does)[A-Z][a-zA-Z]*'
+    flags: -oE
+    label: "Properly prefixed booleans"
+
+  upper_constants:
+    pattern: '\b[A-Z][A-Z_]+\s*='
+    flags: -oE
+    label: "UPPER_CASE constants"
+
+  console_logs:
+    pattern: 'console\.(log|warn|error)\s*\('
+    flags: -cE
+    label: "Console.log calls"
+
+  print_statements:
+    pattern: 'print\s*\(|println|fmt\.Print'
+    flags: -cE
+    label: "Print statements"
+
+# ===========================================================================
+# ANTI-PATTERNS - Quick reference table (documentation only)
+# ===========================================================================
+
+anti_patterns:
+  - pattern: "data, result, item"
+    description: "Generic variable name"
+    fix: "Use domain noun (user, order, invoice)"
+
+  - pattern: "handleData()"
+    description: "Generic function name"
+    fix: "processOrder(), validateUser()"
+
+  - pattern: "x === true"
+    description: "Redundant boolean comparison"
+    fix: "x"
+
+  - pattern: "cond ? true : false"
+    description: "Redundant ternary"
+    fix: "cond"
+
+  - pattern: "if (x) return true; else return false"
+    description: "Redundant conditional return"
+    fix: "return x"
+
+  - pattern: "60 * 60 * 1000"
+    description: "Magic calculation"
+    fix: "MILLISECONDS_PER_HOUR"
+
+  - pattern: "const x = ..."
+    description: "Single letter variable"
+    fix: "const user = ..."
+
+  - pattern: "console.log()"
+    description: "Debug in production"
+    fix: "logger.debug()"
+
+  - pattern: "isNotValid"
+    description: "Negated boolean name"
+    fix: "isValid + negate when needed"
+
+  - pattern: "user (for array)"
+    description: "Singular for collection"
+    fix: "users"
+
+  - pattern: "maxRetries"
+    description: "Constant in camelCase"
+    fix: "MAX_RETRIES"
+
+  - pattern: "throw Error('Failed')"
+    description: "Generic error message"
+    fix: "Include what failed and why"
+
+  - pattern: "function user()"
+    description: "Function named as noun"
+    fix: "function getUser()"
+
+  - pattern: "mixed camel_Case"
+    description: "Inconsistent naming"
+    fix: "Pick one style per file"
+
+# ===========================================================================
+# SOURCES
+# ===========================================================================
+
+sources:
+  - title: "Clean Code by Robert C. Martin"
+    url: "https://www.oreilly.com/library/view/clean-code-a/9780136083238/"
+
+  - title: "Code Complete by Steve McConnell"
+    url: "https://www.oreilly.com/library/view/code-complete-2nd/0735619670/"
+
+  - title: "The Art of Readable Code"
+    url: "https://www.oreilly.com/library/view/the-art-of/9781449318482/"

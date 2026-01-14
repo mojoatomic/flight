@@ -1,0 +1,773 @@
+# docker.flight - Dockerfile and container image best practices
+# Flight domain specification for Docker validation
+# Sources: Docker docs, Hadolint, CIS Docker Benchmark
+
+domain: docker
+version: 1.0.0
+description: >
+  Dockerfile and container image best practices. Covers security, reproducibility,
+  performance optimization, and maintainability. Framework-agnostic.
+
+file_patterns:
+  - "**/Dockerfile"
+  - "**/Dockerfile.*"
+  - "**/*.dockerfile"
+
+suppression:
+  comment: "# flight:ok"
+  guidance: "Use sparingly. Document why the suppression is acceptable."
+
+rules:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # NEVER Rules - Security vulnerabilities (validator will reject)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  N1:
+    title: Running as Root User
+    severity: NEVER
+    description: >
+      Containers should not run as root. Running as root inside a container
+      means running as root on the host if container escape occurs.
+    source: "CIS 4.1, Hadolint DL3002"
+    mechanical: true
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if ! grep -qE "^USER\s+" "$f" 2>/dev/null; then
+            echo "$f: no USER directive found (container runs as root)"
+          elif grep -qE "^USER\s+(root|0)\s*$" "$f" 2>/dev/null; then
+            grep -HnE "^USER\s+(root|0)\s*$" "$f"
+          fi
+        done | grep -v "flight:ok"
+    examples:
+      bad:
+        - "# No USER directive at all"
+        - "USER root"
+        - "USER 0"
+      good:
+        - "USER appuser"
+        - "USER 1000:1000"
+        - "USER nobody"
+
+  N2:
+    title: Secrets in Build Args or Environment
+    severity: NEVER
+    description: >
+      Never pass secrets via ARG or ENV. Build args are visible in image history.
+      Environment variables may be logged or exposed. Use secret mounts instead.
+    source: "CIS 4.10, Docker security best practices"
+    mechanical: true
+    check:
+      type: grep
+      pattern: '(ARG|ENV)\s+\w*(PASSWORD|SECRET|API_KEY|PRIVATE_KEY|TOKEN|CREDENTIAL|AUTH)\w*\s*='
+      flags: -Ein
+      exclude: "flight:ok"
+    examples:
+      bad:
+        - "ARG DB_PASSWORD=secret123"
+        - "ENV API_KEY=sk-12345"
+        - "ARG PRIVATE_KEY_PATH=/keys/private.pem"
+      good:
+        - "# Use --secret flag in docker build"
+        - "RUN --mount=type=secret,id=api_key cat /run/secrets/api_key"
+        - "# Pass secrets at runtime, not build time"
+
+  N3:
+    title: ADD for Remote URLs
+    severity: NEVER
+    description: >
+      Do not use ADD for downloading remote files. ADD with URLs is unpredictable
+      and cannot be verified. Use RUN with curl/wget for checksums and control.
+    source: "Hadolint DL3020, Docker best practices"
+    mechanical: true
+    check:
+      type: grep
+      pattern: '^ADD\s+https?://'
+      flags: -Ein
+      exclude: "flight:ok"
+    examples:
+      bad:
+        - "ADD https://example.com/file.tar.gz /app/"
+        - "ADD http://releases.example.com/v1.0/binary /usr/local/bin/"
+      good:
+        - "RUN curl -fsSL https://example.com/file.tar.gz | tar xz"
+        - "RUN wget -qO- https://example.com/file.tar.gz | sha256sum -c - && tar xz"
+        - "COPY --from=builder /app/binary /usr/local/bin/"
+
+  N4:
+    title: Privileged Operations in Dockerfile
+    severity: NEVER
+    description: >
+      Do not configure privileged capabilities in Dockerfile. Capabilities should
+      be granted at runtime with minimal scope, not baked into images.
+    source: "CIS 5.3, 5.4"
+    mechanical: true
+    check:
+      type: grep
+      pattern: '--privileged|--cap-add|SYS_ADMIN|NET_ADMIN|ALL'
+      flags: -Ein
+      exclude: "flight:ok"
+    examples:
+      bad:
+        - "# In docker-compose or run commands baked into image"
+        - "RUN setcap cap_net_bind_service+ep /app  # Consider if necessary"
+      good:
+        - "# Grant capabilities at runtime with docker run --cap-add"
+        - "# Use rootless containers when possible"
+
+  N5:
+    title: Hardcoded Passwords or Keys
+    severity: NEVER
+    description: >
+      Never hardcode passwords, API keys, or other secrets directly in Dockerfiles.
+      These become permanently visible in image layers and history.
+    source: "CIS 4.10, OWASP"
+    mechanical: true
+    check:
+      type: grep
+      pattern: '(password|passwd|secret|api_key|apikey|private_key|token)\s*[=:]\s*["\047][^"\047]+["\047]'
+      flags: -Ein
+      exclude: "flight:ok"
+    examples:
+      bad:
+        - 'ENV password="hunter2"'
+        - "RUN echo 'api_key=sk-12345' > /app/config"
+        - 'ARG token="ghp_xxxxxxxxxxxx"'
+      good:
+        - "# Use Docker secrets or environment variables at runtime"
+        - "RUN --mount=type=secret,id=password cat /run/secrets/password"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # MUST Rules - Real problems (validator will reject)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  M1:
+    title: Use Absolute WORKDIR
+    severity: MUST
+    description: >
+      WORKDIR must be an absolute path. Relative paths cause confusion and
+      may behave differently depending on previous instructions.
+    source: "Hadolint DL3000"
+    mechanical: true
+    check:
+      type: grep
+      pattern: '^WORKDIR\s+[^/]'
+      flags: -En
+      exclude: "flight:ok"
+    examples:
+      bad:
+        - "WORKDIR app"
+        - "WORKDIR ./src"
+        - "WORKDIR ../shared"
+      good:
+        - "WORKDIR /app"
+        - "WORKDIR /home/appuser/src"
+        - "WORKDIR /opt/application"
+
+  M2:
+    title: Pin Base Image Versions
+    severity: MUST
+    description: >
+      Always pin base image versions with specific tags or SHA digests.
+      Using 'latest' or no tag causes unpredictable builds and security issues.
+    source: "Hadolint DL3006, DL3007, CIS 4.2"
+    mechanical: true
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          grep -HnE "^FROM\s+[^:@\s]+\s*$|^FROM\s+[^@\s]+:latest(\s|$)" "$f" 2>/dev/null | \
+            grep -v "flight:ok"
+        done
+    examples:
+      bad:
+        - "FROM node"
+        - "FROM python:latest"
+        - "FROM ubuntu:latest"
+      good:
+        - "FROM node:20.11.0-alpine3.19"
+        - "FROM python:3.12.1-slim-bookworm"
+        - "FROM ubuntu:22.04@sha256:abc123..."
+
+  M3:
+    title: Use COPY Instead of ADD for Local Files
+    severity: MUST
+    description: >
+      Use COPY for copying local files. ADD has implicit behaviors (tar extraction,
+      URL fetching) that make builds unpredictable. Use ADD only for tar extraction.
+    source: "Hadolint DL3020, Docker best practices"
+    mechanical: true
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          grep -HnE "^ADD\s+[^h][^\s]+\s+" "$f" 2>/dev/null | \
+            grep -vE "\.(tar|tar\.gz|tgz|tar\.bz2|tar\.xz)\s" | \
+            grep -v "flight:ok"
+        done
+    examples:
+      bad:
+        - "ADD package.json /app/"
+        - "ADD src/ /app/src/"
+        - "ADD config.yml /etc/app/"
+      good:
+        - "COPY package.json /app/"
+        - "COPY src/ /app/src/"
+        - "ADD archive.tar.gz /app/  # OK for tar extraction"
+
+  M4:
+    title: MAINTAINER is Deprecated
+    severity: MUST
+    description: >
+      MAINTAINER instruction is deprecated. Use LABEL maintainer="..." instead
+      for better metadata handling and OCI compliance.
+    source: "Hadolint DL4000, Docker deprecation"
+    mechanical: true
+    check:
+      type: grep
+      pattern: '^MAINTAINER\s+'
+      flags: -Ein
+      exclude: "flight:ok"
+    examples:
+      bad:
+        - 'MAINTAINER John Doe <john@example.com>'
+        - "MAINTAINER dev-team"
+      good:
+        - 'LABEL maintainer="John Doe <john@example.com>"'
+        - 'LABEL org.opencontainers.image.authors="dev-team@example.com"'
+
+  M5:
+    title: Use JSON Notation for CMD and ENTRYPOINT
+    severity: MUST
+    description: >
+      Use JSON array format (exec form) for CMD and ENTRYPOINT. Shell form
+      invokes a shell wrapper, preventing proper signal handling and PID 1 issues.
+    source: "Hadolint DL3025, Docker best practices"
+    mechanical: true
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          grep -HnE "^(CMD|ENTRYPOINT)\s+[^\[]" "$f" 2>/dev/null | \
+            grep -v "flight:ok"
+        done
+    examples:
+      bad:
+        - "CMD node server.js"
+        - "ENTRYPOINT /app/entrypoint.sh"
+        - "CMD npm start"
+      good:
+        - 'CMD ["node", "server.js"]'
+        - 'ENTRYPOINT ["/app/entrypoint.sh"]'
+        - 'CMD ["npm", "start"]'
+
+  M6:
+    title: Set SHELL Pipefail Before RUN with Pipes
+    severity: MUST
+    description: >
+      When using pipes in RUN commands, set SHELL with pipefail option.
+      Without pipefail, only the exit code of the last command is checked.
+    source: "Hadolint DL4006"
+    mechanical: true
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qE "^RUN\s+.*\|" "$f" 2>/dev/null; then
+            if ! grep -qE "^SHELL\s+.*pipefail" "$f" 2>/dev/null; then
+              echo "$f: RUN commands use pipes but SHELL pipefail not set"
+            fi
+          fi
+        done | grep -v "flight:ok"
+    examples:
+      bad:
+        - |
+          # No SHELL directive
+          RUN curl -fsSL https://example.com/install.sh | bash
+      good:
+        - |
+          SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+          RUN curl -fsSL https://example.com/install.sh | bash
+
+  M7:
+    title: Invalid EXPOSE Port
+    severity: MUST
+    description: >
+      EXPOSE must specify valid port numbers (1-65535). Invalid ports
+      indicate configuration errors.
+    source: "Hadolint DL3011"
+    mechanical: true
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          grep -HnE "^EXPOSE\s+" "$f" 2>/dev/null | while read -r line; do
+            linenum=$(echo "$line" | cut -d: -f2)
+            ports=$(echo "$line" | sed 's/.*EXPOSE\s*//' | grep -oE '[0-9]+')
+            for port in $ports; do
+              if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+                echo "$line"
+              fi
+            done
+          done
+        done | grep -v "flight:ok"
+    examples:
+      bad:
+        - "EXPOSE 0"
+        - "EXPOSE 70000"
+        - "EXPOSE 99999"
+      good:
+        - "EXPOSE 8080"
+        - "EXPOSE 443"
+        - "EXPOSE 3000 5432"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # SHOULD Rules - Optimization (validator warns)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  S1:
+    title: Pin Package Versions in apt-get
+    severity: SHOULD
+    description: >
+      Pin versions in apt-get install for reproducible builds. Unpinned packages
+      may change between builds, causing subtle breakages.
+    source: "Hadolint DL3008"
+    mechanical: true
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          grep -HnE "apt-get\s+install.*\s[a-z][a-z0-9+-]+(\s|$)" "$f" 2>/dev/null | \
+            grep -vE "=[0-9]|flight:ok"
+        done
+    examples:
+      bad:
+        - "RUN apt-get install -y curl wget"
+        - "RUN apt-get install python3"
+      good:
+        - "RUN apt-get install -y curl=7.88.1-10 wget=1.21.3-1"
+        - "RUN apt-get install python3=3.11.2-6"
+
+  S2:
+    title: Clean Package Cache in Same Layer
+    severity: SHOULD
+    description: >
+      Remove package manager cache in the same RUN layer as install.
+      Cleaning in a separate layer doesn't reduce image size due to layer caching.
+    source: "Docker best practices"
+    mechanical: true
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          grep -HnE "^RUN\s+.*apt-get\s+install" "$f" 2>/dev/null | \
+            grep -vE "rm\s+-rf\s+/var/lib/apt|flight:ok"
+        done
+    examples:
+      bad:
+        - |
+          RUN apt-get update && apt-get install -y curl
+          RUN rm -rf /var/lib/apt/lists/*
+      good:
+        - |
+          RUN apt-get update && apt-get install -y curl \
+              && rm -rf /var/lib/apt/lists/*
+
+  S3:
+    title: Use Multi-Stage Builds
+    severity: SHOULD
+    description: >
+      Use multi-stage builds to reduce final image size. Build dependencies
+      should not be included in production images.
+    source: "Docker best practices"
+    mechanical: true
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qE "gcc|make|npm\s+install|pip\s+install|go\s+build|cargo\s+build" "$f" 2>/dev/null; then
+            from_count=$(grep -cE "^FROM\s+" "$f" 2>/dev/null || echo 0)
+            if [ "$from_count" -lt 2 ]; then
+              echo "$f: build tools detected but no multi-stage build (single FROM)"
+            fi
+          fi
+        done | grep -v "flight:ok"
+    examples:
+      bad:
+        - |
+          FROM node:20
+          RUN npm install
+          RUN npm run build
+          CMD ["node", "dist/server.js"]
+      good:
+        - |
+          FROM node:20 AS builder
+          RUN npm install && npm run build
+
+          FROM node:20-alpine
+          COPY --from=builder /app/dist /app/dist
+          CMD ["node", "dist/server.js"]
+
+  S4:
+    title: Order Layers for Caching
+    severity: SHOULD
+    description: >
+      Order Dockerfile instructions from least to most frequently changing.
+      COPY package*.json before COPY . to maximize cache reuse.
+    source: "Docker best practices"
+    mechanical: true
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          copy_all_line=$(grep -nE "^COPY\s+\.\s+" "$f" 2>/dev/null | head -1 | cut -d: -f1)
+          copy_pkg_line=$(grep -nE "^COPY\s+package" "$f" 2>/dev/null | head -1 | cut -d: -f1)
+          if [ -n "$copy_all_line" ] && [ -n "$copy_pkg_line" ]; then
+            if [ "$copy_all_line" -lt "$copy_pkg_line" ]; then
+              echo "$f:$copy_all_line: COPY . before COPY package* (poor cache efficiency)"
+            fi
+          fi
+        done | grep -v "flight:ok"
+    examples:
+      bad:
+        - |
+          COPY . /app
+          RUN npm install
+      good:
+        - |
+          COPY package*.json /app/
+          RUN npm install
+          COPY . /app
+
+  S5:
+    title: Use .dockerignore
+    severity: SHOULD
+    description: >
+      Create a .dockerignore file to exclude unnecessary files from build context.
+      Reduces build time and prevents accidental inclusion of secrets.
+    source: "Docker best practices"
+    mechanical: true
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          dir=$(dirname "$f")
+          if [ ! -f "$dir/.dockerignore" ]; then
+            echo "$f: no .dockerignore found in $dir"
+          fi
+        done | grep -v "flight:ok"
+    examples:
+      bad:
+        - "# No .dockerignore file"
+      good:
+        - |
+          # .dockerignore
+          .git
+          node_modules
+          __pycache__
+          .env
+          *.log
+          dist
+          .DS_Store
+
+  S6:
+    title: Define HEALTHCHECK
+    severity: SHOULD
+    description: >
+      Define HEALTHCHECK instruction for container health monitoring.
+      Enables orchestrators to detect and replace unhealthy containers.
+    source: "CIS 4.6, Docker best practices"
+    mechanical: true
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if ! grep -qE "^HEALTHCHECK\s+" "$f" 2>/dev/null; then
+            if grep -qE "^(CMD|ENTRYPOINT)\s+" "$f" 2>/dev/null; then
+              echo "$f: no HEALTHCHECK defined for service image"
+            fi
+          fi
+        done | grep -v "flight:ok"
+    examples:
+      bad:
+        - |
+          FROM node:20
+          CMD ["node", "server.js"]
+      good:
+        - |
+          FROM node:20
+          HEALTHCHECK --interval=30s --timeout=3s \
+            CMD curl -f http://localhost:3000/health || exit 1
+          CMD ["node", "server.js"]
+
+  S7:
+    title: Combine RUN Commands
+    severity: SHOULD
+    description: >
+      Combine related RUN commands to minimize layers. Each RUN creates a new
+      layer, increasing image size and complexity.
+    source: "Docker best practices"
+    mechanical: true
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          run_count=$(grep -cE "^RUN\s+" "$f" 2>/dev/null || echo 0)
+          if [ "$run_count" -gt 10 ]; then
+            echo "$f: $run_count RUN commands (consider combining)"
+          fi
+        done | grep -v "flight:ok"
+    examples:
+      bad:
+        - |
+          RUN apt-get update
+          RUN apt-get install -y curl
+          RUN apt-get install -y wget
+          RUN rm -rf /var/lib/apt/lists/*
+      good:
+        - |
+          RUN apt-get update \
+              && apt-get install -y curl wget \
+              && rm -rf /var/lib/apt/lists/*
+
+  S8:
+    title: Use Specific COPY Targets
+    severity: SHOULD
+    description: >
+      Avoid COPY . when possible. Copy only required files to improve
+      cache efficiency and reduce unintended file inclusion.
+    source: "Docker best practices"
+    mechanical: true
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          grep -HnE "^COPY\s+\.\s+" "$f" 2>/dev/null | \
+            grep -v "flight:ok"
+        done
+    examples:
+      bad:
+        - "COPY . /app"
+      good:
+        - |
+          COPY package*.json /app/
+          COPY src/ /app/src/
+          COPY public/ /app/public/
+
+  S9:
+    title: Avoid apt-get upgrade
+    severity: SHOULD
+    description: >
+      Avoid apt-get upgrade/dist-upgrade in Dockerfiles. Upgrading packages
+      can cause unpredictable changes. Pin base images instead.
+    source: "Hadolint DL3005"
+    mechanical: true
+    check:
+      type: grep
+      pattern: 'apt-get\s+(upgrade|dist-upgrade)'
+      flags: -Ein
+      exclude: "flight:ok"
+    examples:
+      bad:
+        - "RUN apt-get update && apt-get upgrade -y"
+        - "RUN apt-get dist-upgrade"
+      good:
+        - "# Use a newer base image instead"
+        - "FROM debian:bookworm-20240110"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # GUIDANCE Rules - Design principles (not mechanically checked)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  G1:
+    title: One Process Per Container
+    severity: GUIDANCE
+    description: >
+      Each container should run a single process. This enables proper process
+      management, scaling, and logging. Use orchestration for multi-process apps.
+    source: "Docker best practices, 12-factor app"
+    mechanical: false
+    guidance: >
+      Check if container runs supervisor, systemd, or multiple services.
+      Consider splitting into separate containers with docker-compose.
+    examples:
+      bad:
+        - "supervisord managing nginx + app"
+        - "Running database and app in same container"
+      good:
+        - "Separate containers for web, worker, database"
+        - "docker-compose for multi-service orchestration"
+
+  G2:
+    title: Use Official Base Images
+    severity: GUIDANCE
+    description: >
+      Prefer official images from Docker Hub or verified publishers.
+      Official images are maintained, scanned, and follow best practices.
+    source: "CIS 4.2"
+    mechanical: false
+    guidance: >
+      Check if FROM uses official images (library/, no namespace, or verified).
+      Avoid unknown third-party images without security review.
+    examples:
+      bad:
+        - "FROM randomuser/node:latest"
+        - "FROM unverified-registry.io/base:v1"
+      good:
+        - "FROM node:20-alpine"
+        - "FROM python:3.12-slim"
+        - "FROM gcr.io/distroless/static-debian12"
+
+  G3:
+    title: Use Labels for Metadata
+    severity: GUIDANCE
+    description: >
+      Add LABEL instructions for image metadata. Enables image discovery,
+      version tracking, and compliance documentation.
+    source: "OCI Image Spec, Docker best practices"
+    mechanical: false
+    guidance: >
+      Include standard labels: maintainer, version, description, source URL.
+      Consider OCI annotation keys for interoperability.
+    examples:
+      bad:
+        - "# No labels"
+      good:
+        - |
+          LABEL org.opencontainers.image.title="My App"
+          LABEL org.opencontainers.image.version="1.0.0"
+          LABEL org.opencontainers.image.source="https://github.com/org/repo"
+
+  G4:
+    title: Prefer Distroless or Alpine
+    severity: GUIDANCE
+    description: >
+      Use minimal base images (distroless, alpine) for production.
+      Smaller attack surface, fewer vulnerabilities, faster pulls.
+    source: "Google distroless, Alpine Linux"
+    mechanical: false
+    guidance: >
+      For production, consider gcr.io/distroless/* or alpine variants.
+      Use full images only when specific packages are required.
+    examples:
+      bad:
+        - "FROM ubuntu:22.04  # 77MB base"
+        - "FROM debian:bookworm  # 124MB base"
+      good:
+        - "FROM node:20-alpine  # ~50MB"
+        - "FROM gcr.io/distroless/nodejs20-debian12  # ~50MB"
+        - "FROM python:3.12-slim  # ~50MB"
+
+  G5:
+    title: Document Build Arguments
+    severity: GUIDANCE
+    description: >
+      Document ARG instructions with comments explaining purpose and valid values.
+      Helps maintainers understand build configuration options.
+    source: "Documentation best practices"
+    mechanical: false
+    guidance: >
+      Each ARG should have a comment explaining its purpose.
+      Provide default values where sensible.
+    examples:
+      bad:
+        - |
+          ARG VERSION
+          ARG ENV
+      good:
+        - |
+          # Application version for tagging
+          ARG VERSION=1.0.0
+          # Build environment: development, staging, production
+          ARG BUILD_ENV=production
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Info Section - Informational metrics
+# ═══════════════════════════════════════════════════════════════════════════
+
+info:
+  from_count:
+    pattern: '^FROM\s+'
+    label: "FROM instructions (stages)"
+
+  layer_count:
+    pattern: '^(RUN|COPY|ADD)\s+'
+    label: "Layer-creating instructions"
+
+  expose_count:
+    pattern: '^EXPOSE\s+'
+    label: "EXPOSE directives"
+
+  env_count:
+    pattern: '^ENV\s+'
+    label: "ENV directives"
+
+  arg_count:
+    pattern: '^ARG\s+'
+    label: "ARG directives"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Anti-Patterns Summary
+# ═══════════════════════════════════════════════════════════════════════════
+
+anti_patterns:
+  - pattern: "Running as root"
+    description: "No USER directive or USER root"
+    fix: "Add USER directive with non-root user"
+
+  - pattern: "Secrets in image"
+    description: "ARG/ENV with passwords, keys, tokens"
+    fix: "Use --secret mount or runtime environment"
+
+  - pattern: "Unpinned base image"
+    description: "FROM image:latest or FROM image"
+    fix: "Pin specific version: FROM image:x.y.z"
+
+  - pattern: "ADD for local files"
+    description: "Using ADD instead of COPY"
+    fix: "Use COPY unless extracting tar archives"
+
+  - pattern: "Shell form CMD"
+    description: 'CMD command args instead of CMD ["command", "args"]'
+    fix: "Use JSON array format for exec form"
+
+  - pattern: "Unclean apt-get"
+    description: "apt-get install without cleaning cache"
+    fix: "Add && rm -rf /var/lib/apt/lists/* in same RUN"
+
+  - pattern: "Poor layer ordering"
+    description: "COPY . before dependency installation"
+    fix: "COPY package*.json first, then npm install, then COPY ."
+
+  - pattern: "No multi-stage"
+    description: "Build tools in production image"
+    fix: "Use multi-stage builds to separate build and runtime"
+
+  - pattern: "Missing HEALTHCHECK"
+    description: "Service container without health monitoring"
+    fix: "Add HEALTHCHECK instruction"
+
+  - pattern: "Deprecated MAINTAINER"
+    description: "Using MAINTAINER instruction"
+    fix: "Use LABEL maintainer=..."
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Sources
+# ═══════════════════════════════════════════════════════════════════════════
+
+sources:
+  - name: "Docker Official Best Practices"
+    url: "https://docs.docker.com/build/building/best-practices/"
+
+  - name: "Hadolint"
+    url: "https://github.com/hadolint/hadolint"
+
+  - name: "CIS Docker Benchmark"
+    url: "https://www.cisecurity.org/benchmark/docker"
+
+  - name: "Google Distroless"
+    url: "https://github.com/GoogleContainerTools/distroless"
+
+  - name: "OCI Image Spec"
+    url: "https://github.com/opencontainers/image-spec"

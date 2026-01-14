@@ -1,0 +1,16 @@
+#!/bin/bash
+# Wrapper to run flight-compile.py with the correct Python environment
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FLIGHT_DIR="$(dirname "$SCRIPT_DIR")"
+PROJECT_DIR="$(dirname "$FLIGHT_DIR")"
+
+# Try venv locations in order of preference
+if [[ -f "$PROJECT_DIR/.venv/bin/python3" ]]; then
+    PYTHON="$PROJECT_DIR/.venv/bin/python3"
+elif [[ -f "$FLIGHT_DIR/.venv/bin/python3" ]]; then
+    PYTHON="$FLIGHT_DIR/.venv/bin/python3"
+else
+    PYTHON="python3"
+fi
+
+exec "$PYTHON" "$SCRIPT_DIR/flight-compile.py" "$@"
