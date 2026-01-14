@@ -1,0 +1,742 @@
+# yaml.flight - YAML Best Practices and Footguns
+# Compiled by flight-compile.py into yaml.md + yaml.validate.sh
+
+domain: yaml
+version: "1.0"
+description: |
+  YAML syntax best practices and common footguns. Covers type coercion,
+  string handling, security, and structural patterns. Catches the infamous
+  Norway problem, sexagesimal parsing, and other YAML surprises.
+
+file_patterns:
+  - "*.yaml"
+  - "*.yml"
+
+exclude_patterns:
+  - "node_modules/**"
+  - "vendor/**"
+  - ".git/**"
+  - "dist/**"
+  - "build/**"
+  - "*.min.yaml"
+
+suppression:
+  marker: "flight:ok"
+  scope: line
+
+rules:
+  # ============================================================================
+  # NEVER - Parse errors and data corruption
+  # ============================================================================
+
+  N1:
+    title: Tab Characters
+    severity: NEVER
+    mechanical: true
+    description: |
+      Tabs are not allowed in YAML indentation. YAML requires spaces for
+      indentation. Tabs will cause parse errors or unpredictable behavior.
+    check:
+      type: grep
+      pattern: '^\t'
+      flags: -n
+      exclude: flight:ok
+    note: |
+      YAML spec explicitly forbids tab characters for indentation.
+      Use spaces only. Configure your editor to insert spaces when Tab is pressed.
+    examples:
+      bad:
+        - "\tkey: value  # Tab indentation"
+      good:
+        - "  key: value  # Space indentation"
+
+  N2:
+    title: Duplicate Keys
+    severity: NEVER
+    mechanical: true
+    description: |
+      Duplicate keys in the same mapping are invalid. The second value silently
+      overwrites the first, causing data loss with no warning.
+    check:
+      type: script
+      code: |
+        # Check for duplicate keys at the same indentation level
+        awk '
+        /^[[:space:]]*[^#[:space:]][^:]*:/ {
+          # Extract indentation and key
+          match($0, /^[[:space:]]*/);
+          indent = RLENGTH;
+          key = $0;
+          gsub(/^[[:space:]]*/, "", key);
+          gsub(/:.*$/, "", key);
+
+          # Create unique identifier for indent level + key
+          id = indent ":" key;
+
+          if (seen[id] && seen[id] == indent_context) {
+            print FILENAME ":" NR ": duplicate key \"" key "\" at same level";
+            found = 1;
+          }
+          seen[id] = indent_context;
+
+          # Track context changes
+          if (indent == 0) indent_context++;
+        }
+        END { exit found ? 1 : 0 }
+        ' "$file"
+    note: |
+      YAML 1.2 spec states duplicate keys are an error, but many parsers
+      silently accept them. This causes subtle bugs when the wrong value wins.
+    examples:
+      bad:
+        - |
+          config:
+            timeout: 30
+            timeout: 60  # Silently overwrites!
+      good:
+        - |
+          config:
+            timeout: 30
+            retry_timeout: 60
+
+  N3:
+    title: Unsafe YAML Load
+    severity: NEVER
+    mechanical: true
+    description: |
+      Never use unsafe YAML loading functions that allow arbitrary code execution.
+      YAML tags like !python/object can execute code during parsing.
+    check:
+      type: grep
+      pattern: 'yaml\.load\s*\([^)]*\)\s*$|yaml\.load\s*\([^,)]+\)(?!\s*,\s*Loader)'
+      flags: -Pn
+      exclude: flight:ok
+    note: |
+      PyYAML's yaml.load() without a Loader argument is dangerous.
+      Use yaml.safe_load() or yaml.load(data, Loader=yaml.SafeLoader).
+      This applies to most YAML libraries across languages.
+    examples:
+      bad:
+        - "data = yaml.load(file)"
+        - "data = yaml.load(content)"
+      good:
+        - "data = yaml.safe_load(file)"
+        - "data = yaml.load(content, Loader=yaml.SafeLoader)"
+
+  N4:
+    title: YAML Bomb (Billion Laughs)
+    severity: NEVER
+    mechanical: true
+    description: |
+      Exponentially expanding anchors/aliases can cause denial of service.
+      Never allow deeply nested anchor references from untrusted sources.
+    check:
+      type: grep
+      pattern: '&[a-zA-Z_][a-zA-Z0-9_]*\s*\[\s*\*[a-zA-Z_]'
+      flags: -n
+      exclude: flight:ok
+    note: |
+      YAML bombs use anchors (&name) and aliases (*name) to create
+      exponential expansion. A small file can expand to gigabytes.
+      Limit alias expansion depth and total size when parsing untrusted YAML.
+    examples:
+      bad:
+        - |
+          a: &a ["lol","lol"]
+          b: &b [*a,*a]
+          c: &c [*b,*b]  # Exponential growth
+      good:
+        - |
+          # Flat structure without nested aliases
+          items:
+            - lol
+            - lol
+
+  # ============================================================================
+  # MUST - Correct data interpretation
+  # ============================================================================
+
+  M1:
+    title: Unquoted Norway Problem
+    severity: MUST
+    mechanical: true
+    description: |
+      Country codes NO, DK, or values like "yes", "no", "on", "off" parse as
+      booleans in YAML 1.1. This is the infamous "Norway problem."
+    check:
+      type: grep
+      pattern: ':\s+(no|NO|No|yes|YES|Yes|on|ON|On|off|OFF|Off)\s*(#|$)'
+      flags: -En
+      exclude: flight:ok
+    note: |
+      YAML 1.1 treats these as booleans: yes/no, on/off, true/false (various cases).
+      YAML 1.2 removed this, but many parsers still use 1.1 behavior.
+      Always quote values that could be misinterpreted: "NO", "yes", etc.
+    examples:
+      bad:
+        - "country: NO  # Becomes false!"
+        - "enabled: yes  # Works but version-dependent"
+      good:
+        - 'country: "NO"'
+        - "enabled: true  # Explicit boolean"
+
+  M2:
+    title: Unquoted Sexagesimal Numbers
+    severity: MUST
+    mechanical: true
+    description: |
+      Values like 22:22 or 4:30 are parsed as base-60 (sexagesimal) numbers
+      in YAML 1.1, converting to seconds. Port mappings are commonly affected.
+    check:
+      type: grep
+      pattern: ':\s+[0-9]+:[0-9]+(:[0-9]+)?\s*(#|$)'
+      flags: -En
+      exclude: flight:ok
+    note: |
+      YAML 1.1 interprets colon-separated numbers as sexagesimal:
+      22:22 becomes 1342 (22*60 + 22). YAML 1.2 removed this, but parsers vary.
+      Always quote port mappings, times, and similar colon-separated values.
+    examples:
+      bad:
+        - "port: 22:22  # Becomes 1342 in YAML 1.1!"
+        - "time: 4:30   # Becomes 270"
+      good:
+        - 'port: "22:22"'
+        - 'time: "4:30"'
+
+  M3:
+    title: Unquoted Octal Numbers
+    severity: MUST
+    mechanical: true
+    description: |
+      Numbers starting with 0 are octal in YAML 1.1. The value 0777 becomes
+      511 decimal. File permissions are commonly affected.
+    check:
+      type: grep
+      pattern: ':\s+0[0-7]{2,}\s*(#|$)'
+      flags: -En
+      exclude: flight:ok
+    note: |
+      YAML 1.1 parses 0-prefixed numbers as octal: 0777 = 511 decimal.
+      YAML 1.2 changed this (requires 0o prefix), but parsers vary.
+      Quote file permissions and similar values: "0755".
+    examples:
+      bad:
+        - "mode: 0755  # Becomes 493 decimal"
+        - "permissions: 0644"
+      good:
+        - 'mode: "0755"'
+        - "mode: 493  # If you actually want decimal"
+
+  M4:
+    title: Version Number Coercion
+    severity: MUST
+    mechanical: true
+    description: |
+      Version strings like 1.0 or 10.23 are parsed as floats, losing precision
+      or format. Version 1.10 becomes 1.1, version 10.0 becomes 10.
+    check:
+      type: grep
+      pattern: 'version:\s+[0-9]+\.[0-9]+\s*(#|$)'
+      flags: -Ein
+      exclude: flight:ok
+    note: |
+      Unquoted version numbers are parsed as floats:
+      - 1.0 stays 1.0 but loses string identity
+      - 1.10 becomes 1.1 (trailing zero stripped)
+      - 10.23 is fine but 10.0 becomes 10
+      Always quote version strings: "1.0", "2.10.3"
+    examples:
+      bad:
+        - "version: 1.0   # Becomes float 1.0"
+        - "version: 1.10  # Becomes 1.1!"
+      good:
+        - 'version: "1.0"'
+        - 'version: "1.10"'
+
+  M5:
+    title: Unquoted Scientific Notation
+    severity: MUST
+    mechanical: true
+    description: |
+      Values that look like scientific notation (1e10, 2E5) are parsed as
+      floats. Version numbers or identifiers can be misinterpreted.
+    check:
+      type: grep
+      pattern: ':\s+[0-9]+[eE][0-9]+\s*(#|$)'
+      flags: -En
+      exclude: flight:ok
+    note: |
+      YAML parses e/E notation as scientific floats: 1e10 = 10000000000.
+      This can affect version numbers, identifiers, or codes.
+      Quote if you want the literal string: "1e10"
+    examples:
+      bad:
+        - "code: 1e10  # Becomes 10000000000"
+      good:
+        - 'code: "1e10"'
+
+  M6:
+    title: Unquoted Special Strings
+    severity: MUST
+    mechanical: true
+    description: |
+      Values null, ~, true, false, and .inf/.nan have special meaning in YAML.
+      They must be quoted if you want the literal string.
+    check:
+      type: grep
+      pattern: ':\s+(null|Null|NULL|~|true|True|TRUE|false|False|FALSE|\.inf|\.Inf|\.INF|\.nan|\.NaN|\.NAN)\s*(#|$)'
+      flags: -En
+      exclude: flight:ok
+    note: |
+      These are YAML special values, not strings:
+      - null, Null, NULL, ~ = null/nil
+      - true, True, TRUE, false, False, FALSE = booleans
+      - .inf, .nan = special floats
+      Quote them if you want strings: "null", "true"
+    examples:
+      bad:
+        - "value: null  # Becomes null, not string"
+        - "name: True   # Becomes boolean true"
+      good:
+        - 'value: "null"  # String "null"'
+        - 'enabled: true  # If boolean intended'
+
+  M7:
+    title: Inconsistent Indentation
+    severity: MUST
+    mechanical: true
+    description: |
+      Mixed indentation levels (e.g., 2 spaces then 4 spaces) cause parse
+      errors or incorrect nesting. Use consistent indentation throughout.
+    check:
+      type: script
+      code: |
+        # Check for inconsistent indentation increments
+        awk '
+        BEGIN { base_indent = 0; last_indent = 0 }
+        /^[[:space:]]+[^#[:space:]]/ {
+          match($0, /^[[:space:]]+/);
+          indent = RLENGTH;
+
+          if (base_indent == 0 && indent > 0) {
+            base_indent = indent;
+          } else if (indent > last_indent && base_indent > 0) {
+            increment = indent - last_indent;
+            if (increment != base_indent && increment > 0) {
+              print FILENAME ":" NR ": inconsistent indent (expected " base_indent ", got " increment ")";
+              found = 1;
+            }
+          }
+          last_indent = indent;
+        }
+        /^[^[:space:]#]/ { last_indent = 0 }
+        END { exit found ? 1 : 0 }
+        ' "$file"
+    note: |
+      YAML is whitespace-sensitive. Pick one indentation size (2 spaces is
+      common) and use it consistently. Mixed indentation causes silent
+      misinterpretation of document structure.
+    examples:
+      bad:
+        - |
+          parent:
+            child1: value  # 2 spaces
+                child2: value  # 4 spaces - wrong!
+      good:
+        - |
+          parent:
+            child1: value
+            child2: value
+
+  M8:
+    title: Trailing Whitespace in Multiline
+    severity: MUST
+    mechanical: true
+    description: |
+      Trailing spaces in multiline strings can cause unexpected behavior,
+      especially with folded (>) or literal (|) block scalars.
+    check:
+      type: grep
+      pattern: '[[:space:]]+$'
+      flags: -n
+      exclude: flight:ok
+    note: |
+      Trailing whitespace in YAML can:
+      - Be silently preserved in literal blocks (|)
+      - Cause diff noise and merge conflicts
+      - Lead to subtle string comparison failures
+      Configure your editor to strip trailing whitespace.
+    examples:
+      bad:
+        - "key: value   # trailing spaces"
+      good:
+        - "key: value"
+
+  # ============================================================================
+  # SHOULD - Style consistency and best practices
+  # ============================================================================
+
+  S1:
+    title: Prefer Explicit Document Start
+    severity: SHOULD
+    mechanical: true
+    description: |
+      Multi-document YAML files should have explicit document start markers.
+      Single-document files benefit from consistency.
+    check:
+      type: script
+      code: |
+        # Warn if file has multiple documents without ---
+        if grep -q '^---' "$file"; then
+          exit 0  # Has document markers
+        fi
+        if grep -c '^\.\.\.$' "$file" > /dev/null 2>&1; then
+          echo "$file:1: missing document start marker (---) in multi-doc file"
+          exit 1
+        fi
+        exit 0
+    note: |
+      The --- marker explicitly starts a YAML document. While optional for
+      single documents, it improves clarity and is required for multi-document
+      streams. Consider always using it for consistency.
+    examples:
+      bad:
+        - |
+          key: value
+          ...
+          another: doc
+      good:
+        - |
+          ---
+          key: value
+          ...
+          ---
+          another: doc
+
+  S2:
+    title: Quote Strings Starting with Special Characters
+    severity: SHOULD
+    mechanical: true
+    description: |
+      Strings starting with @, `, *, &, !, |, >, {, [, or % should be quoted
+      to avoid being parsed as YAML special constructs.
+    check:
+      type: grep
+      pattern: ':\s+[@`*&!|>{[%][^[:space:]]'
+      flags: -En
+      exclude: flight:ok
+    note: |
+      These characters have special meaning in YAML:
+      - @ reserved, ` reserved
+      - * alias reference, & anchor definition
+      - ! tag, | literal block, > folded block
+      - { flow mapping, [ flow sequence
+      - % directive
+      Quote strings starting with these to avoid parsing issues.
+    examples:
+      bad:
+        - "email: @user  # @ is reserved"
+        - "ref: *main    # Interpreted as alias"
+      good:
+        - 'email: "@user"'
+        - 'ref: "*main"'
+
+  S3:
+    title: Avoid Anchors for Simple Values
+    severity: SHOULD
+    mechanical: true
+    description: |
+      Anchors and aliases add complexity. For simple values, prefer
+      repetition or external templating over YAML anchors.
+    check:
+      type: grep
+      pattern: '&[a-zA-Z_][a-zA-Z0-9_]*\s+[^[{]'
+      flags: -n
+      exclude: flight:ok
+    note: |
+      Anchors (&name) and aliases (*name) reduce repetition but:
+      - Make YAML harder to understand
+      - Not all tools handle them correctly
+      - Can cause security issues (YAML bombs)
+      For complex templating, consider dedicated tools (Helm, Kustomize, etc.)
+    examples:
+      bad:
+        - |
+          defaults: &defaults
+            timeout: 30
+          production:
+            <<: *defaults
+      good:
+        - |
+          development:
+            timeout: 30
+          production:
+            timeout: 30
+
+  S4:
+    title: Use Lowercase for Boolean Values
+    severity: SHOULD
+    mechanical: true
+    description: |
+      Use lowercase true/false for booleans. Other spellings (True, TRUE,
+      yes, on) work in YAML 1.1 but are less portable.
+    check:
+      type: grep
+      pattern: ':\s+(True|TRUE|False|FALSE)\s*(#|$)'
+      flags: -En
+      exclude: flight:ok
+    note: |
+      While YAML accepts various boolean spellings, lowercase true/false:
+      - Work in both YAML 1.1 and 1.2
+      - Are consistent with JSON
+      - Are more universally recognized
+      Avoid yes/no/on/off which are YAML 1.1 only.
+    examples:
+      bad:
+        - "enabled: True"
+        - "enabled: TRUE"
+        - "enabled: yes"
+      good:
+        - "enabled: true"
+        - "enabled: false"
+
+  S5:
+    title: Quote Empty Strings
+    severity: SHOULD
+    mechanical: true
+    description: |
+      Empty values in YAML are null, not empty strings. Use explicit quotes
+      for empty strings. Note: This check may flag parent keys with nested
+      content; suppress with flight:ok if intentional.
+    check:
+      type: grep
+      pattern: '^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_-]*:\s*$'
+      flags: -n
+      exclude: flight:ok
+    note: |
+      In YAML, a key with no value is null:
+        key:      # This is null, not ""
+      To specify an empty string:
+        key: ""   # Explicit empty string
+        key: ''   # Also works
+      Note: Parent keys with nested content will also match. Add flight:ok
+      comment if the structure is intentional.
+    examples:
+      bad:
+        - "name:  # This is null!"
+      good:
+        - 'name: ""  # Explicit empty string'
+        - "name: null  # If null is intended"
+
+  S6:
+    title: Avoid Flow Style for Complex Structures
+    severity: SHOULD
+    mechanical: true
+    description: |
+      Flow style ({}, []) is harder to read for nested structures.
+      Use block style for anything beyond simple lists.
+    check:
+      type: grep
+      pattern: '\{[^}]*\{|\[[^\]]*\['
+      flags: -n
+      exclude: flight:ok
+    note: |
+      Flow style is JSON-like: {key: value} or [item1, item2]
+      It's concise but:
+      - Hard to read when nested
+      - Comments aren't allowed inside
+      - Error-prone for long lines
+      Use flow style only for simple, single-line structures.
+    examples:
+      bad:
+        - 'config: {db: {host: localhost, port: 5432}}'
+      good:
+        - |
+          config:
+            db:
+              host: localhost
+              port: 5432
+
+  # ============================================================================
+  # GUIDANCE - Design principles
+  # ============================================================================
+
+  G1:
+    title: Prefer Flat Structures
+    severity: GUIDANCE
+    mechanical: false
+    description: |
+      Deeply nested YAML is hard to read and maintain. Prefer flatter
+      structures where possible.
+    note: |
+      Deep nesting (4+ levels) makes YAML hard to:
+      - Read and understand at a glance
+      - Modify without indentation errors
+      - Merge and diff effectively
+
+      Consider restructuring deeply nested configs or splitting into
+      multiple files.
+    examples:
+      bad:
+        - |
+          app:
+            config:
+              database:
+                connection:
+                  pool:
+                    size: 10
+      good:
+        - |
+          database_pool_size: 10
+          # Or use dotted keys if supported
+          database.connection.pool.size: 10
+
+  G2:
+    title: Document Complex Structures
+    severity: GUIDANCE
+    mechanical: false
+    description: |
+      Add comments explaining non-obvious YAML structures, especially
+      anchors, tags, and complex multiline strings.
+    note: |
+      YAML supports comments with #. Use them to explain:
+      - Why a value is quoted (avoiding type coercion)
+      - What an anchor/alias does
+      - Expected format of complex values
+      - Units or valid ranges for numbers
+    examples:
+      good:
+        - |
+          # Connection timeout in seconds
+          timeout: 30
+
+          # Country code - quoted to avoid Norway problem
+          country: "NO"
+
+  G3:
+    title: Use Schema Validation
+    severity: GUIDANCE
+    mechanical: false
+    description: |
+      For configuration files, use JSON Schema or similar validation
+      to catch type errors and invalid values early.
+    note: |
+      YAML's loose typing means runtime errors for bad config.
+      JSON Schema provides:
+      - Type checking (string vs number)
+      - Enum validation (allowed values)
+      - Required field checking
+      - Pattern matching
+
+      Tools: jsonschema, ajv, yamale, kwalify
+    examples:
+      good:
+        - |
+          # $schema: ./config-schema.json
+          # Or use a YAML schema directive
+          apiVersion: v1
+          kind: Config
+
+  G4:
+    title: Consider Alternatives for Complex Data
+    severity: GUIDANCE
+    mechanical: false
+    description: |
+      For complex configuration, consider TOML, JSON5, or generating
+      JSON from a proper programming language.
+    note: |
+      YAML's complexity leads to subtle bugs. Alternatives:
+      - TOML: Simple, explicit typing, good for config files
+      - JSON5: JSON + comments + trailing commas
+      - Generate JSON: From Python, Nix, CUE, Dhall, etc.
+
+      As the saying goes: "YAML is a superset of JSON, and that's
+      the only nice thing about it."
+    examples:
+      good:
+        - "# For simple config: TOML"
+        - "# For complex config: Generate JSON from code"
+
+info:
+  anchor_count:
+    pattern: '&[a-zA-Z_][a-zA-Z0-9_]*'
+    flags: -cE
+    label: "Anchor definitions"
+
+  alias_count:
+    pattern: '\*[a-zA-Z_][a-zA-Z0-9_]*'
+    flags: -cE
+    label: "Alias references"
+
+  multiline_literal:
+    pattern: ':\s*\|'
+    flags: -cE
+    label: "Literal blocks (|)"
+
+  multiline_folded:
+    pattern: ':\s*>'
+    flags: -cE
+    label: "Folded blocks (>)"
+
+  document_markers:
+    pattern: '^---'
+    flags: -cE
+    label: "Document starts"
+
+  comment_lines:
+    pattern: '^\s*#'
+    flags: -cE
+    label: "Comment lines"
+
+anti_patterns:
+  - pattern: "Unquoted country codes"
+    problem: "NO becomes false (Norway problem)"
+    fix: 'Quote the value: "NO"'
+
+  - pattern: "Unquoted port mappings"
+    problem: "22:22 becomes 1342 (sexagesimal)"
+    fix: 'Quote the value: "22:22"'
+
+  - pattern: "Unquoted version numbers"
+    problem: "1.10 becomes 1.1"
+    fix: 'Quote the value: "1.10"'
+
+  - pattern: "yaml.load() without SafeLoader"
+    problem: "Arbitrary code execution"
+    fix: "Use yaml.safe_load() or specify SafeLoader"
+
+  - pattern: "Leading zero numbers"
+    problem: "0755 becomes 493 (octal)"
+    fix: 'Quote the value: "0755"'
+
+  - pattern: "Empty values for strings"
+    problem: "Empty value is null, not empty string"
+    fix: 'Use explicit quotes: ""'
+
+  - pattern: "Deeply nested anchors"
+    problem: "YAML bomb / denial of service"
+    fix: "Limit nesting, validate untrusted input"
+
+  - pattern: "Tab indentation"
+    problem: "Parse error"
+    fix: "Use spaces only"
+
+sources:
+  - name: "YAML 1.2 Specification"
+    url: "https://yaml.org/spec/1.2.2/"
+
+  - name: "The YAML Document From Hell"
+    url: "https://ruudvanasseldonk.com/2023/01/11/the-yaml-document-from-hell"
+
+  - name: "StrictYAML - Why"
+    url: "https://hitchdev.com/strictyaml/why/"
+
+  - name: "Norway Problem"
+    url: "https://hitchdev.com/strictyaml/why/implicit-typing-removed/"
+
+  - name: "PyYAML Documentation"
+    url: "https://pyyaml.org/wiki/PyYAMLDocumentation"
+
+  - name: "YAML Multiline Strings"
+    url: "https://yaml-multiline.info/"
