@@ -457,6 +457,7 @@ Validation: validate, check, verify, ensure, assert, confirm
 Conversion: to, from, parse, format, transform, convert, map
 Boolean:    is, has, can, should, will, was, did, does
 Lifecycle:  start, stop, begin, end, open, close, init, cleanup
+Async/Time: delay, wait, sleep, pause, retry, poll, defer, schedule, queue, batch, throttle, debounce
 
 
 3. **Domain Term Examples** - Examples of domain-specific terms for common application types.
