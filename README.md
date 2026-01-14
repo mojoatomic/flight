@@ -2,13 +2,13 @@
 
 **TDD-style prompt engineering for AI-assisted development.**
 
-Flight is a methodology and toolset that prevents bad code from being generated in the first place. Instead of fixing AI mistakes after the fact, Flight front-loads quality constraints so Claude knows the rules before writing a single line.
+Flight is a methodology and toolset that reduces AI code generation mistakes by front-loading constraints. Instead of fixing AI mistakes after the fact, Flight ensures the rules are known before a single line is written.
 
 ---
 
 ## Why Flight Exists
 
-AI code generation has a fundamental problem: **Claude writes code that looks right but violates project standards, framework conventions, and hard-won engineering patterns.**
+AI code generation has a fundamental problem: **it often produces code that looks correct but violates project standards, framework conventions, and established engineering patterns.**
 
 The traditional fix is linting and code review after generation. This fails because:
 
@@ -146,7 +146,7 @@ Preserves:
 
 **Purpose:** Transform a rough product idea into atomic tasks.
 
-Claude Code excels at atomic, well-defined tasks (1-2 hours). It struggles with large, multi-day projects. This command breaks big ideas into executable units.
+Claude Code excels at atomic, well-defined tasks. It struggles with large, multi-step projects. This command breaks big ideas into executable units.
 
 **Output:**
 - `PRD.md` - Product vision (human reference)
@@ -276,20 +276,43 @@ Domains are the heart of Flight. Each domain captures:
 - **SHOULD rules** - Best practices that warn but don't fail
 - **GUIDANCE** - Patterns too complex for grep, documented for Claude
 
+### Code Hygiene (Always Loaded)
+
+The `code-hygiene` domain applies to **all code in every language**. It catches AI-generated code smells that transcend syntax:
+
+- **Generic variable names** - `data`, `result`, `temp`, `item`, `value`, `obj` → use descriptive names
+- **Redundant conditionals** - `if (x) return true; else return false;` → `return x;`
+- **Meaningless prefixes** - `myVar`, `theUser`, `aResult` → drop the noise
+- **Magic number calculations** - `1024 * 1024` → `BYTES_PER_MB`
+- **Boolean parameter blindness** - `process(true, false)` → use named options
+
+This domain runs automatically on every validation. You don't need to explicitly load it.
+
 ### Available Domains
 
 | Domain | Focus | Key Rules |
 |--------|-------|-----------|
+| `api` | REST/HTTP APIs | Resource URIs, status codes, versioning |
 | `bash` | Shell scripts | Strict mode, quoting, error handling |
-| `code-hygiene` | Universal (always load) | Naming, redundant logic, semantic clarity |
-| `javascript` | JS hygiene | No `var`, no `==`, no `console.log` |
-| `typescript` | Type safety | No unjustified `any`, explicit returns |
-| `react` | Component patterns | No inline objects in JSX, proper hooks |
-| `nextjs` | App Router | Server/client boundaries, loading states |
-| `python` | Python idioms | No bare except, type hints, logging |
-| `sql` | Database access | No `SELECT *`, parameterized queries, RLS |
+| `code-hygiene` | **Universal** | Naming, redundant logic, semantic clarity |
+| `docker` | Container config | Multi-stage builds, non-root users, layer caching |
 | `embedded-c-p10` | Safety-critical C | NASA Power of 10 rules |
-| `rp2040-pico` | Embedded dual-core | Spinlocks, watchdog, static allocation |
+| `go` | Go source files | Error handling, defer patterns, concurrency |
+| `javascript` | JS files | No `var`, no `==`, no `console.log` |
+| `kubernetes` | K8s manifests | Resource limits, probes, security contexts |
+| `nextjs` | Next.js App Router | Server/client boundaries, loading states |
+| `python` | Python files | No bare except, type hints, logging |
+| `react` | React components | No inline objects in JSX, proper hooks |
+| `rp2040-pico` | RP2040 embedded | Spinlocks, watchdog, static allocation |
+| `rust` | Rust files | Error handling, unsafe blocks, ownership |
+| `scaffold` | Project setup | create-vite, npm init patterns |
+| `sms-twilio` | SMS/Twilio | Message validation, error handling, opt-out |
+| `sql` | Database queries | No `SELECT *`, parameterized queries, RLS |
+| `supabase` | Supabase (TS/Next.js) | @supabase/ssr, auth patterns, realtime cleanup |
+| `testing` | Unit tests | Isolation, naming, assertion patterns |
+| `typescript` | TypeScript files | No unjustified `any`, explicit returns |
+| `webhooks` | Webhook handlers | Idempotency, signature verification, timeouts |
+| `yaml` | YAML config | Quoting, anchors, multiline strings |
 
 ### Domain Contract
 
@@ -303,21 +326,72 @@ This keeps the contract honest. No aspirational rules that aren't enforced.
 
 ## Creating Custom Domains
 
-1. **Create the rules file:** `.flight/domains/your-domain.md`
+Flight domains are defined in `.flight` YAML files and compiled to `.md` (documentation) + `.validate.sh` (executable validator). This single-source approach eliminates drift between specs and validators.
 
-2. **Generate the validator:**
-   ```
-   /flight-create-validator .flight/domains/your-domain.md
-   ```
+### Prerequisites
 
-3. **Verify both directions:**
-   ```bash
-   # Should FAIL
-   .flight/domains/your-domain.validate.sh .flight/domains/tests/your-domain.bad.ext
+```bash
+# One-time setup
+python3 -m venv .venv
+.venv/bin/pip install pyyaml
+```
 
-   # Should PASS
-   .flight/domains/your-domain.validate.sh .flight/domains/tests/your-domain.good.ext
-   ```
+### Workflow
+
+```
+1. Create .flight/domains/my-domain.flight
+2. Compile: .flight/bin/flight-domain-compile my-domain.flight
+3. Test: .flight/validate-all.sh
+```
+
+### YAML Structure
+
+```yaml
+domain: my-domain
+version: "1.0"
+description: What this domain covers
+file_patterns:
+  - "**/*.ts"
+
+rules:
+  N1:
+    title: Rule title
+    severity: NEVER          # NEVER, MUST, SHOULD, or GUIDANCE
+    mechanical: true         # Generate validator check
+    description: Why this rule exists
+    check:
+      type: grep             # grep, script, presence, file_exists
+      pattern: "bad-pattern"
+    examples:
+      bad:
+        - "code that violates"
+      good:
+        - "code that passes"
+```
+
+### Commands
+
+```bash
+# Compile single domain
+.flight/bin/flight-domain-compile my-domain.flight
+
+# Compile all domains
+.flight/bin/flight-domain-compile --all
+
+# Syntax check only
+.flight/bin/flight-domain-compile --check my-domain.flight
+```
+
+### Severity Levels
+
+| Level | Validator | Blocks |
+|-------|-----------|--------|
+| NEVER | `check()` | Yes |
+| MUST | `check()` | Yes |
+| SHOULD | `warn()` | No |
+| GUIDANCE | None | No |
+
+See `.flight/FLIGHT.md` for complete YAML reference and check types.
 
 ---
 
@@ -327,9 +401,9 @@ This keeps the contract honest. No aspirational rules that aren't enforced.
 
 Linters catch syntax and style. Flight catches **semantic mistakes**:
 
-- ESLint won't flag `const data = fetchUser()` - it's valid JS
+- Standard linters typically won't flag `const data = fetchUser()` - it's valid JS
 - Flight flags it because `data` is a meaningless name
-- ESLint won't flag `if (x) return true; else return false;`
+- Standard linters typically won't flag `if (x) return true; else return false;`
 - Flight flags it because it should be `return x;`
 
 Linters and Flight are complementary. Linters handle formatting. Flight handles intent.

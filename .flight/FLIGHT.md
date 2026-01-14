@@ -270,20 +270,26 @@ If MCP tools aren't available, fall back to web search.
 | Domain | When to Load |
 |--------|--------------|
 | `code-hygiene` | **ALWAYS** - applies to all code |
-| `testing` | Unit tests (any language) |
 | `api` | REST/HTTP API routes, controllers |
-| `webhooks` | Webhook handlers (provider/consumer) |
 | `bash` | Shell scripts (.sh) |
+| `docker` | Dockerfiles, container configuration |
+| `embedded-c-p10` | Safety-critical C (NASA Power of 10) |
+| `go` | Go source files (.go) |
 | `javascript` | .js files |
-| `typescript` | .ts files |
-| `react` | React components (.jsx, .tsx) |
+| `kubernetes` | Kubernetes YAML manifests |
 | `nextjs` | Next.js projects |
 | `python` | .py files |
-| `sql` | Database queries, migrations |
-| `sms-twilio` | SMS messaging, Twilio integration |
-| `scaffold` | Project scaffolding (create-vite, etc.) |
-| `embedded-c-p10` | Safety-critical C |
+| `react` | React components (.jsx, .tsx) |
 | `rp2040-pico` | RP2040 microcontroller |
+| `rust` | Rust source files (.rs) |
+| `scaffold` | Project scaffolding (create-vite, etc.) |
+| `sms-twilio` | SMS messaging, Twilio integration |
+| `sql` | Database queries, migrations |
+| `supabase` | Supabase client, auth, realtime (TypeScript/Next.js) |
+| `testing` | Unit tests (any language) |
+| `typescript` | .ts files |
+| `webhooks` | Webhook handlers (provider/consumer) |
+| `yaml` | YAML configuration files |
 
 ---
 
