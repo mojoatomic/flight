@@ -1,0 +1,1233 @@
+# rust.flight - Rust development patterns and common AI mistakes
+# Flight domain specification for Rust validation
+# Sources: Rust API Guidelines, Clippy lints, Rustonomicon, The Rust Book
+
+domain: rust
+version: 1.0.0
+description: >
+  Rust development patterns covering error handling, ownership, memory safety,
+  concurrency, and idiomatic code. Catches common AI mistakes and anti-patterns.
+
+file_patterns:
+  - "**/*.rs"
+
+exclude_patterns:
+  - "**/target/**"
+  - "**/.git/**"
+
+suppression:
+  comment: "// flight:ok"
+  guidance: |
+    Add `// flight:ok` comment on the same line to suppress a specific check.
+    Use sparingly. Document why the suppression is acceptable.
+
+# ===========================================================================
+# RULES
+# ===========================================================================
+# ID format: {severity_prefix}{number}
+#   N = NEVER (check - fails build)
+#   M = MUST (check - fails build)
+#   S = SHOULD (warn - advisory)
+#   G = GUIDANCE (not checked)
+#
+# mechanical: true  = validator implements this
+# mechanical: false = code review only, skip in validator
+#
+# clippy: lint_name = overlaps with this Clippy lint (noted for reference)
+# ===========================================================================
+
+rules:
+
+  # =========================================================================
+  # NEVER - Memory safety and critical issues (validator will reject)
+  # =========================================================================
+
+  N1:
+    title: Unsafe Block Without Safety Comment
+    severity: NEVER
+    mechanical: true
+    clippy: undocumented_unsafe_blocks
+    description: >
+      All unsafe blocks must have a SAFETY comment explaining why the unsafe
+      code is sound. Document what invariants must be upheld.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          awk '
+            /unsafe\s*\{/ {
+              if (prev !~ /\/\/\s*SAFETY:/ && prev !~ /\/\/\s*safety:/ && prev !~ /\/\*.*SAFETY:/) {
+                print FILENAME ":" NR ": unsafe block without SAFETY comment"
+              }
+            }
+            { prev = $0 }
+          ' "$f" 2>/dev/null | grep -v "flight:ok"
+        done
+    note: |
+      From Rustonomicon: Unsafe code must be carefully documented. The SAFETY
+      comment explains why the code is correct despite bypassing Rust's safety checks.
+    examples:
+      bad:
+        - |
+          unsafe {
+              ptr::write(dest, value);
+          }
+      good:
+        - |
+          // SAFETY: dest is valid and properly aligned, checked in caller
+          unsafe {
+              ptr::write(dest, value);
+          }
+
+  N2:
+    title: mem::transmute Usage
+    severity: NEVER
+    mechanical: true
+    clippy: transmute_undefined_repr, useless_transmute
+    description: >
+      Avoid mem::transmute - it's extremely dangerous and almost never needed.
+      Use safer alternatives like from_ne_bytes, as casts, or pointer casts.
+    check:
+      type: grep
+      pattern: 'mem::transmute\s*[<(]|transmute::<'
+      flags: -En
+      exclude: "flight:ok"
+    note: |
+      transmute bypasses all type checking and can easily cause undefined behavior.
+      Most uses can be replaced with safer alternatives.
+    examples:
+      bad:
+        - "let x: u32 = unsafe { mem::transmute(bytes) };"
+        - "let ptr: *const T = mem::transmute(ref_t);"
+      good:
+        - "let x = u32::from_ne_bytes(bytes);"
+        - "let ptr: *const T = ref_t as *const T;"
+        - "let ptr = ptr.cast::<T>();"
+
+  N3:
+    title: Panic in Library Code
+    severity: NEVER
+    mechanical: true
+    clippy: panic_in_result_fn
+    description: >
+      Libraries should not panic on recoverable errors. Return Result or Option
+      instead. Panics should only occur for programmer errors (invariant violations).
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Skip test files, main.rs, and bin files
+          if [[ "$f" == *"_test.rs" ]] || [[ "$f" == *"/tests/"* ]] || \
+             [[ "$f" == *"main.rs" ]] || [[ "$f" == *"/bin/"* ]] || \
+             [[ "$f" == *"/examples/"* ]]; then
+            continue
+          fi
+          grep -HnE 'panic!\s*\(|todo!\s*\(|unimplemented!\s*\(' "$f" 2>/dev/null | \
+            grep -v "flight:ok" | grep -v "unreachable!"
+        done
+    note: |
+      Libraries should let callers decide how to handle errors. Use panic! only for
+      bugs (invariant violations) that indicate programmer error, not user input errors.
+    examples:
+      bad:
+        - 'panic!("invalid input: {}", x);'
+        - 'panic!("file not found");'
+        - 'todo!("implement later");  // in production code'
+      good:
+        - 'return Err(Error::InvalidInput(x));'
+        - 'return None;'
+        - 'unreachable!("checked above")  // OK for true invariants'
+
+  N4:
+    title: .unwrap() in Production Code
+    severity: NEVER
+    mechanical: true
+    clippy: unwrap_used
+    description: >
+      Do not use .unwrap() in production code. Use ?, .expect() with a message,
+      or proper error handling. Unwrap hides the failure reason.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Skip test files
+          if [[ "$f" == *"_test.rs" ]] || [[ "$f" == *"/tests/"* ]] || \
+             [[ "$f" == *"/examples/"* ]]; then
+            continue
+          fi
+          grep -HnE '\.unwrap\(\s*\)' "$f" 2>/dev/null | grep -v "flight:ok"
+        done
+    note: |
+      .unwrap() panics without context. In production code, use ? for propagation,
+      .expect("reason") for invariants, or match/if-let for handling.
+    examples:
+      bad:
+        - 'let value = map.get("key").unwrap();'
+        - 'let file = File::open(path).unwrap();'
+        - 'let num: i32 = s.parse().unwrap();'
+      good:
+        - 'let value = map.get("key").ok_or(Error::KeyNotFound)?;'
+        - 'let file = File::open(path)?;'
+        - 'let num: i32 = s.parse().expect("validated above");'
+
+  N5:
+    title: .expect() Without Descriptive Message
+    severity: NEVER
+    mechanical: true
+    clippy: expect_used
+    description: >
+      When using .expect(), always provide a descriptive message explaining
+      why the value should be present. Empty or generic messages defeat the purpose.
+    check:
+      type: grep
+      pattern: '\.expect\s*\(\s*""\s*\)|\.expect\s*\(\s*\)'
+      flags: -En
+      exclude: "flight:ok"
+    note: |
+      .expect() messages appear in panic output. They should explain the invariant
+      being relied upon, not just describe the error.
+    examples:
+      bad:
+        - '.expect("")'
+        - '.expect("failed")'
+        - '.expect("error")'
+      good:
+        - '.expect("config file validated during startup")'
+        - '.expect("mutex poisoned - concurrent panic occurred")'
+        - '.expect("internal invariant: queue always has at least one item")'
+
+  N6:
+    title: Raw Pointer Arithmetic Without Bounds Check
+    severity: NEVER
+    mechanical: true
+    description: >
+      Raw pointer arithmetic (offset, add, sub) requires bounds checking.
+      Going out of bounds is undefined behavior even without dereferencing.
+    check:
+      type: grep
+      pattern: '\.offset\s*\(|\.add\s*\(|\.sub\s*\(|\.wrapping_offset\s*\('
+      flags: -En
+      exclude: "flight:ok"
+    note: |
+      From Rust reference: "Both the starting and resulting pointer must be either
+      in bounds or one byte past the end of the same allocated object."
+    examples:
+      bad:
+        - |
+          unsafe {
+              let ptr = arr.as_ptr().add(index);  // No bounds check!
+          }
+      good:
+        - |
+          assert!(index < arr.len());
+          // SAFETY: bounds checked above
+          unsafe {
+              let ptr = arr.as_ptr().add(index);
+          }
+
+  N7:
+    title: mem::forget Without Clear Justification
+    severity: NEVER
+    mechanical: true
+    clippy: mem_forget
+    description: >
+      mem::forget prevents destructors from running, causing resource leaks.
+      Almost always indicates a design problem. Use ManuallyDrop if needed.
+    check:
+      type: grep
+      pattern: 'mem::forget\s*\(|std::mem::forget\s*\('
+      flags: -En
+      exclude: "flight:ok"
+    note: |
+      mem::forget is safe but usually wrong. It leaks resources and can break
+      RAII invariants. ManuallyDrop is more explicit about the intent.
+    examples:
+      bad:
+        - 'mem::forget(mutex_guard);  // Keeps lock held forever!'
+        - 'mem::forget(file);  // File descriptor leaked'
+      good:
+        - 'let _ = ManuallyDrop::new(value);  // Explicit, searchable'
+        - 'std::mem::forget(std::mem::ManuallyDrop::new(value));  // If truly needed'
+
+  N8:
+    title: Mutex Held Across Await Point
+    severity: NEVER
+    mechanical: true
+    clippy: await_holding_lock
+    description: >
+      Holding a std::sync::Mutex guard across an .await causes deadlocks.
+      Use tokio::sync::Mutex for async code or restructure to drop before await.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Look for patterns like: lock() followed by .await without drop
+          if grep -qE '\.lock\(\)' "$f" 2>/dev/null; then
+            if grep -qE '\.await' "$f" 2>/dev/null; then
+              # Check for suspicious patterns (heuristic)
+              awk '
+                /\.lock\(\)/ { in_lock = 1; lock_line = NR }
+                /\.await/ && in_lock {
+                  print FILENAME ":" lock_line ": mutex may be held across await"
+                  in_lock = 0
+                }
+                /drop\(|}\s*$/ { in_lock = 0 }
+              ' "$f" 2>/dev/null | grep -v "flight:ok"
+            fi
+          fi
+        done
+    note: |
+      std::sync::Mutex is not async-aware. If a task yields while holding the lock,
+      it blocks the executor thread, preventing other tasks from releasing the lock.
+    examples:
+      bad:
+        - |
+          let guard = mutex.lock().unwrap();
+          some_async_fn().await;  // Deadlock risk!
+          drop(guard);
+      good:
+        - |
+          {
+              let guard = mutex.lock().unwrap();
+              // Use guard
+          }  // Dropped here
+          some_async_fn().await;
+        - |
+          let guard = async_mutex.lock().await;  // Use tokio::sync::Mutex
+
+  # =========================================================================
+  # MUST - Error handling and ownership patterns (validator will reject)
+  # =========================================================================
+
+  M1:
+    title: Use ? Operator for Error Propagation
+    severity: MUST
+    mechanical: true
+    description: >
+      Prefer the ? operator over match/unwrap chains for error propagation.
+      It's more concise and idiomatic.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Look for verbose match patterns that could use ?
+          grep -HnE 'match\s+\w+\s*\{[^}]*Ok\s*\(\s*\w+\s*\)\s*=>\s*\w+\s*,' "$f" 2>/dev/null | \
+            grep -v "flight:ok"
+        done
+    note: |
+      The ? operator is the idiomatic way to propagate errors in Rust. It makes
+      error paths explicit while keeping code concise.
+    examples:
+      bad:
+        - |
+          let file = match File::open(path) {
+              Ok(f) => f,
+              Err(e) => return Err(e),
+          };
+      good:
+        - 'let file = File::open(path)?;'
+
+  M2:
+    title: Clone Abuse - Cloning to Satisfy Borrow Checker
+    severity: MUST
+    mechanical: true
+    clippy: clone_on_ref_ptr, redundant_clone
+    description: >
+      Do not clone just to satisfy the borrow checker. This indicates a design
+      issue. Restructure code, use references, or use Rc/Arc if shared ownership is needed.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Look for .clone() immediately before passing to function or after &
+          grep -HnE '&\w+\.clone\(\)|\.clone\(\)\s*\)' "$f" 2>/dev/null | grep -v "flight:ok"
+        done
+    note: |
+      Cloning has runtime cost. If you're cloning to work around borrow checker
+      errors, consider restructuring or using Cow, Rc, or Arc instead.
+    examples:
+      bad:
+        - 'process(&data.clone());  // Clone then borrow - wasteful'
+        - 'vec.push(item.clone());  // When item could be moved'
+      good:
+        - 'process(&data);'
+        - 'vec.push(item);  // Move instead of clone'
+        - 'let shared = Arc::new(data);  // If truly needs sharing'
+
+  M3:
+    title: String Parameter When &str Would Work
+    severity: MUST
+    mechanical: true
+    clippy: ptr_arg
+    description: >
+      Function parameters should use &str instead of String or &String when
+      the function only reads the string. This accepts both String and &str.
+    check:
+      type: grep
+      pattern: 'fn\s+\w+\s*\([^)]*:\s*&?String[^)]*(,|\))|fn\s+\w+\s*<[^>]*>\s*\([^)]*:\s*&?String'
+      flags: -En
+      exclude: "flight:ok"
+    note: |
+      &str is more flexible - it accepts &String, &str, string slices, and
+      String::as_str(). Only use String when you need ownership.
+    examples:
+      bad:
+        - 'fn greet(name: &String) { ... }'
+        - 'fn greet(name: String) { println!("{}", name); }  // Only reads'
+      good:
+        - 'fn greet(name: &str) { ... }'
+        - 'fn take_ownership(name: String) { self.name = name; }  // Stores it'
+
+  M4:
+    title: Vec Parameter When Slice Would Work
+    severity: MUST
+    mechanical: true
+    clippy: ptr_arg
+    description: >
+      Function parameters should use &[T] instead of &Vec<T> when the function
+      only reads the vector. Slices are more general.
+    check:
+      type: grep
+      pattern: 'fn\s+\w+\s*\([^)]*:\s*&Vec<[^>]+>[^)]*(,|\))'
+      flags: -En
+      exclude: "flight:ok"
+    note: |
+      &[T] accepts arrays, vectors, and slices. &Vec<T> only accepts vectors
+      and is strictly less flexible.
+    examples:
+      bad:
+        - 'fn sum(numbers: &Vec<i32>) -> i32 { ... }'
+      good:
+        - 'fn sum(numbers: &[i32]) -> i32 { ... }'
+
+  M5:
+    title: Box<T> When T Would Work
+    severity: MUST
+    mechanical: true
+    clippy: box_collection
+    description: >
+      Avoid unnecessary Box<T> allocations. Use Box only for recursive types,
+      trait objects, or when you need stable addresses.
+    check:
+      type: grep
+      pattern: 'Box<(String|Vec<|HashMap<|HashSet<)'
+      flags: -En
+      exclude: "flight:ok"
+    note: |
+      Box allocates on the heap. String, Vec, and HashMap already use heap
+      allocation internally, so boxing them adds unnecessary indirection.
+    examples:
+      bad:
+        - 'let names: Box<Vec<String>> = Box::new(vec![]);'
+        - 'struct Foo { data: Box<String> }'
+      good:
+        - 'let names: Vec<String> = vec![];'
+        - 'struct Foo { data: String }'
+
+  M6:
+    title: println! in Library Code
+    severity: MUST
+    mechanical: true
+    description: >
+      Libraries should not use println!/print!/eprintln! for output. Use the
+      log or tracing crate for configurable logging.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Skip test files, main.rs, bin files, and examples
+          if [[ "$f" == *"_test.rs" ]] || [[ "$f" == *"/tests/"* ]] || \
+             [[ "$f" == *"main.rs" ]] || [[ "$f" == *"/bin/"* ]] || \
+             [[ "$f" == *"/examples/"* ]] || [[ "$f" == *"/benches/"* ]]; then
+            continue
+          fi
+          grep -HnE 'println!\s*\(|print!\s*\(|eprintln!\s*\(|eprint!\s*\(' "$f" 2>/dev/null | \
+            grep -v "flight:ok"
+        done
+    note: |
+      Library users should control output. Use log::info!, log::debug!, etc.
+      or tracing::info!, tracing::debug! for structured logging.
+    examples:
+      bad:
+        - 'println!("Processing item: {}", item);'
+        - 'eprintln!("Warning: {}", msg);'
+      good:
+        - 'log::info!("Processing item: {}", item);'
+        - 'tracing::warn!("Warning: {}", msg);'
+        - 'debug!("Debug info: {:?}", data);'
+
+  M7:
+    title: Blocking Operations in Async Context
+    severity: MUST
+    mechanical: true
+    clippy: blocking_operations_in_async
+    description: >
+      Do not perform blocking I/O or CPU-intensive work in async functions.
+      Use spawn_blocking or async alternatives.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qE 'async\s+fn' "$f" 2>/dev/null; then
+            grep -HnE 'std::fs::|std::thread::sleep|std::io::stdin|\.read_to_string\(' "$f" 2>/dev/null | \
+              grep -v "flight:ok"
+          fi
+        done
+    note: |
+      Blocking operations in async code block the entire executor thread,
+      preventing other tasks from making progress.
+    examples:
+      bad:
+        - |
+          async fn read_file(path: &str) -> String {
+              std::fs::read_to_string(path).unwrap()  // Blocks!
+          }
+      good:
+        - |
+          async fn read_file(path: &str) -> String {
+              tokio::fs::read_to_string(path).await.unwrap()
+          }
+        - |
+          async fn heavy_compute() -> Result<()> {
+              tokio::task::spawn_blocking(|| cpu_intensive_work()).await?
+          }
+
+  M8:
+    title: Missing #[must_use] on Important Return Values
+    severity: MUST
+    mechanical: false
+    description: >
+      Functions that return values that should not be ignored (Results, important
+      computations) should be marked #[must_use].
+    note: |
+      #[must_use] generates a warning when the return value is discarded.
+      Essential for Result-returning functions and pure functions.
+    examples:
+      bad:
+        - |
+          pub fn validate(input: &str) -> bool {
+              // Caller might forget to check return value
+          }
+      good:
+        - |
+          #[must_use]
+          pub fn validate(input: &str) -> bool {
+              // Compiler warns if result is ignored
+          }
+
+  M9:
+    title: Derive Common Traits
+    severity: MUST
+    mechanical: true
+    description: >
+      Public types should derive common traits: Debug, Clone, PartialEq where
+      appropriate. At minimum, all public types should implement Debug.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          awk '
+            /^pub\s+(struct|enum)\s+\w+/ {
+              if (prev !~ /#\[derive\(.*Debug/) {
+                print FILENAME ":" NR ": public type missing Debug derive"
+              }
+            }
+            { prev = $0 }
+          ' "$f" 2>/dev/null | grep -v "flight:ok"
+        done
+    note: |
+      From Rust API Guidelines (C-COMMON-TRAITS): Types should eagerly implement
+      common traits like Debug, Clone, Eq, PartialEq, Hash, Default.
+    examples:
+      bad:
+        - |
+          pub struct Config {
+              pub name: String,
+          }
+      good:
+        - |
+          #[derive(Debug, Clone, PartialEq)]
+          pub struct Config {
+              pub name: String,
+          }
+
+  # =========================================================================
+  # SHOULD - Style and idioms (validator warns)
+  # =========================================================================
+
+  S1:
+    title: Use Iterators Over Manual Loops
+    severity: SHOULD
+    mechanical: true
+    clippy: manual_filter_map, needless_range_loop
+    description: >
+      Prefer iterator methods (map, filter, fold) over manual for loops
+      when appropriate. They're often more readable and optimizable.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Look for patterns like for i in 0..vec.len() { vec[i] }
+          grep -HnE 'for\s+\w+\s+in\s+0\s*\.\.\s*\w+\.len\(\)' "$f" 2>/dev/null | \
+            grep -v "flight:ok"
+        done
+    note: |
+      Iterator methods are idiomatic Rust and often produce better optimized code.
+      The compiler can better understand intent with iterators.
+    examples:
+      bad:
+        - |
+          let mut result = Vec::new();
+          for i in 0..items.len() {
+              result.push(items[i] * 2);
+          }
+      good:
+        - |
+          let result: Vec<_> = items.iter().map(|x| x * 2).collect();
+
+  S2:
+    title: Use if let for Single-Arm Matches
+    severity: SHOULD
+    mechanical: true
+    clippy: single_match
+    description: >
+      Use if let instead of match when you only care about one pattern.
+      It's more concise and clearly expresses intent.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Look for match with only one meaningful arm and _ => {}
+          grep -HnE 'match\s+\w+\s*\{[^}]*_\s*=>\s*\{\s*\}[^}]*\}' "$f" 2>/dev/null | \
+            grep -v "flight:ok"
+        done
+    note: |
+      'match' with a single pattern and '_ => {}' is verbose. 'if let' is clearer
+      when you only need to handle one case.
+    examples:
+      bad:
+        - |
+          match option {
+              Some(x) => do_something(x),
+              _ => {},
+          }
+      good:
+        - |
+          if let Some(x) = option {
+              do_something(x);
+          }
+
+  S3:
+    title: Implement Default for Types with Obvious Defaults
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Types with sensible default values should implement the Default trait.
+      This enables ..Default::default() syntax and integration with serde.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Look for pub fn new() that takes no args - might want Default
+          if grep -qE 'pub\s+fn\s+new\s*\(\s*\)\s*->' "$f" 2>/dev/null; then
+            if ! grep -qE 'impl\s+Default\s+for' "$f" 2>/dev/null; then
+              name=$(grep -oE 'impl[^{]+\{[^}]*pub\s+fn\s+new\s*\(' "$f" 2>/dev/null | head -1)
+              if [ -n "$name" ]; then
+                echo "$f: has new() but no Default implementation"
+              fi
+            fi
+          fi
+        done | grep -v "flight:ok"
+    note: |
+      From Rust API Guidelines: Types should implement Default when there's
+      an obvious default value. Use #[derive(Default)] when possible.
+    examples:
+      bad:
+        - |
+          impl Config {
+              pub fn new() -> Self {
+                  Config { timeout: 30, retries: 3 }
+              }
+          }
+      good:
+        - |
+          #[derive(Default)]
+          struct Config {
+              timeout: u32,
+              retries: u32,
+          }
+          // Or implement Default if non-trivial defaults needed
+
+  S4:
+    title: Use Builder Pattern for Complex Construction
+    severity: SHOULD
+    mechanical: false
+    description: >
+      For types with many optional parameters, use the builder pattern
+      instead of constructors with many arguments.
+    note: |
+      From Rust API Guidelines (C-BUILDER): Builders enable construction of
+      complex values without remembering argument order or providing dummy values.
+    examples:
+      bad:
+        - |
+          Server::new("localhost", 8080, true, false, 30, None, Some(logger))
+      good:
+        - |
+          Server::builder()
+              .host("localhost")
+              .port(8080)
+              .tls(true)
+              .timeout(30)
+              .logger(logger)
+              .build()
+
+  S5:
+    title: Avoid Wildcard Imports
+    severity: SHOULD
+    mechanical: true
+    clippy: wildcard_imports
+    description: >
+      Avoid use foo::* imports in production code. They make it unclear where
+      names come from and can cause conflicts when dependencies update.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Skip test modules and prelude imports
+          grep -HnE '^use\s+[^;]+::\*;' "$f" 2>/dev/null | \
+            grep -vE 'prelude::\*|flight:ok|#\[cfg\(test\)\]'
+        done
+    note: |
+      Wildcard imports reduce code clarity. Explicit imports document dependencies
+      and prevent name collisions.
+    examples:
+      bad:
+        - 'use std::collections::*;'
+        - 'use crate::models::*;'
+      good:
+        - 'use std::collections::{HashMap, HashSet};'
+        - 'use crate::models::{User, Post};'
+        - 'use crate::prelude::*;  // OK for curated preludes'
+
+  S6:
+    title: Use snake_case for Functions and Variables
+    severity: SHOULD
+    mechanical: true
+    clippy: non_snake_case
+    description: >
+      Rust conventions require snake_case for functions, methods, variables,
+      and modules. CamelCase is for types and traits only.
+    check:
+      type: grep
+      pattern: '(let|fn)\s+[a-z]+[A-Z][a-zA-Z]*\s*[=:(]'
+      flags: -En
+      exclude: "flight:ok"
+    note: |
+      From Rust naming conventions: snake_case for values and functions,
+      CamelCase for types and traits, SCREAMING_SNAKE_CASE for constants.
+    examples:
+      bad:
+        - 'let userName = "alice";'
+        - 'fn getUserById(id: i32) -> User'
+      good:
+        - 'let user_name = "alice";'
+        - 'fn get_user_by_id(id: i32) -> User'
+
+  S7:
+    title: Avoid Large Stack Allocations
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Avoid large structs (>1KB) on the stack. Use Box for large data
+      to prevent stack overflow in deeply recursive code.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Look for arrays larger than 256 elements of basic types
+          grep -HnE '\[\s*[a-z0-9_]+\s*;\s*[0-9]{4,}\s*\]' "$f" 2>/dev/null | \
+            grep -v "flight:ok"
+        done
+    note: |
+      The default stack size is limited (usually 2-8MB). Large arrays or
+      deeply nested structs can cause stack overflows.
+    examples:
+      bad:
+        - 'let buffer: [u8; 1_000_000] = [0; 1_000_000];'
+      good:
+        - 'let buffer: Box<[u8; 1_000_000]> = Box::new([0; 1_000_000]);'
+        - 'let buffer: Vec<u8> = vec![0; 1_000_000];'
+
+  S8:
+    title: Prefer From/Into Over as for Type Conversions
+    severity: SHOULD
+    mechanical: true
+    clippy: cast_possible_truncation
+    description: >
+      Use From/Into traits for type conversions instead of 'as' casts when possible.
+      From/Into are checked and more explicit about conversion intent.
+    check:
+      type: grep
+      pattern: '\s+as\s+(u8|u16|u32|i8|i16|i32)\s*[;,)\]]'
+      flags: -En
+      exclude: "flight:ok"
+    note: |
+      'as' casts can silently truncate. From/Into and TryFrom/TryInto make
+      conversion fallibility explicit.
+    examples:
+      bad:
+        - 'let small = big_number as u8;  // Silently truncates'
+      good:
+        - 'let small: u8 = big_number.try_into()?;'
+        - 'let small = u8::try_from(big_number).map_err(|_| Error::Overflow)?;'
+
+  S9:
+    title: Return Result from Functions That Can Fail
+    severity: SHOULD
+    mechanical: false
+    description: >
+      Functions that can fail should return Result, not panic or return sentinel
+      values. Let callers decide how to handle failures.
+    note: |
+      Rust's error handling is based on Result. Functions should return Result
+      for recoverable errors, making error handling explicit.
+    examples:
+      bad:
+        - |
+          fn parse_config(path: &str) -> Config {
+              // Returns default on error - hides failures
+              fs::read_to_string(path)
+                  .map(|s| toml::from_str(&s).unwrap_or_default())
+                  .unwrap_or_default()
+          }
+      good:
+        - |
+          fn parse_config(path: &str) -> Result<Config, ConfigError> {
+              let content = fs::read_to_string(path)?;
+              let config = toml::from_str(&content)?;
+              Ok(config)
+          }
+
+  S10:
+    title: Use Cow for Flexible String/Slice Ownership
+    severity: SHOULD
+    mechanical: false
+    description: >
+      Use Cow<str> or Cow<[T]> when a function might need to either borrow
+      or own data, avoiding unnecessary clones.
+    note: |
+      Cow (Clone-on-Write) lets you return borrowed data when possible and
+      only allocate when necessary. Useful for optimization.
+    examples:
+      bad:
+        - |
+          fn process(s: &str) -> String {
+              if s.contains("bad") {
+                  s.replace("bad", "good")  // Always allocates
+              } else {
+                  s.to_string()  // Unnecessary allocation
+              }
+          }
+      good:
+        - |
+          fn process(s: &str) -> Cow<str> {
+              if s.contains("bad") {
+                  Cow::Owned(s.replace("bad", "good"))
+              } else {
+                  Cow::Borrowed(s)  // No allocation
+              }
+          }
+
+  # =========================================================================
+  # GUIDANCE - Design principles (not mechanically checked)
+  # =========================================================================
+
+  G1:
+    title: Error Type Design - thiserror vs anyhow
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Libraries should define structured error types using thiserror. Applications
+      can use anyhow for convenient error handling. Don't mix them incorrectly.
+    note: |
+      thiserror: For libraries. Creates typed errors that callers can match on.
+      anyhow: For applications. Convenient context addition, no typing overhead.
+      Never use anyhow::Error in a library's public API.
+    examples:
+      good:
+        - |
+          // Library (using thiserror)
+          #[derive(Debug, thiserror::Error)]
+          pub enum ParseError {
+              #[error("invalid syntax at line {line}")]
+              Syntax { line: usize },
+              #[error("io error: {0}")]
+              Io(#[from] std::io::Error),
+          }
+        - |
+          // Application (using anyhow)
+          use anyhow::{Context, Result};
+
+          fn main() -> Result<()> {
+              let config = load_config()
+                  .context("failed to load config")?;
+              Ok(())
+          }
+
+  G2:
+    title: Prefer Composition Over Inheritance
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Rust doesn't have inheritance. Use composition, traits, and generics
+      instead of trying to simulate inheritance patterns.
+    note: |
+      Compose types by including them as fields. Use traits for shared behavior.
+      Avoid DerefMut abuse to simulate inheritance.
+    examples:
+      bad:
+        - |
+          // Don't try to simulate inheritance
+          struct Child {
+              parent: Parent,
+          }
+          impl Deref for Child {
+              type Target = Parent;
+              fn deref(&self) -> &Parent { &self.parent }
+          }
+      good:
+        - |
+          // Use traits for shared behavior
+          trait Drawable {
+              fn draw(&self);
+          }
+
+          struct Circle { radius: f64 }
+          impl Drawable for Circle {
+              fn draw(&self) { /* ... */ }
+          }
+
+  G3:
+    title: Make Invalid States Unrepresentable
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Design types so that invalid states cannot be constructed. Use enums
+      and newtypes to enforce invariants at compile time.
+    note: |
+      Type safety is Rust's superpower. Encode invariants in types rather
+      than relying on runtime checks.
+    examples:
+      bad:
+        - |
+          struct EmailMessage {
+              to: Option<String>,
+              body: Option<String>,
+              sent: bool,  // Can be true even if to/body are None!
+          }
+      good:
+        - |
+          enum EmailMessage {
+              Draft { to: Option<String>, body: Option<String> },
+              Ready { to: String, body: String },
+              Sent { to: String, body: String, sent_at: DateTime },
+          }
+
+  G4:
+    title: Prefer Small, Focused Crates
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Split large crates into smaller, focused ones. This improves compile
+      times, enables better code reuse, and clarifies dependencies.
+    note: |
+      Rust's compilation unit is the crate. Smaller crates mean faster incremental
+      builds and clearer dependency graphs.
+    examples:
+      good:
+        - |
+          // Instead of one monolithic crate:
+          myapp/
+          ├── myapp-core/      # Core types, no IO
+          ├── myapp-db/        # Database layer
+          ├── myapp-api/       # HTTP API
+          └── myapp/           # Binary, ties it together
+
+  G5:
+    title: Use Type State Pattern for Compile-Time State Machines
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      For state machines, encode states as types. This prevents invalid
+      state transitions at compile time rather than runtime.
+    note: |
+      The typestate pattern uses generics to track state at compile time.
+      Invalid transitions become type errors.
+    examples:
+      good:
+        - |
+          struct Connection<State> {
+              inner: TcpStream,
+              _state: PhantomData<State>,
+          }
+
+          struct Disconnected;
+          struct Connected;
+          struct Authenticated;
+
+          impl Connection<Disconnected> {
+              fn connect(self) -> Result<Connection<Connected>> { /* ... */ }
+          }
+
+          impl Connection<Connected> {
+              fn authenticate(self, creds: &Credentials) -> Result<Connection<Authenticated>> { /* ... */ }
+          }
+
+          impl Connection<Authenticated> {
+              fn query(&self, sql: &str) -> Result<Rows> { /* ... */ }
+          }
+
+          // This won't compile:
+          // let conn = Connection::<Disconnected>::new();
+          // conn.query("SELECT 1");  // Error: no method query on Disconnected
+
+  G6:
+    title: Avoid Arc<Mutex<T>> When Possible
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Arc<Mutex<T>> is often overused. Consider channels, actors, or
+      restructuring to avoid shared mutable state.
+    note: |
+      Shared mutable state adds complexity. Message passing (channels) or
+      actor patterns often produce cleaner, more testable code.
+    examples:
+      bad:
+        - |
+          // Shared state everywhere
+          let state = Arc::new(Mutex::new(AppState::new()));
+          // Clone Arc for every handler
+      good:
+        - |
+          // Use channels for communication
+          let (tx, rx) = mpsc::channel();
+          // State manager owns the state, receives commands via channel
+
+  G7:
+    title: Document Safety Requirements for Public Unsafe Functions
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Public unsafe functions must document their safety requirements.
+      What invariants must the caller uphold?
+    note: |
+      From Rust API Guidelines: unsafe functions should have a # Safety section
+      documenting what the caller must guarantee.
+    examples:
+      good:
+        - |
+          /// Converts a byte slice to a string without checking UTF-8 validity.
+          ///
+          /// # Safety
+          ///
+          /// The bytes must be valid UTF-8. If this constraint is violated,
+          /// undefined behavior results.
+          pub unsafe fn from_utf8_unchecked(bytes: &[u8]) -> &str {
+              // ...
+          }
+
+  G8:
+    title: Use Cargo Features for Optional Functionality
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Use Cargo features to make dependencies and functionality optional.
+      This reduces compile times and binary size for users who don't need everything.
+    note: |
+      Features should be additive. Enabling a feature should never remove functionality
+      or change behavior in breaking ways.
+    examples:
+      good:
+        - |
+          # Cargo.toml
+          [features]
+          default = ["json"]
+          json = ["dep:serde_json"]
+          yaml = ["dep:serde_yaml"]
+          full = ["json", "yaml", "toml"]
+
+          [dependencies]
+          serde_json = { version = "1", optional = true }
+          serde_yaml = { version = "0.9", optional = true }
+
+# ===========================================================================
+# INFO CHECKS - Statistics for reporting (not pass/fail)
+# ===========================================================================
+
+info:
+  unsafe_count:
+    pattern: 'unsafe\s*\{'
+    flags: -cE
+    label: "Unsafe blocks"
+
+  unwrap_count:
+    pattern: '\.unwrap\(\)'
+    flags: -cE
+    label: "Unwrap calls"
+
+  expect_count:
+    pattern: '\.expect\('
+    flags: -cE
+    label: "Expect calls"
+
+  clone_count:
+    pattern: '\.clone\(\)'
+    flags: -cE
+    label: "Clone calls"
+
+  arc_mutex_count:
+    pattern: 'Arc<.*Mutex<|Arc::new.*Mutex::new'
+    flags: -cE
+    label: "Arc<Mutex<T>> patterns"
+
+  async_fn_count:
+    pattern: 'async\s+fn'
+    flags: -cE
+    label: "Async functions"
+
+  pub_fn_count:
+    pattern: '^pub\s+(async\s+)?fn\s+'
+    flags: -cE
+    label: "Public functions"
+
+  derive_count:
+    pattern: '#\[derive\('
+    flags: -cE
+    label: "Derive macros"
+
+  test_count:
+    pattern: '#\[test\]|#\[tokio::test\]'
+    flags: -cE
+    label: "Test functions"
+
+# ===========================================================================
+# ANTI-PATTERNS - Quick reference table (documentation only)
+# ===========================================================================
+
+anti_patterns:
+  - pattern: "Unsafe without SAFETY comment"
+    example: "unsafe { ptr.read() }"
+    fix: "Add // SAFETY: explanation"
+    clippy: undocumented_unsafe_blocks
+
+  - pattern: "mem::transmute"
+    example: "mem::transmute::<&T, &U>(x)"
+    fix: "Use from_ne_bytes, as, or ptr casts"
+    clippy: transmute_undefined_repr
+
+  - pattern: ".unwrap() in production"
+    example: "file.read().unwrap()"
+    fix: "Use ? or .expect(\"reason\")"
+    clippy: unwrap_used
+
+  - pattern: "panic! in library"
+    example: "panic!(\"bad input\")"
+    fix: "Return Result or Option"
+    clippy: panic_in_result_fn
+
+  - pattern: "Clone to satisfy borrow checker"
+    example: "process(&data.clone())"
+    fix: "Restructure or use Arc/Rc"
+    clippy: redundant_clone
+
+  - pattern: "&String parameter"
+    example: "fn f(s: &String)"
+    fix: "fn f(s: &str)"
+    clippy: ptr_arg
+
+  - pattern: "&Vec<T> parameter"
+    example: "fn f(v: &Vec<T>)"
+    fix: "fn f(v: &[T])"
+    clippy: ptr_arg
+
+  - pattern: "Blocking in async"
+    example: "async { std::fs::read() }"
+    fix: "Use tokio::fs or spawn_blocking"
+    clippy: blocking_operations_in_async
+
+  - pattern: "Mutex across await"
+    example: "let g = m.lock(); f.await"
+    fix: "Drop before await or use async Mutex"
+    clippy: await_holding_lock
+
+  - pattern: "println! in library"
+    example: "println!(\"debug: {}\", x)"
+    fix: "Use log::debug! or tracing"
+    clippy: print_stdout
+
+  - pattern: "Missing Debug derive"
+    example: "pub struct Foo { ... }"
+    fix: "#[derive(Debug)] pub struct Foo"
+    clippy: missing_debug_implementations
+
+  - pattern: "Wildcard imports"
+    example: "use std::collections::*"
+    fix: "use std::collections::{HashMap, HashSet}"
+    clippy: wildcard_imports
+
+  - pattern: "Large stack allocation"
+    example: "let arr: [u8; 10_000_000]"
+    fix: "Use Box or Vec"
+    clippy: large_stack_arrays
+
+  - pattern: "anyhow in library API"
+    example: "pub fn f() -> anyhow::Result<T>"
+    fix: "Define error type with thiserror"
+
+# ===========================================================================
+# CARGO CHECKS - Cargo.toml validation
+# ===========================================================================
+
+cargo_rules:
+  - id: C1
+    title: Wildcard Dependencies
+    description: "Pin dependency versions, don't use * wildcards"
+    pattern: '=\s*"\*"'
+    fix: "Specify version: dependency = \"1.0\""
+
+  - id: C2
+    title: Missing Cargo.lock for Binaries
+    description: "Binary crates should commit Cargo.lock"
+    note: "Check if [[bin]] exists but .gitignore has Cargo.lock"
+
+  - id: C3
+    title: Missing License
+    description: "Crates should specify a license"
+    note: "Check for license or license-file in Cargo.toml"
+
+# ===========================================================================
+# RESEARCH SOURCES
+# ===========================================================================
+
+sources:
+  - title: "Rust API Guidelines"
+    url: "https://rust-lang.github.io/api-guidelines/"
+
+  - title: "Clippy Lints"
+    url: "https://rust-lang.github.io/rust-clippy/"
+
+  - title: "The Rust Book"
+    url: "https://doc.rust-lang.org/book/"
+
+  - title: "Rustonomicon"
+    url: "https://doc.rust-lang.org/nomicon/"
+
+  - title: "Rust Reference"
+    url: "https://doc.rust-lang.org/reference/"
+
+  - title: "Effective Rust"
+    url: "https://www.lurklurk.org/effective-rust/"
+
+  - title: "Rust Design Patterns"
+    url: "https://rust-unofficial.github.io/patterns/"
