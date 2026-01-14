@@ -700,6 +700,62 @@ def generate_sh(spec: DomainSpec) -> str:
     return "".join(lines)
 
 
+def validate_yaml_syntax(flight_path: Path) -> bool:
+    """Validate .flight file using yaml.validate.sh (dogfooding).
+
+    Only fails on critical NEVER rules (N1: tabs, N2: duplicate keys) that would
+    cause actual YAML parse errors. MUST/SHOULD rules are skipped because:
+    - .flight files contain examples of bad patterns (that's their purpose)
+    - Python's YAML parser handles type coercion differently
+
+    Returns True if valid, False if critical errors found.
+    """
+    domains_dir = get_domains_dir()
+    yaml_validator = domains_dir / "yaml.validate.sh"
+
+    if not yaml_validator.exists():
+        # yaml.validate.sh doesn't exist yet (bootstrapping)
+        return True
+
+    # Skip validation for yaml.flight itself - it contains intentional examples
+    # of bad YAML patterns and would always fail
+    if flight_path.name == "yaml.flight":
+        return True
+
+    try:
+        result = subprocess.run(
+            ["bash", str(yaml_validator), str(flight_path)],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            output = result.stdout + result.stderr
+            # Only fail on critical NEVER rules that would break parsing:
+            # N1 (tabs) and N2 (duplicate keys)
+            # N3 (unsafe load) and N4 (YAML bomb) don't apply to .flight files
+            critical_failures = []
+            in_never_section = False
+            for line in output.split("\n"):
+                if "## NEVER Rules" in line:
+                    in_never_section = True
+                elif line.startswith("## "):
+                    in_never_section = False
+                elif in_never_section and "❌ N1:" in line:
+                    critical_failures.append(("N1: Tab Characters", []))
+                elif in_never_section and "❌ N2:" in line:
+                    critical_failures.append(("N2: Duplicate Keys", []))
+
+            if critical_failures:
+                print(f"ERROR: {flight_path.name} has critical YAML errors:", file=sys.stderr)
+                for rule, _ in critical_failures:
+                    print(f"  {rule}", file=sys.stderr)
+                return False
+        return True
+    except FileNotFoundError:
+        # bash not found
+        return True
+
+
 def validate_shell_script(sh_path: Path) -> bool:
     """Validate generated shell script using bash -n (syntax check).
 
@@ -802,6 +858,12 @@ def compile_domain(domain: str, args) -> int:
     domain_path = Path(domain)
     if domain_path.suffix == '.flight':
         domain = domain_path.stem
+
+    # Validate YAML syntax before parsing (dogfooding)
+    domains_dir = get_domains_dir()
+    flight_path = domains_dir / f"{domain}.flight"
+    if flight_path.exists() and not validate_yaml_syntax(flight_path):
+        return 1
 
     data = load_flight_file(domain)
 
