@@ -104,11 +104,13 @@ check "N7: Exported functions must have return type" \
     grep -En '^export (async )?function \w+\([^)]*\)\s*\{' $FILES | grep -v '):'
     "
 
-# N8: Implicit any in callbacks (common miss)
-check "N8: No implicit any in callbacks (.map(x =>, .filter(item =>" \
+# N8: Implicit any in callbacks - only flag high-confidence cases
+# (JSON.parse and 'as any' are definitively untyped; typed arrays infer correctly)
+check "N8: No implicit any in callbacks (JSON.parse, as any)" \
     bash -c "
-    grep -En '\.(map|filter|reduce|forEach|find|some|every)\(\s*\(?\s*[a-z]+\s*\)?\s*=>' $FILES | grep -v '([^)]*:[^)]*)'
-    "
+    grep -En 'JSON\.parse\([^)]*\)\.(map|filter|reduce|forEach|find|some|every)\(' $FILES | grep -v 'flight:ok'
+    grep -En 'as any\)\.(map|filter|reduce|forEach|find|some|every)\(' $FILES | grep -v 'flight:ok'
+    " 2>/dev/null
 
 # N9: console.log
 check "N9: No console.log in source files" \
