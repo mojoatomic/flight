@@ -78,6 +78,7 @@ is_api_file() {
     fi
     # Content-based detection: HTTP method handlers
     # Note: case-sensitive to avoid matching response.json() from fetch calls
+    # Note: \bResponse\.json requires word boundary to avoid httpResponse.json() match
     # Frameworks detected:
     #   Express/Koa:    (app|router|server).get(
     #   Fastify:        fastify.get(
@@ -88,7 +89,7 @@ is_api_file() {
     #   Django REST:    @api_view @action
     #   Flask:          @app.route @blueprint.route
     #   Go net/http:    http.HandleFunc func.*Handler
-    if grep -qE "(app|router|server|fastify|hono)\.(get|post|put|patch|delete|on)\(|NextResponse|Response\.json|export\s+(async\s+)?function\s+(GET|POST|PUT|PATCH|DELETE)|@(Get|Post|Put|Delete|Patch|RequestMapping|GetMapping|PostMapping|api_view|action)\(|@(app|blueprint)\.route\(|http\.HandleFunc|func\s+\w*Handler" "$f" 2>/dev/null; then
+    if grep -qE "(app|router|server|fastify|hono)\.(get|post|put|patch|delete|on)\(|NextResponse|\bResponse\.json|export\s+(async\s+)?function\s+(GET|POST|PUT|PATCH|DELETE)|@(Get|Post|Put|Delete|Patch|RequestMapping|GetMapping|PostMapping|api_view|action)\(|@(app|blueprint)\.route\(|http\.HandleFunc|func\s+\w*Handler" "$f" 2>/dev/null; then
         return 0
     fi
     return 1
