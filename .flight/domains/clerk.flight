@@ -1,0 +1,946 @@
+# clerk.flight - Clerk authentication patterns for TypeScript/Next.js
+# Source: Official Clerk docs, multi-tenant best practices, organization patterns
+
+domain: clerk
+version: 1.0.0
+description: >
+  Clerk authentication and multi-tenant organization patterns for SaaS applications
+  using TypeScript/Next.js App Router. Covers clerkMiddleware, auth(), organizations,
+  orgId-scoped data access, role-based permissions, and webhook verification.
+
+file_patterns:
+  - "**/*.ts"
+  - "**/*.tsx"
+
+exclude_patterns:
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/.git/**"
+  - "**/*.d.ts"
+
+suppression:
+  comment: "flight:ok"
+  guidance: |
+    Add `// flight:ok` comment on the same line to suppress.
+    Use sparingly. Document why the suppression is acceptable.
+
+# ===========================================================================
+# RULES
+# ===========================================================================
+# Clerk-SPECIFIC rules for multi-tenant Next.js/TypeScript applications.
+# These catch common AI mistakes with Clerk auth, organizations, and middleware.
+#
+# ID format: {severity_prefix}{number}
+#   N = NEVER (check - fails build)
+#   M = MUST (check - currently implemented as warn)
+#   S = SHOULD (warn - advisory)
+#   G = GUIDANCE (not checked)
+# ===========================================================================
+
+rules:
+
+  # =========================================================================
+  # NEVER - Security and correctness violations (validator will reject)
+  # =========================================================================
+
+  N1:
+    title: Secret Key in Client Code
+    severity: NEVER
+    mechanical: true
+    description: >
+      CLERK_SECRET_KEY must never appear in client-accessible code.
+      It has admin privileges. Only use in server-side code that is
+      never bundled to client.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Check for secret key in any client-accessible file
+          # Skip files that are clearly server-only (api/, server/, actions/)
+          if [[ "$f" != *"/api/"* ]] && [[ "$f" != *"/server/"* ]] && [[ "$f" != *".server."* ]] && [[ "$f" != *"/actions/"* ]] && [[ "$f" != *"middleware"* ]]; then
+            grep -HnE 'CLERK_SECRET_KEY|secretKey.*clerk' "$f" 2>/dev/null | grep -v 'flight:ok'
+          fi
+        done
+    note: |
+      CLERK_SECRET_KEY has admin privileges and can impersonate any user.
+      If exposed to the browser, attackers can create sessions for any user.
+      Only use in:
+      - API routes (pages/api/ or app/api/)
+      - Server actions
+      - Server-only files (.server.ts)
+      - Middleware
+    examples:
+      bad:
+        - "const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })"
+        - "process.env.NEXT_PUBLIC_CLERK_SECRET_KEY"
+      good:
+        - |
+          // In app/api/admin/route.ts (server-only)
+          import { clerkClient } from '@clerk/nextjs/server'
+
+  N2:
+    title: Deprecated authMiddleware
+    severity: NEVER
+    mechanical: true
+    description: >
+      authMiddleware is deprecated. Use clerkMiddleware() instead.
+      authMiddleware has known issues with Next.js 14+ and doesn't
+      support the new routing patterns.
+    check:
+      type: grep
+      pattern: 'authMiddleware|from [''"]@clerk/nextjs[''"].*authMiddleware'
+      flags: -En
+    note: |
+      authMiddleware was deprecated in @clerk/nextjs 5.0. Migrate to clerkMiddleware:
+      - authMiddleware({ publicRoutes }) → clerkMiddleware() + createRouteMatcher
+      - Better protection patterns with auth.protect()
+      - Supports Next.js 14+ App Router fully
+    examples:
+      bad:
+        - "import { authMiddleware } from '@clerk/nextjs'"
+        - "export default authMiddleware({ publicRoutes: [...] })"
+      good:
+        - |
+          import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+          const isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)'])
+
+          export default clerkMiddleware((auth, req) => {
+            if (!isPublicRoute(req)) auth.protect()
+          })
+
+  N3:
+    title: auth() in Client Components
+    severity: NEVER
+    mechanical: true
+    description: >
+      auth() from @clerk/nextjs/server cannot be used in client components.
+      It's a server-only function. Use useAuth() hook in client components.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Check if file is a client component
+          if grep -q "'use client'" "$f" 2>/dev/null; then
+            # Flag if importing auth from server
+            if grep -qE "from ['\"]@clerk/nextjs/server['\"]" "$f" 2>/dev/null; then
+              grep -Hn "from ['\"]@clerk/nextjs/server['\"]" "$f" | grep -v 'flight:ok'
+            fi
+          fi
+        done
+    note: |
+      @clerk/nextjs/server exports are server-only. In client components:
+      - Use useAuth() for auth state
+      - Use useUser() for user data
+      - Use useOrganization() for org data
+      - Use useOrganizationList() for org switching
+    examples:
+      bad:
+        - |
+          'use client'
+          import { auth } from '@clerk/nextjs/server'
+      good:
+        - |
+          'use client'
+          import { useAuth, useOrganization } from '@clerk/nextjs'
+
+  N4:
+    title: Synchronous auth() Call in Next.js 15+
+    severity: NEVER
+    mechanical: true
+    description: >
+      In Next.js 15+, auth() returns a Promise. Must be awaited.
+      Synchronous usage causes runtime errors.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Find auth() calls that aren't awaited or in async context
+          # Look for patterns like: const { userId } = auth() without await
+          grep -HnE "const\s*\{[^}]*\}\s*=\s*auth\(\)" "$f" 2>/dev/null | \
+            grep -v "await" | grep -v 'flight:ok'
+        done
+    note: |
+      Next.js 15 changed auth() to be async. Always await:
+      - const { userId, orgId } = await auth()
+      - Ensure the function is async
+      This applies to auth(), currentUser(), and other Clerk server functions.
+    examples:
+      bad:
+        - "const { userId } = auth()"
+        - "const { orgId } = auth()"
+      good:
+        - "const { userId, orgId } = await auth()"
+
+  N5:
+    title: Hardcoded Clerk Keys
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never hardcode Clerk publishable or secret keys. Use environment
+      variables. Hardcoded credentials get committed and leaked.
+    check:
+      type: grep
+      pattern: "pk_test_[a-zA-Z0-9]+|pk_live_[a-zA-Z0-9]+|sk_test_[a-zA-Z0-9]+|sk_live_[a-zA-Z0-9]+"
+      flags: -En
+    note: |
+      Hardcoded keys are a security risk. They get committed to git.
+      Always use environment variables:
+      - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY (safe for client)
+      - CLERK_SECRET_KEY (server only, never NEXT_PUBLIC_)
+    examples:
+      bad:
+        - "publishableKey: 'pk_test_abc123'"
+        - "secretKey: 'sk_live_xyz789'"
+      good:
+        - "publishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"
+
+  N6:
+    title: Missing Webhook Signature Verification
+    severity: NEVER
+    mechanical: true
+    description: >
+      Clerk webhooks must verify the svix signature. Without verification,
+      attackers can send fake webhook events to your API.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Check webhook handler files
+          if [[ "$f" == *"webhook"* ]] && [[ "$f" == *"/api/"* ]]; then
+            # Must have svix verification
+            if ! grep -qE "Webhook|verifyWebhook|svix-id|svix-timestamp|svix-signature" "$f" 2>/dev/null; then
+              if ! grep -q "flight:ok" "$f" 2>/dev/null; then
+                echo "$f: webhook handler without signature verification"
+              fi
+            fi
+          fi
+        done
+    note: |
+      Always verify webhook signatures using Clerk's verifyWebhook or svix:
+
+      import { verifyWebhook } from '@clerk/nextjs/webhooks'
+
+      const payload = await verifyWebhook(request)
+
+      This prevents attackers from forging webhook events.
+    examples:
+      bad:
+        - |
+          // API route that trusts webhook without verification
+          export async function POST(req) {
+            const body = await req.json()
+            // Processing without verification!
+          }
+      good:
+        - |
+          import { verifyWebhook } from '@clerk/nextjs/webhooks'
+
+          export async function POST(req) {
+            const payload = await verifyWebhook(req)
+            // Now safe to process
+          }
+
+  N7:
+    title: Using userId When orgId is Required
+    severity: NEVER
+    mechanical: true
+    description: >
+      In multi-tenant apps, data must be scoped to orgId, not userId.
+      A user can be in multiple orgs. Using userId creates data leaks.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Skip test files
+          if [[ "$f" == *".test."* ]] || [[ "$f" == *".spec."* ]]; then
+            continue
+          fi
+          # In server files that query data
+          if [[ "$f" == *"/api/"* ]] || [[ "$f" == *"/actions/"* ]] || [[ "$f" == *".server."* ]]; then
+            # Flag if using userId for data filtering without orgId
+            if grep -qE "where.*userId|userId.*=" "$f" 2>/dev/null; then
+              if ! grep -qE "orgId|organizationId" "$f" 2>/dev/null; then
+                grep -Hn "userId" "$f" 2>/dev/null | head -3 | grep -v 'flight:ok'
+              fi
+            fi
+          fi
+        done
+    note: |
+      In multi-tenant SaaS, the organization is the tenant boundary:
+      - Data belongs to organizations, not individual users
+      - Users can access data in orgs they belong to
+      - Always filter by orgId, optionally also by userId for user-specific data
+
+      BAD:  where: { userId }        // User sees data across all their orgs
+      GOOD: where: { orgId }         // User only sees current org's data
+      GOOD: where: { orgId, userId } // User's items within current org
+    examples:
+      bad:
+        - "prisma.posts.findMany({ where: { userId } })"
+        - "db.query.posts.where(eq(posts.userId, userId))"
+      good:
+        - "prisma.posts.findMany({ where: { orgId } })"
+        - "prisma.posts.findMany({ where: { orgId, userId } })"
+
+  N8:
+    title: Missing Organization Context in Protected Routes
+    severity: NEVER
+    mechanical: true
+    description: >
+      Protected routes in multi-tenant apps must check for orgId.
+      A valid session without org context means the user hasn't selected an org.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Check API routes and server actions
+          if [[ "$f" == *"/api/"* ]] || [[ "$f" == *"/actions/"* ]]; then
+            # If file uses auth() but doesn't check orgId
+            if grep -q "await auth()" "$f" 2>/dev/null; then
+              if grep -qE "userId\s*\}" "$f" 2>/dev/null; then
+                if ! grep -qE "orgId|organizationId|!.*org" "$f" 2>/dev/null; then
+                  if ! grep -q "flight:ok" "$f" 2>/dev/null; then
+                    echo "$f: auth check without orgId verification"
+                  fi
+                fi
+              fi
+            fi
+          fi
+        done
+    note: |
+      In multi-tenant apps, always destructure and check orgId:
+
+      const { userId, orgId } = await auth()
+      if (!userId) return unauthorized()
+      if (!orgId) return redirect('/select-org')  // Or handle appropriately
+
+      A user can be authenticated but not have selected an organization.
+    examples:
+      bad:
+        - |
+          const { userId } = await auth()
+          if (!userId) throw new Error('Unauthorized')
+          // Missing orgId check!
+      good:
+        - |
+          const { userId, orgId } = await auth()
+          if (!userId) throw new Error('Unauthorized')
+          if (!orgId) throw new Error('No organization selected')
+
+  N9:
+    title: Missing Null Checks for Auth Values
+    severity: NEVER
+    mechanical: true
+    description: >
+      auth() can return null for userId and orgId. Using them without
+      null checks causes runtime errors and security issues.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Check files using auth()
+          if grep -q "await auth()" "$f" 2>/dev/null; then
+            # Find destructured values being used directly without checks
+            if grep -qE "\{ userId \}|\{ orgId \}" "$f" 2>/dev/null; then
+              # Check if there's a null check before usage
+              if grep -qE "userId\!|orgId\!" "$f" 2>/dev/null; then
+                if ! grep -qE "if.*!.*userId|if.*!.*orgId|userId\s*\?\?" "$f" 2>/dev/null; then
+                  grep -Hn "userId\!|orgId\!" "$f" | grep -v 'flight:ok'
+                fi
+              fi
+            fi
+          fi
+        done
+    note: |
+      Always check for null before using auth values:
+
+      const { userId, orgId } = await auth()
+      if (!userId) throw new Error('Unauthorized')
+      if (!orgId) throw new Error('No organization')
+
+      // Now safe to use userId and orgId
+
+      Never use non-null assertion (!) without prior validation.
+    examples:
+      bad:
+        - |
+          const { userId } = await auth()
+          await db.posts.create({ data: { userId: userId! } })
+      good:
+        - |
+          const { userId } = await auth()
+          if (!userId) throw new Error('Unauthorized')
+          await db.posts.create({ data: { userId } })
+
+  # =========================================================================
+  # MUST - Important patterns (validator warns)
+  # =========================================================================
+
+  M1:
+    title: ClerkProvider at Root
+    severity: MUST
+    mechanical: true
+    description: >
+      ClerkProvider must wrap the application at the root layout.
+      Without it, Clerk hooks and components won't work.
+    check:
+      type: script
+      code: |
+        # Check if any layout file has ClerkProvider
+        for f in "$@"; do
+          if [[ "$f" == *"layout"* ]]; then
+            if grep -q "ClerkProvider" "$f" 2>/dev/null; then
+              exit 0  # Found it, pass
+            fi
+          fi
+        done
+        # If we get here, no layout has ClerkProvider
+        echo "No ClerkProvider found in layout files"
+    note: |
+      ClerkProvider must be in your root layout.tsx:
+
+      import { ClerkProvider } from '@clerk/nextjs'
+
+      export default function RootLayout({ children }) {
+        return (
+          <ClerkProvider>
+            <html><body>{children}</body></html>
+          </ClerkProvider>
+        )
+      }
+    examples:
+      good:
+        - |
+          import { ClerkProvider } from '@clerk/nextjs'
+
+          export default function RootLayout({ children }) {
+            return (
+              <ClerkProvider>
+                <html><body>{children}</body></html>
+              </ClerkProvider>
+            )
+          }
+
+  M2:
+    title: Middleware Matcher Configuration
+    severity: MUST
+    mechanical: true
+    description: >
+      Clerk middleware must have a matcher config to avoid running on
+      static files and internal Next.js routes.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if [[ "$f" == *"middleware"* ]]; then
+            if grep -q "clerkMiddleware" "$f" 2>/dev/null; then
+              if ! grep -q "matcher" "$f" 2>/dev/null; then
+                echo "$f: clerkMiddleware without matcher config"
+              fi
+            fi
+          fi
+        done
+    note: |
+      Always export a matcher config with your middleware:
+
+      export const config = {
+        matcher: [
+          '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+          '/(api|trpc)(.*)',
+        ],
+      }
+
+      This prevents middleware from running on static files.
+    examples:
+      bad:
+        - |
+          export default clerkMiddleware()
+          // Missing config.matcher!
+      good:
+        - |
+          export default clerkMiddleware()
+
+          export const config = {
+            matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+          }
+
+  M3:
+    title: Use createRouteMatcher for Route Protection
+    severity: MUST
+    mechanical: true
+    description: >
+      Use createRouteMatcher() with clerkMiddleware for route protection.
+      This is the recommended pattern over manual path checks.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if [[ "$f" == *"middleware"* ]]; then
+            if grep -q "clerkMiddleware" "$f" 2>/dev/null; then
+              # Check if using auth.protect() without createRouteMatcher
+              if grep -q "auth\.protect\|auth()\.protect" "$f" 2>/dev/null; then
+                if ! grep -q "createRouteMatcher" "$f" 2>/dev/null; then
+                  echo "$f: using auth.protect without createRouteMatcher"
+                fi
+              fi
+            fi
+          fi
+        done
+    note: |
+      createRouteMatcher provides clean, declarative route matching:
+
+      import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+      const isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)'])
+      const isProtectedRoute = createRouteMatcher(['/dashboard(.*)'])
+
+      export default clerkMiddleware((auth, req) => {
+        if (isProtectedRoute(req)) auth.protect()
+      })
+    examples:
+      good:
+        - |
+          const isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)'])
+
+          export default clerkMiddleware((auth, req) => {
+            if (!isPublicRoute(req)) auth.protect()
+          })
+
+  M4:
+    title: Validate Organization Slug in Routes
+    severity: MUST
+    mechanical: true
+    description: >
+      When using org slug in URL ([orgSlug]), validate it matches
+      the user's current organization to prevent URL manipulation.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Check route files with orgSlug parameter
+          if [[ "$f" == *"[orgSlug]"* ]] || [[ "$f" == *"[slug]"* ]]; then
+            # Should have validation against auth orgSlug
+            if ! grep -qE "orgSlug.*===|slug.*===|validateSlug|params\.orgSlug" "$f" 2>/dev/null; then
+              if ! grep -q "flight:ok" "$f" 2>/dev/null; then
+                echo "$f: org slug route without slug validation"
+              fi
+            fi
+          fi
+        done
+    note: |
+      Users can manipulate URLs. Always validate the slug:
+
+      const { orgSlug } = await auth()
+      const { orgSlug: urlSlug } = params
+
+      if (urlSlug !== orgSlug) {
+        redirect(`/${orgSlug}/dashboard`)  // Redirect to their actual org
+      }
+    examples:
+      bad:
+        - |
+          // app/[orgSlug]/dashboard/page.tsx
+          export default async function Page({ params }) {
+            const { orgSlug } = params
+            // Using URL slug without validation!
+          }
+      good:
+        - |
+          export default async function Page({ params }) {
+            const { orgSlug: authSlug } = await auth()
+            const { orgSlug: urlSlug } = params
+            if (urlSlug !== authSlug) redirect(`/${authSlug}/dashboard`)
+          }
+
+  M5:
+    title: Include orgId in Database Queries
+    severity: MUST
+    mechanical: true
+    description: >
+      All data queries must include orgId to enforce tenant isolation.
+      This is the fundamental multi-tenant security boundary.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Check data access files
+          if [[ "$f" == *"/api/"* ]] || [[ "$f" == *"/actions/"* ]] || [[ "$f" == *".server."* ]]; then
+            # If file has database queries
+            if grep -qE "findMany|findFirst|findUnique|select.*from|query\." "$f" 2>/dev/null; then
+              # Should have orgId in where clause
+              if ! grep -qE "orgId|organization_id|organizationId" "$f" 2>/dev/null; then
+                if ! grep -q "flight:ok" "$f" 2>/dev/null; then
+                  echo "$f: database query without orgId filter"
+                fi
+              fi
+            fi
+          fi
+        done
+    note: |
+      Every database query for tenant data must filter by orgId:
+
+      const { orgId } = await auth()
+
+      // All queries must include orgId
+      const posts = await prisma.posts.findMany({
+        where: { orgId }
+      })
+
+      This prevents users from accessing other organizations' data.
+    examples:
+      bad:
+        - "prisma.posts.findMany()"
+        - "prisma.posts.findMany({ where: { published: true } })"
+      good:
+        - "prisma.posts.findMany({ where: { orgId } })"
+        - "prisma.posts.findMany({ where: { orgId, published: true } })"
+
+  M6:
+    title: Handle Organization Switching
+    severity: MUST
+    mechanical: true
+    description: >
+      When a user switches organizations, the app must handle the
+      context change - clearing cached data and updating UI.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Check client files using organization hooks
+          if grep -q "'use client'" "$f" 2>/dev/null; then
+            if grep -qE "useOrganization|OrganizationSwitcher" "$f" 2>/dev/null; then
+              # Should handle org changes
+              if ! grep -qE "onOrganizationSelect|organization\.id.*useEffect|router\.refresh|revalidate" "$f" 2>/dev/null; then
+                if ! grep -q "flight:ok" "$f" 2>/dev/null; then
+                  echo "$f: org component without change handling"
+                fi
+              fi
+            fi
+          fi
+        done
+    note: |
+      When org changes, you need to:
+      1. Clear any cached data for the old org
+      2. Refetch data for the new org
+      3. Update any org-specific UI state
+
+      Use OrganizationSwitcher's afterSelectOrganization callback:
+
+      <OrganizationSwitcher
+        afterSelectOrganization={() => router.refresh()}
+      />
+    examples:
+      good:
+        - |
+          <OrganizationSwitcher
+            afterSelectOrganization={() => {
+              router.refresh()
+            }}
+          />
+
+  # =========================================================================
+  # SHOULD - Best practices (advisory)
+  # =========================================================================
+
+  S1:
+    title: Use OrganizationSwitcher Component
+    severity: SHOULD
+    mechanical: false
+    description: >
+      Use Clerk's OrganizationSwitcher component instead of building
+      custom org switching UI. It handles edge cases correctly.
+    note: |
+      OrganizationSwitcher handles:
+      - Loading states
+      - Create organization flow
+      - Personal account switching
+      - Error states
+      - Accessibility
+
+      import { OrganizationSwitcher } from '@clerk/nextjs'
+
+      <OrganizationSwitcher
+        afterSelectOrganization={() => router.refresh()}
+        appearance={{...}}
+      />
+    examples:
+      good:
+        - |
+          import { OrganizationSwitcher } from '@clerk/nextjs'
+
+          export function OrgSwitcher() {
+            const router = useRouter()
+            return (
+              <OrganizationSwitcher
+                afterSelectOrganization={() => router.refresh()}
+              />
+            )
+          }
+
+  S2:
+    title: Use has() for Permission Checks
+    severity: SHOULD
+    mechanical: false
+    description: >
+      Use has() helper for role and permission checks instead of
+      manual role string comparisons.
+    note: |
+      has() provides type-safe permission checking:
+
+      const { has } = await auth()
+
+      // Check role
+      if (has({ role: 'org:admin' })) {
+        // Admin-only action
+      }
+
+      // Check permission
+      if (has({ permission: 'org:posts:edit' })) {
+        // Can edit posts
+      }
+
+      Define permissions in Clerk Dashboard for type safety.
+    examples:
+      bad:
+        - "if (user.role === 'admin')"
+        - "if (membership.role === 'org:admin')"
+      good:
+        - "if (has({ role: 'org:admin' }))"
+        - "if (has({ permission: 'org:posts:edit' }))"
+
+  S3:
+    title: Sync Organization to Database
+    severity: SHOULD
+    mechanical: false
+    description: >
+      Sync Clerk organizations to your database using webhooks.
+      This enables querying org data without Clerk API calls.
+    note: |
+      Set up webhooks for organization events:
+      - organization.created
+      - organization.updated
+      - organization.deleted
+      - organizationMembership.created
+      - organizationMembership.deleted
+
+      Store org data locally for faster queries and joins.
+      Use Clerk as source of truth, database as cache.
+
+  S4:
+    title: Use Clerk's Built-in Components
+    severity: SHOULD
+    mechanical: false
+    description: >
+      Prefer Clerk's pre-built components (SignIn, SignUp, UserButton,
+      OrganizationSwitcher) over custom implementations.
+    note: |
+      Clerk components handle:
+      - OAuth flows
+      - MFA
+      - Email verification
+      - Error states
+      - Accessibility
+      - Loading states
+
+      Customize with appearance prop rather than rebuilding.
+
+  # =========================================================================
+  # GUIDANCE - Design principles (not mechanically checked)
+  # =========================================================================
+
+  G1:
+    title: Multi-Tenant Route Structure
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Recommended route structure for multi-tenant SaaS apps.
+    note: |
+      app/
+      ├── (auth)/
+      │   ├── sign-in/[[...sign-in]]/page.tsx
+      │   └── sign-up/[[...sign-up]]/page.tsx
+      ├── (marketing)/
+      │   ├── page.tsx                    # Landing page
+      │   └── pricing/page.tsx
+      ├── (app)/
+      │   └── [orgSlug]/
+      │       ├── layout.tsx              # Org-scoped layout
+      │       ├── dashboard/page.tsx
+      │       ├── settings/page.tsx
+      │       └── [...]/
+      ├── api/
+      │   └── webhooks/
+      │       └── clerk/route.ts
+      └── middleware.ts
+
+      Use route groups () to separate concerns.
+      Use [orgSlug] for org-scoped routes.
+
+  G2:
+    title: Environment Variables Reference
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Standard environment variables for Clerk in Next.js.
+    note: |
+      # .env.local
+
+      # Safe for client (NEXT_PUBLIC_ prefix)
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+      NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+      NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+      NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/dashboard
+      NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/onboarding
+
+      # Server only (no NEXT_PUBLIC_ prefix)
+      CLERK_SECRET_KEY=sk_test_...
+      CLERK_WEBHOOK_SECRET=whsec_...
+
+      Never use NEXT_PUBLIC_ with secret key!
+
+  G3:
+    title: Webhook Event Handling
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Key webhook events to handle for multi-tenant sync.
+    note: |
+      Essential events for multi-tenant apps:
+
+      User events:
+      - user.created → Create user record in database
+      - user.updated → Sync user profile changes
+      - user.deleted → Handle user deletion (soft delete?)
+
+      Organization events:
+      - organization.created → Create org record
+      - organization.updated → Sync org name/slug
+      - organization.deleted → Handle org deletion
+
+      Membership events:
+      - organizationMembership.created → Add user to org
+      - organizationMembership.updated → Update role
+      - organizationMembership.deleted → Remove user from org
+
+      Always make handlers idempotent using event IDs.
+
+  G4:
+    title: Data Model for Multi-Tenant
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Database schema patterns for multi-tenant applications.
+    note: |
+      Core tables:
+
+      organizations:
+        id            String   @id @default(cuid())
+        clerkOrgId    String   @unique  // From Clerk
+        name          String
+        slug          String   @unique
+        createdAt     DateTime @default(now())
+
+      users:
+        id            String   @id @default(cuid())
+        clerkUserId   String   @unique  // From Clerk
+        email         String   @unique
+        name          String?
+
+      organization_members:
+        id            String   @id @default(cuid())
+        orgId         String
+        userId        String
+        role          String   // org:admin, org:member
+        @@unique([orgId, userId])
+
+      All tenant data tables must have orgId foreign key:
+
+      posts:
+        id            String   @id @default(cuid())
+        orgId         String   // REQUIRED for tenant isolation
+        userId        String   // Optional for user attribution
+        content       String
+
+# ===========================================================================
+# INFO CHECKS - Statistics for reporting (not pass/fail)
+# ===========================================================================
+
+info:
+  clerk_imports:
+    pattern: 'from .@clerk'
+    flags: -oE
+    label: "Clerk imports"
+
+  auth_calls:
+    pattern: 'await auth\(\)|useAuth\(\)'
+    flags: -cE
+    label: "Auth calls"
+
+  org_hooks:
+    pattern: 'useOrganization|useOrganizationList'
+    flags: -cE
+    label: "Organization hooks"
+
+  webhook_handlers:
+    pattern: 'webhooks?.*clerk|clerk.*webhooks?'
+    flags: -ciE
+    label: "Webhook handlers"
+
+# ===========================================================================
+# ANTI-PATTERNS - Quick reference table (documentation only)
+# ===========================================================================
+
+anti_patterns:
+  - pattern: "CLERK_SECRET_KEY in client"
+    description: "Admin key exposed to browser"
+    fix: "Only use in server-side code"
+
+  - pattern: "authMiddleware"
+    description: "Deprecated middleware"
+    fix: "Use clerkMiddleware with createRouteMatcher"
+
+  - pattern: "auth() in client component"
+    description: "Server function in client"
+    fix: "Use useAuth() hook"
+
+  - pattern: "sync auth() call"
+    description: "Missing await in Next.js 15+"
+    fix: "Always await auth()"
+
+  - pattern: "hardcoded keys"
+    description: "Security risk, gets committed"
+    fix: "Use environment variables"
+
+  - pattern: "webhook without verification"
+    description: "Accepts forged events"
+    fix: "Use verifyWebhook from @clerk/nextjs/webhooks"
+
+  - pattern: "userId without orgId"
+    description: "Data leak across organizations"
+    fix: "Always scope data to orgId"
+
+  - pattern: "missing orgId check"
+    description: "No tenant context validation"
+    fix: "Check orgId after auth()"
+
+# ===========================================================================
+# SOURCES
+# ===========================================================================
+
+sources:
+  - title: "Clerk Next.js Quickstart"
+    url: "https://clerk.com/docs/quickstarts/nextjs"
+
+  - title: "Clerk Middleware Reference"
+    url: "https://clerk.com/docs/references/nextjs/clerk-middleware"
+
+  - title: "Clerk Organizations Guide"
+    url: "https://clerk.com/docs/organizations/overview"
+
+  - title: "Clerk Webhooks"
+    url: "https://clerk.com/docs/webhooks/overview"
+
+  - title: "Multi-Tenant SaaS with Clerk"
+    url: "https://clerk.com/docs/guides/multi-tenant-saas"
