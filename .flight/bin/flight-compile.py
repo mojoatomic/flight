@@ -13,6 +13,7 @@ Single source of truth: .flight YAML generates both spec and validator.
 """
 
 import argparse
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -699,6 +700,29 @@ def generate_sh(spec: DomainSpec) -> str:
     return "".join(lines)
 
 
+def validate_shell_script(sh_path: Path) -> bool:
+    """Validate generated shell script using bash -n (syntax check).
+
+    Returns True if valid, False if syntax errors found.
+    """
+    try:
+        result = subprocess.run(
+            ["bash", "-n", str(sh_path)],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            print(f"ERROR: Generated validator has syntax errors:", file=sys.stderr)
+            if result.stderr:
+                for line in result.stderr.strip().split("\n"):
+                    print(f"  {line}", file=sys.stderr)
+            return False
+        return True
+    except FileNotFoundError:
+        print("WARNING: bash not found, skipping syntax validation", file=sys.stderr)
+        return True  # Don't fail if bash isn't available
+
+
 def load_flight_file(domain: str) -> dict:
     """Load and parse a .flight YAML file."""
     domains_dir = get_domains_dir()
@@ -844,6 +868,10 @@ def compile_domain(domain: str, args) -> int:
             sh_path.write_text(sh_content, encoding='utf-8')
             sh_path.chmod(0o755)  # Make executable
             print(f"Wrote {sh_path}")
+
+            # Validate generated shell script
+            if not validate_shell_script(sh_path):
+                return 1
 
     return 0
 
