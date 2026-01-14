@@ -145,8 +145,9 @@ warn "M2: Components with fetch/async should handle error" \
     "
 
 # M3: Boolean prop prefixes
+# Note: Standard HTML boolean attributes (disabled, checked, selected, open) are excluded
 warn "M3: Boolean props should use is/has/can/should prefix" \
-    grep -En "^\s*(open|loading|disabled|visible|active|selected|checked)=" $FILES
+    grep -En "^\s*(loading|visible|active)=" $FILES
 
 # M4: useCallback for handlers passed to children
 warn "M4: Handlers passed to children should use useCallback" \

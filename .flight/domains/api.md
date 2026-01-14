@@ -2,7 +2,18 @@
 
 REST/HTTP API design patterns. Framework-agnostic. Prevents common integration failures.
 
-**Validation:** `api_validate.sh` enforces NEVER/MUST rules. SHOULD rules trigger warnings. GUIDANCE is not mechanically checked.
+**Validation:** `api.validate.sh` enforces NEVER/MUST rules. SHOULD rules trigger warnings. GUIDANCE is not mechanically checked.
+
+### Suppressing Warnings
+
+Add `// flight:ok` comment on the same line to suppress a specific check:
+
+```javascript
+// Legacy endpoint, scheduled for deprecation in v3
+router.get('/getUser/:id', handler)  // flight:ok
+```
+
+Use sparingly. Document why the suppression is acceptable.
 
 ---
 
@@ -50,6 +61,9 @@ REST/HTTP API design patterns. Framework-agnostic. Prevents common integration f
    ```
 
 4. **Breaking Changes Without Versioning** - Existing clients must not break
+
+   > ⚠️ Not mechanically validated. Enforced via code review.
+
    ```
    Breaking changes:
    - Removing or renaming fields
@@ -107,23 +121,7 @@ REST/HTTP API design patterns. Framework-agnostic. Prevents common integration f
    }
    ```
 
-8. **Missing Request IDs** - Impossible to trace issues across services
-   ```javascript
-   // BAD - no way to correlate logs
-   { "error": "Something failed" }
-
-   // GOOD - every response includes trace ID
-   {
-     "error": "Something failed",
-     "request_id": "req_abc123",
-     "trace_id": "trace_xyz789"
-   }
-
-   // Generate on entry, propagate through, return in response
-   X-Request-ID: req_abc123
-   ```
-
-9. **CORS Wildcard with Credentials** - Security vulnerability
+8. **CORS Wildcard with Credentials** - Security vulnerability
    ```javascript
    // BAD - allows any origin to send credentials
    Access-Control-Allow-Origin: *
@@ -447,6 +445,22 @@ REST/HTTP API design patterns. Framework-agnostic. Prevents common integration f
 
     // Exception: localhost in development is OK
     const devUrl = "http://localhost:3000/api"
+    ```
+
+13. **Include Request IDs** - Enable tracing across services
+    ```javascript
+    // BAD - no way to correlate logs
+    { "error": "Something failed" }
+
+    // GOOD - every response includes trace ID
+    {
+      "error": "Something failed",
+      "request_id": "req_abc123",
+      "trace_id": "trace_xyz789"
+    }
+
+    // Generate on entry, propagate through, return in response
+    X-Request-ID: req_abc123
     ```
 
 ### GUIDANCE (not mechanically checked)

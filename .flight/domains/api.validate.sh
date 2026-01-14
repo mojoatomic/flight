@@ -68,24 +68,69 @@ fi
 
 printf 'API files: %d\n\n' "${#FILES[@]}"
 
+# Filter to actual API endpoint files for API-specific checks (M3, S2, S4, S6, S7)
+# These checks don't apply to service/utility files that happen to be in the file list
+is_api_file() {
+    local f="$1"
+    # Path-based detection
+    if [[ "$f" =~ (api/|routes/|endpoints/|handlers/|controllers/) ]]; then
+        return 0
+    fi
+    # Content-based detection: HTTP method handlers
+    # Note: case-sensitive to avoid matching response.json() from fetch calls
+    # Frameworks detected:
+    #   Express/Koa:    (app|router|server).get(
+    #   Fastify:        fastify.get(
+    #   Hono:           hono.get( or app.on(
+    #   Next.js:        NextResponse, Response.json, export.*function.*(GET|POST|...)
+    #   NestJS:         @Get( @Post( etc.
+    #   Spring Boot:    @GetMapping @RequestMapping
+    #   Django REST:    @api_view @action
+    #   Flask:          @app.route @blueprint.route
+    #   Go net/http:    http.HandleFunc func.*Handler
+    if grep -qE "(app|router|server|fastify|hono)\.(get|post|put|patch|delete|on)\(|NextResponse|Response\.json|export\s+(async\s+)?function\s+(GET|POST|PUT|PATCH|DELETE)|@(Get|Post|Put|Delete|Patch|RequestMapping|GetMapping|PostMapping|api_view|action)\(|@(app|blueprint)\.route\(|http\.HandleFunc|func\s+\w*Handler" "$f" 2>/dev/null; then
+        return 0
+    fi
+    return 1
+}
+
+API_ENDPOINT_FILES=()
+for f in "${FILES[@]}"; do
+    if is_api_file "$f"; then
+        API_ENDPOINT_FILES+=("$f")
+    fi
+done
+
+if [[ ${#API_ENDPOINT_FILES[@]} -gt 0 ]]; then
+    printf 'API endpoint files: %d\n\n' "${#API_ENDPOINT_FILES[@]}"
+else
+    printf 'API endpoint files: 0 (some checks will be skipped)\n\n'
+fi
+
 printf '%s\n' "## NEVER Rules"
 
 # N1: Verbs in URI paths (create, delete, get, update, etc.)
 # Catches: POST /createUser, GET /getUsers, router.get('/deleteItem')
+# Requires verb + uppercase (camelCase) or verb + separator (snake/kebab)
+# Excludes legitimate words like /updated, /getaway, /creator
+# Respects flight:ok justification comments
+# Note: Must NOT use -i flag as it makes [A-Z] match lowercase
 check "N1: No verbs in URI paths" \
-    grep -Ein "['\"]/(create|delete|remove|update|get|fetch|add|edit|modify)[A-Za-z]" "${FILES[@]}"
+    bash -c 'grep -En "['\''\"]/?(create|delete|remove|update|get|fetch|add|edit|modify)([A-Z]|[_-][a-z])" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
 
 # N2: 200 OK with error body patterns
+# Matches error as a property name (error:, "error":, 'error':), not in variable names
 check "N2: No 200 status with error responses" \
-    grep -Ein "res\.(status\(200\)|json).*error|\.ok\(.*error|status.*200.*success.*false" "${FILES[@]}"
+    grep -Ein "status\(200\).*['\"]?error['\"]?\s*:|\.ok\(.*['\"]?error['\"]?\s*:|status.*200.*success.*false" "${FILES[@]}"
 
 # N3: Exposed auto-increment IDs in pagination
 warn "N3: Potential exposed IDs in pagination (use opaque cursors)" \
     grep -Ein "after_id|before_id|since_id|last_id|start_id" "${FILES[@]}"
 
 # N4: Sensitive data in query params (patterns suggesting auth in URL)
+# Catches dot notation, bracket notation, and destructuring patterns
 check "N4: No sensitive data in query strings" \
-    grep -Ein "req\.(query|params)\.(password|secret|api_key|token|auth)" "${FILES[@]}"
+    grep -Ein "req\.(query|params)(\.(password|secret|api_key|token|auth)|\[['\"]?(password|secret|api_key|token|auth))|(\{[^}]*(password|secret|api_key|token|auth)[^}]*\})\s*=\s*req\.(query|params)" "${FILES[@]}"
 
 # N5: Offset pagination with high limits
 warn "N5: Potential offset pagination (prefer cursor for large datasets)" \
@@ -120,12 +165,33 @@ warn "M2: API versioning present" \
     bash -c 'grep -qEi "/v[0-9]+/|version.*header|api-version" "$@" || echo "No API versioning detected"' _ "${FILES[@]}"
 
 # M3: Error response structure (should have type/title/status pattern)
-warn "M3: Consistent error response format (RFC 7807 pattern)" \
-    bash -c 'grep -l "application/problem\+json\|type.*title.*status\|ProblemDetails" "$@" >/dev/null || echo "No RFC 7807 Problem Details pattern found"' _ "${FILES[@]}"
+# Only applies to actual API endpoint files
+if [[ ${#API_ENDPOINT_FILES[@]} -gt 0 ]]; then
+    warn "M3: Consistent error response format (RFC 7807 pattern)" \
+        bash -c 'grep -l "application/problem\+json\|type.*title.*status\|ProblemDetails" "$@" >/dev/null || echo "No RFC 7807 Problem Details pattern found"' _ "${API_ENDPOINT_FILES[@]}"
+else
+    green "✅ M3: Consistent error response format (skipped - no API endpoint files)"
+    ((PASS++)) || true
+fi
 
 # M4: Rate limit headers
 warn "M4: Rate limit headers present" \
     bash -c 'grep -qEi "x-ratelimit|rate.?limit|retry-after" "$@" || echo "No rate limiting headers detected"' _ "${FILES[@]}"
+
+# M4a: Pagination metadata in responses
+# Files with pagination should include metadata (has_more, next_cursor, total, etc.)
+warn "M4a: Pagination responses include metadata" \
+    bash -c '
+        for f in "$@"; do
+            # Check if file has pagination query patterns
+            if grep -qEi "cursor|offset.*limit|page.*per_page|after_id|before_id" "$f" 2>/dev/null; then
+                # Check if it also has pagination response metadata
+                if ! grep -qEi "has_more|next_cursor|prev_cursor|total_pages|total_count|page_info" "$f" 2>/dev/null; then
+                    echo "$f: pagination patterns found but no response metadata (has_more, next_cursor, etc.)"
+                fi
+            fi
+        done
+    ' _ "${FILES[@]}"
 
 # M5: Location header on 201 Created
 warn "M5: Location header on 201 responses" \
@@ -150,8 +216,14 @@ warn "S1: Use HTTPS (no plain HTTP URLs)" \
     bash -c 'grep -Ein "http://[a-zA-Z]" "$@" | grep -v "localhost\|127\.0\.0\.1"' _ "${FILES[@]}"
 
 # S2: ISO 8601 date handling
-warn "S2: Use ISO 8601 dates (toISOString pattern present)" \
-    bash -c 'grep -l "toISOString\|ISO.*8601\|datetime\|DateTimeFormatter" "$@" >/dev/null || echo "No ISO 8601 date handling detected"' _ "${FILES[@]}"
+# Only applies to actual API endpoint files
+if [[ ${#API_ENDPOINT_FILES[@]} -gt 0 ]]; then
+    warn "S2: Use ISO 8601 dates (toISOString pattern present)" \
+        bash -c 'grep -l "toISOString\|ISO.*8601\|datetime\|DateTimeFormatter" "$@" >/dev/null || echo "No ISO 8601 date handling detected"' _ "${API_ENDPOINT_FILES[@]}"
+else
+    green "✅ S2: Use ISO 8601 dates (skipped - no API endpoint files)"
+    ((PASS++)) || true
+fi
 
 # S3: Consistent casing (detect mixed snake_case and camelCase in same file)
 warn "S3: Consistent field naming (no mixed casing)" \
@@ -164,8 +236,14 @@ warn "S3: Consistent field naming (no mixed casing)" \
     ' _ "${FILES[@]}"
 
 # S4: CORS headers for browser clients
-warn "S4: CORS headers present (for browser clients)" \
-    bash -c 'grep -qEi "access-control-allow|cors\(|cors\.enable" "$@" || echo "No CORS handling detected"' _ "${FILES[@]}"
+# Only applies to actual API endpoint files
+if [[ ${#API_ENDPOINT_FILES[@]} -gt 0 ]]; then
+    warn "S4: CORS headers present (for browser clients)" \
+        bash -c 'grep -qEi "access-control-allow|cors\(|cors\.enable" "$@" || echo "No CORS handling detected"' _ "${API_ENDPOINT_FILES[@]}"
+else
+    green "✅ S4: CORS headers present (skipped - no API endpoint files)"
+    ((PASS++)) || true
+fi
 
 # S5: 202 Accepted for long-running operations
 warn "S5: Consider 202 Accepted for async operations" \
@@ -186,20 +264,33 @@ warn "S5: Consider 202 Accepted for async operations" \
     ' _ "${FILES[@]}"
 
 # S6: Idempotency keys for POST operations
-warn "S6: Idempotency keys for non-idempotent operations" \
-    bash -c 'grep -qEi "idempotency|idempotent" "$@" || echo "No idempotency handling detected"' _ "${FILES[@]}"
+# Only applies to actual API endpoint files
+if [[ ${#API_ENDPOINT_FILES[@]} -gt 0 ]]; then
+    warn "S6: Idempotency keys for non-idempotent operations" \
+        bash -c 'grep -qEi "idempotency|idempotent" "$@" || echo "No idempotency handling detected"' _ "${API_ENDPOINT_FILES[@]}"
+else
+    green "✅ S6: Idempotency keys (skipped - no API endpoint files)"
+    ((PASS++)) || true
+fi
 
 # S7: OpenAPI/Swagger spec exists
-warn "S7: OpenAPI specification present" \
-    bash -c '
-        if ! ls openapi.yaml openapi.json swagger.yaml swagger.json api-spec.yaml api-spec.json docs/openapi.* docs/swagger.* 2>/dev/null | head -1 | grep -q .; then
-            echo "No OpenAPI/Swagger spec found (openapi.yaml, swagger.json, etc.)"
-        fi
-    '
+# Only applies if there are actual API endpoint files
+if [[ ${#API_ENDPOINT_FILES[@]} -gt 0 ]]; then
+    warn "S7: OpenAPI specification present" \
+        bash -c '
+            if ! ls openapi.yaml openapi.json swagger.yaml swagger.json api-spec.yaml api-spec.json docs/openapi.* docs/swagger.* 2>/dev/null | head -1 | grep -q .; then
+                echo "No OpenAPI/Swagger spec found (openapi.yaml, swagger.json, etc.)"
+            fi
+        '
+else
+    green "✅ S7: OpenAPI specification (skipped - no API endpoint files)"
+    ((PASS++)) || true
+fi
 
 # S8: Hardcoded URLs (should use config/env)
+# Excludes comments (lines starting with // # /* *) and common safe domains
 warn "S8: No hardcoded API URLs (use config)" \
-    bash -c 'grep -Ein "https?://[a-zA-Z0-9][a-zA-Z0-9.-]+\.(com|io|net|org|dev|app)" "$@" | grep -v "localhost\|127\.0\.0\.1\|example\.com"' _ "${FILES[@]}"
+    bash -c 'grep -EHn "https?://[a-zA-Z0-9][a-zA-Z0-9.-]+\.(com|io|net|org|dev|app)" "$@" | grep -v "localhost\|127\.0\.0\.1\|example\.com" | grep -Ev ":[0-9]+:\s*(//|#|/\*|\*)"' _ "${FILES[@]}"
 
 # S9: CORS wildcard with credentials (security risk)
 check "S9: No CORS wildcard (*) with credentials" \
@@ -231,7 +322,7 @@ printf 'ℹ️  Files with auth handling: %s\n' "$HAS_AUTH"
 HAS_VALIDATION=$( (grep -l "validate\|schema\|joi\|yup\|zod\|class-validator" "${FILES[@]}" 2>/dev/null || true) | wc -l | tr -d ' ')
 printf 'ℹ️  Files with validation: %s\n' "$HAS_VALIDATION"
 
-HAS_REQUEST_ID=$( (grep -l "request.?id\|trace.?id\|correlation.?id\|x-request-id" "${FILES[@]}" 2>/dev/null || true) | wc -l | tr -d ' ')
+HAS_REQUEST_ID=$( (grep -li "request.?id\|trace.?id\|correlation.?id\|x-request-id" "${FILES[@]}" 2>/dev/null || true) | wc -l | tr -d ' ')
 printf 'ℹ️  Files with request ID handling: %s\n' "$HAS_REQUEST_ID"
 
 printf '\n%s\n' "═══════════════════════════════════════════"
