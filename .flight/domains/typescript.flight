@@ -1,0 +1,611 @@
+# typescript.flight - TypeScript type safety and compiler cooperation
+# Source: Migrated from typescript.md and typescript.validate.sh
+
+domain: typescript
+version: 1.0.0
+description: >
+  Type-safe TypeScript patterns that catch errors at compile time.
+  Don't lie to the compiler. Use unknown for external data, validate
+  before asserting, and let the type system work for you.
+
+file_patterns:
+  - "**/*.ts"
+  - "**/*.tsx"
+
+exclude_patterns:
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/.git/**"
+  - "**/*.d.ts"
+
+suppression:
+  comment: "flight:ok"
+  guidance: |
+    Add `// flight:ok` comment on the same line to suppress.
+    Use sparingly. Document why the suppression is acceptable.
+
+# ===========================================================================
+# RULES
+# ===========================================================================
+# TypeScript-SPECIFIC rules. Universal code hygiene rules (console.log,
+# boolean comparisons, generic names) are in code-hygiene.flight.
+#
+# ID format: {severity_prefix}{number}
+#   N = NEVER (check - fails build)
+#   M = MUST (check - currently implemented as warn)
+#   S = SHOULD (warn - advisory)
+#   G = GUIDANCE (not checked)
+# ===========================================================================
+
+rules:
+
+  # =========================================================================
+  # NEVER - Type safety violations (validator will reject)
+  # =========================================================================
+
+  N1:
+    title: Unjustified any
+    severity: NEVER
+    mechanical: true
+    description: >
+      Every `any` needs a comment explaining why it's necessary.
+      Prefer `unknown` with type guards for external data.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          awk '
+          /: any/ || /as any/ || /<any>/ {
+            # Check if previous line has justification
+            if (prev !~ /TODO|FIXME|any.*because|legacy|migration|third.party|lib types/) {
+              # Check if current line has justification in a comment
+              if ($0 !~ /\/\/.*any|\/\*.*any|\/\/.*TODO|\/\/.*FIXME|\/\/.*legacy|\/\/.*migration|\/\/.*third.party|\/\/.*lib types|flight:ok/) {
+                print FILENAME":"NR": "$0
+              }
+            }
+          }
+          { prev = $0 }
+          ' "$f"
+        done
+    note: |
+      `any` disables type checking. If you must use it, document why.
+      Common justifications: legacy code migration, third-party lib types incorrect,
+      TODO for later typing. Prefer `unknown` with validation for external data.
+    examples:
+      bad:
+        - "const response: any = await fetch(url);"
+        - "function parse(input: any) { ... }"
+      good:
+        - "const legacyData: any /* TODO: type after v2 migration */ = oldApi.getData();"
+        - "const response: unknown = await fetch(url).then(r => r.json());"
+
+  N2:
+    title: "@ts-ignore Without Explanation"
+    severity: NEVER
+    mechanical: true
+    description: >
+      @ts-ignore suppresses all type errors. If you must use it,
+      explain why and reference an issue number if possible.
+    check:
+      type: grep
+      pattern: '@ts-ignore\s*$'
+      flags: -En
+    note: |
+      Bare @ts-ignore hides real bugs. If you need to suppress an error,
+      use @ts-expect-error (fails if error goes away) with explanation.
+    examples:
+      bad:
+        - |
+          // @ts-ignore
+          doSomething(problematicValue);
+      good:
+        - |
+          // @ts-ignore - lib types incorrect, fixed in v3.0 (issue #1234)
+          doSomething(problematicValue);
+        - |
+          // @ts-expect-error - intentionally testing error case
+          expectError(invalidInput);
+
+  N3:
+    title: Chained Non-null Assertions
+    severity: NEVER
+    mechanical: true
+    description: >
+      Multiple `!` assertions in one expression (x!.y!.z!) hide real bugs.
+      Handle null cases explicitly or use optional chaining with fallbacks.
+    check:
+      type: grep
+      pattern: '\w+!\.\w+!\.'
+      flags: -En
+    note: |
+      Each `!` is a promise to the compiler that the value is not null.
+      Chained assertions multiply the risk. One null anywhere crashes.
+    examples:
+      bad:
+        - "const name = user!.profile!.name!;"
+        - "const element = document.getElementById('root')!;"
+      good:
+        - "const name = user?.profile?.name ?? 'Anonymous';"
+        - |
+          const element = document.getElementById('root');
+          if (!element) throw new Error('Root element not found');
+
+  N4:
+    title: Type Assertion on Unvalidated Data
+    severity: NEVER
+    mechanical: true
+    description: >
+      Don't use `as Type` on JSON.parse or fetch responses.
+      External data is unknown until validated.
+    check:
+      type: grep
+      pattern: 'JSON\.parse\([^)]+\)\s+as\s+|\.json\(\)\s+as\s+'
+      flags: -En
+    note: |
+      Type assertions tell the compiler "trust me". But JSON.parse and
+      fetch return unknown data. Validate before asserting.
+    examples:
+      bad:
+        - "const user = data as User;"
+        - "const config = JSON.parse(str) as Config;"
+        - "const data = await response.json() as User;"
+      good:
+        - "const user = validateUser(data);  // throws or returns User"
+        - "const config = parseConfig(str);  // returns Config | null"
+        - |
+          const data: unknown = await response.json();
+          if (isUser(data)) { /* data is User */ }
+
+  N5:
+    title: Loose Object Types
+    severity: NEVER
+    mechanical: true
+    description: >
+      Don't use `: object` or `: {}` as parameter types.
+      They accept anything and provide no type safety.
+    check:
+      type: grep
+      pattern: ':\s*object\s*[;,)=\{]|:\s*\{\s*\}\s*[;,)=]'
+      flags: -En
+    note: |
+      `object` and `{}` are almost useless types. They accept any non-primitive
+      but provide no property access. Use specific interfaces.
+    examples:
+      bad:
+        - "function process(data: object) { ... }"
+        - "function handle(options: {}) { ... }"
+        - "const cache: Record<string, any> = {};"
+      good:
+        - "function process(data: UserRecord) { ... }"
+        - "function handle(options: HandlerOptions) { ... }"
+        - "const cache: Map<UserId, UserData> = new Map();"
+
+  N6:
+    title: String Type for Status/Type/Kind Fields
+    severity: NEVER
+    mechanical: true
+    description: >
+      Don't use `string` for fields named status, type, kind, state, or mode.
+      Use union types to catch typos at compile time.
+    check:
+      type: grep
+      pattern: '(status|type|kind|state|mode):\s*string\s*[;,)]'
+      flags: -En
+    note: |
+      String-typed status fields don't catch typos. 'actve' compiles fine.
+      Union types ('active' | 'inactive') catch mistakes at compile time.
+    examples:
+      bad:
+        - "function setStatus(status: string) { ... }"
+        - "interface User { status: string; }"
+      good:
+        - |
+          type Status = 'active' | 'inactive' | 'pending';
+          function setStatus(status: Status) { ... }
+        - "interface User { status: 'active' | 'inactive'; }"
+
+  N7:
+    title: Exported Functions Must Have Return Type
+    severity: NEVER
+    mechanical: true
+    description: >
+      Exported functions must have explicit return types.
+      Inferred types can change unexpectedly and break consumers.
+    check:
+      type: script
+      code: |
+        grep -En '^export (async )?function \w+\([^)]*\)\s*\{' "$@" | grep -v '):'
+    note: |
+      Inferred return types are a leaky abstraction. If the implementation
+      changes, the type changes. Explicit types catch accidental changes.
+    examples:
+      bad:
+        - |
+          export function calculateTotal(items) {
+            return items.reduce((sum, item) => sum + item.price, 0);
+          }
+      good:
+        - |
+          export function calculateTotal(items: LineItem[]): number {
+            return items.reduce((sum, item) => sum + item.price, 0);
+          }
+
+  N8:
+    title: Implicit Any in Callbacks (JSON.parse, as any)
+    severity: NEVER
+    mechanical: true
+    description: >
+      Don't iterate over JSON.parse() or `as any` results without typing.
+      The callback parameters will be implicit any.
+    check:
+      type: script
+      code: |
+        grep -En 'JSON\.parse\([^)]*\)\.(map|filter|reduce|forEach|find|some|every)\(' "$@" | grep -v 'flight:ok'
+        grep -En 'as any\)\.(map|filter|reduce|forEach|find|some|every)\(' "$@" | grep -v 'flight:ok'
+    note: |
+      JSON.parse returns `any`. Calling .map() on it gives implicit any in the callback.
+      Validate or type the parsed result first.
+      Note: Typed arrays (e.g., User[].map(u =>)) are fine - TypeScript infers the type.
+    examples:
+      bad:
+        - "JSON.parse(data).map(item => item.name)"
+        - "(data as any).filter(x => x.active)"
+      good:
+        - |
+          const users: User[] = validateUsers(JSON.parse(data));
+          users.map(user => user.name);
+        - |
+          const items = JSON.parse(data) as Item[];  // with validation elsewhere
+          items.map((item: Item) => item.name);
+
+  # =========================================================================
+  # MUST - Important patterns (validator warns)
+  # =========================================================================
+
+  M1:
+    title: tsconfig strict Mode
+    severity: MUST
+    mechanical: true
+    description: >
+      Enable `strict: true` in tsconfig.json or tsconfig.app.json.
+      This enables all strict type-checking options.
+    check:
+      type: script
+      code: |
+        STRICT_FOUND=false
+        if [ -f tsconfig.json ]; then
+          if grep -qE '"strict"[[:space:]]*:[[:space:]]*true' tsconfig.json 2>/dev/null; then
+            STRICT_FOUND=true
+          fi
+        fi
+        if [ -f tsconfig.app.json ]; then
+          if grep -qE '"strict"[[:space:]]*:[[:space:]]*true' tsconfig.app.json 2>/dev/null; then
+            STRICT_FOUND=true
+          fi
+        fi
+        if [ "$STRICT_FOUND" = false ]; then
+          if [ -f tsconfig.json ] || [ -f tsconfig.app.json ]; then
+            echo 'No tsconfig file has strict: true enabled'
+          fi
+        fi
+    note: |
+      strict: true enables noImplicitAny, strictNullChecks, and other
+      important checks. It's the baseline for type safety.
+    examples:
+      good:
+        - |
+          {
+            "compilerOptions": {
+              "strict": true
+            }
+          }
+
+  M2:
+    title: Type Guards for unknown
+    severity: MUST
+    mechanical: true
+    description: >
+      Files using `unknown` type should have type guards nearby
+      to narrow the type safely.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -q ': unknown' "$f"; then
+            if ! grep -q 'is [A-Z]' "$f"; then
+              echo "$f: uses 'unknown' but no type guard found"
+            fi
+          fi
+        done
+    note: |
+      unknown is the type-safe any. But you can't use it until you narrow it.
+      Type guards (function isX(val): val is X) are the safe way to narrow.
+    examples:
+      good:
+        - |
+          function isUser(value: unknown): value is User {
+            return (
+              typeof value === 'object' &&
+              value !== null &&
+              'id' in value &&
+              typeof (value as User).id === 'string'
+            );
+          }
+
+  M3:
+    title: Interface for Object Shapes
+    severity: MUST
+    mechanical: true
+    description: >
+      Prefer `interface` for object shapes. Use `type` for unions,
+      intersections, and computed types.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          grep -Hn 'type [A-Z][a-zA-Z]* = {' "$f" 2>/dev/null | head -3
+        done
+    note: |
+      Interfaces are extendable and produce better error messages.
+      Use type for unions (A | B), intersections (A & B), and mapped types.
+    examples:
+      bad:
+        - |
+          type User = {
+            id: string;
+            name: string;
+          };
+      good:
+        - |
+          interface User {
+            id: string;
+            name: string;
+          }
+
+          // type is correct for unions
+          type Status = 'active' | 'inactive';
+          type UserWithStatus = User & { status: Status };
+
+  M4:
+    title: Readonly for Array Parameters
+    severity: MUST
+    mechanical: true
+    description: >
+      Function parameters that receive arrays but don't mutate them
+      should use `readonly` to prevent accidental mutation.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          grep -En 'function.*\([^)]*:\s*[A-Za-z]+\[\]' "$f" 2>/dev/null | grep -v 'readonly' | head -3
+        done
+    note: |
+      Arrays passed to functions can be accidentally mutated. readonly
+      prevents push, pop, splice, and assignment. Use it for input arrays.
+    examples:
+      bad:
+        - "function processItems(items: Item[]) { ... }"
+      good:
+        - "function processItems(items: readonly Item[]) { ... }"
+
+  # =========================================================================
+  # SHOULD - Best practices (not mechanically checked)
+  # =========================================================================
+
+  S1:
+    title: Use unknown for External Data
+    severity: SHOULD
+    mechanical: false
+    description: >
+      Use `unknown` for data from external sources (API responses, user input,
+      JSON parsing). Validate before using.
+    note: |
+      External data is never safe to trust. unknown forces you to validate
+      before accessing properties. any lets bugs slip through.
+    examples:
+      good:
+        - |
+          async function fetchUser(id: string): Promise<unknown> {
+            const response = await fetch(`/api/users/${id}`);
+            return response.json();
+          }
+
+          const data = await fetchUser('123');
+          if (isUser(data)) {
+            // data is now typed as User
+          }
+
+  S2:
+    title: Discriminated Unions for Variants
+    severity: SHOULD
+    mechanical: false
+    description: >
+      Use discriminated unions instead of optional properties for
+      mutually exclusive states.
+    note: |
+      Optional properties allow invalid states (both data AND error present).
+      Discriminated unions make invalid states unrepresentable.
+    examples:
+      bad:
+        - |
+          interface ApiResponse {
+            success: boolean;
+            data?: User;
+            error?: string;
+          }
+      good:
+        - |
+          type ApiResponse =
+            | { success: true; data: User }
+            | { success: false; error: string };
+
+  S3:
+    title: Generic Constraints Over any
+    severity: SHOULD
+    mechanical: false
+    description: >
+      Use generics with constraints instead of `any[]` or `any` parameters.
+      Generics preserve type information through the function.
+    examples:
+      bad:
+        - |
+          function first(arr: any[]): any {
+            return arr[0];
+          }
+      good:
+        - |
+          function first<T>(arr: T[]): T | undefined {
+            return arr[0];
+          }
+
+  S4:
+    title: Exhaustive Switch with assertNever
+    severity: SHOULD
+    mechanical: false
+    description: >
+      Use assertNever in switch default cases to catch missing cases
+      at compile time when union types are extended.
+    examples:
+      good:
+        - |
+          function assertNever(value: never): never {
+            throw new Error(`Unexpected value: ${value}`);
+          }
+
+          function handleStatus(status: Status): string {
+            switch (status) {
+              case 'pending': return 'Waiting';
+              case 'approved': return 'Approved';
+              case 'rejected': return 'Rejected';
+              default: return assertNever(status);
+            }
+          }
+
+  # =========================================================================
+  # GUIDANCE - Design principles (not mechanically checked)
+  # =========================================================================
+
+  G1:
+    title: tsconfig.json Essentials
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Recommended TypeScript compiler options for type safety.
+    note: |
+      {
+        "compilerOptions": {
+          "strict": true,
+          "noImplicitAny": true,
+          "strictNullChecks": true,
+          "noImplicitReturns": true,
+          "noFallthroughCasesInSwitch": true,
+          "noUncheckedIndexedAccess": true,
+          "exactOptionalPropertyTypes": true
+        }
+      }
+
+  G2:
+    title: Branded Types for IDs
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Use branded types to prevent mixing different ID types.
+    note: |
+      type Brand<T, B> = T & { __brand: B };
+      type UserId = Brand<string, 'UserId'>;
+      type OrderId = Brand<string, 'OrderId'>;
+
+      // Now getUser(orderId) is a compile error
+
+  G3:
+    title: Utility Types Reference
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Use built-in utility types instead of manual definitions.
+    note: |
+      Partial<T>    - All properties optional
+      Required<T>   - All properties required
+      Readonly<T>   - All properties readonly
+      Pick<T, K>    - Subset of properties
+      Omit<T, K>    - Exclude properties
+      Record<K, V>  - Object with key type K and value type V
+      ReturnType<F> - Return type of function F
+      Parameters<F> - Parameter types of function F
+
+# ===========================================================================
+# INFO CHECKS - Statistics for reporting (not pass/fail)
+# ===========================================================================
+
+info:
+  types_defined:
+    pattern: '^(export )?(type|interface) '
+    flags: -cE
+    label: "Types/Interfaces defined"
+
+  any_usage:
+    pattern: ': any|as any|<any>'
+    flags: -oE
+    label: "'any' usage count"
+
+  unknown_usage:
+    pattern: ': unknown'
+    flags: -oE
+    label: "'unknown' usage count"
+
+  type_guards:
+    pattern: 'is [A-Z][a-zA-Z]+'
+    flags: -cE
+    label: "Type guards"
+
+# ===========================================================================
+# ANTI-PATTERNS - Quick reference table (documentation only)
+# ===========================================================================
+
+anti_patterns:
+  - pattern: "data: any"
+    description: "No type safety"
+    fix: "data: unknown + type guard"
+
+  - pattern: "obj as Type"
+    description: "Lies to compiler"
+    fix: "Validate first, then use"
+
+  - pattern: "value!"
+    description: "Hides null bugs"
+    fix: "Handle null case explicitly"
+
+  - pattern: "@ts-ignore"
+    description: "Hides real errors"
+    fix: "Fix issue or add explanation"
+
+  - pattern: ": object or : {}"
+    description: "Too loose, no safety"
+    fix: "Use specific interface"
+
+  - pattern: "status: string"
+    description: "Typos not caught"
+    fix: "Union type or enum"
+
+  - pattern: "export function f() {"
+    description: "Inferred return type"
+    fix: "Add explicit : ReturnType"
+
+  - pattern: "JSON.parse().map(x =>"
+    description: "Implicit any in callback"
+    fix: "Type the parsed result first"
+
+# ===========================================================================
+# SOURCES
+# ===========================================================================
+
+sources:
+  - title: "TypeScript Handbook"
+    url: "https://www.typescriptlang.org/docs/handbook/"
+
+  - title: "TypeScript Deep Dive"
+    url: "https://basarat.gitbook.io/typescript/"
+
+  - title: "Effective TypeScript by Dan Vanderkam"
+    url: "https://effectivetypescript.com/"
