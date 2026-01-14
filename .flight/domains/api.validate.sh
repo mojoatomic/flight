@@ -101,20 +101,26 @@ printf '%s\n' "## NEVER Rules"
 
 # N1: Verbs in URI paths (create, delete, get, update, etc.)
 # Catches: POST /createUser, GET /getUsers, router.get('/deleteItem')
+# Requires verb + uppercase (camelCase) or verb + separator (snake/kebab)
+# Excludes legitimate words like /updated, /getaway, /creator
+# Respects flight:ok justification comments
+# Note: Must NOT use -i flag as it makes [A-Z] match lowercase
 check "N1: No verbs in URI paths" \
-    grep -Ein "['\"]/(create|delete|remove|update|get|fetch|add|edit|modify)[A-Za-z]" "${FILES[@]}"
+    bash -c 'grep -En "['\''\"]/?(create|delete|remove|update|get|fetch|add|edit|modify)([A-Z]|[_-][a-z])" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
 
 # N2: 200 OK with error body patterns
+# Matches error as a property name (error:, "error":, 'error':), not in variable names
 check "N2: No 200 status with error responses" \
-    grep -Ein "res\.(status\(200\)|json).*error|\.ok\(.*error|status.*200.*success.*false" "${FILES[@]}"
+    grep -Ein "status\(200\).*['\"]?error['\"]?\s*:|\.ok\(.*['\"]?error['\"]?\s*:|status.*200.*success.*false" "${FILES[@]}"
 
 # N3: Exposed auto-increment IDs in pagination
 warn "N3: Potential exposed IDs in pagination (use opaque cursors)" \
     grep -Ein "after_id|before_id|since_id|last_id|start_id" "${FILES[@]}"
 
 # N4: Sensitive data in query params (patterns suggesting auth in URL)
+# Catches dot notation, bracket notation, and destructuring patterns
 check "N4: No sensitive data in query strings" \
-    grep -Ein "req\.(query|params)\.(password|secret|api_key|token|auth)" "${FILES[@]}"
+    grep -Ein "req\.(query|params)(\.(password|secret|api_key|token|auth)|\[['\"]?(password|secret|api_key|token|auth))|(\{[^}]*(password|secret|api_key|token|auth)[^}]*\})\s*=\s*req\.(query|params)" "${FILES[@]}"
 
 # N5: Offset pagination with high limits
 warn "N5: Potential offset pagination (prefer cursor for large datasets)" \
@@ -257,8 +263,9 @@ else
 fi
 
 # S8: Hardcoded URLs (should use config/env)
+# Excludes comments (lines starting with // # /* *) and common safe domains
 warn "S8: No hardcoded API URLs (use config)" \
-    bash -c 'grep -Ein "https?://[a-zA-Z0-9][a-zA-Z0-9.-]+\.(com|io|net|org|dev|app)" "$@" | grep -v "localhost\|127\.0\.0\.1\|example\.com"' _ "${FILES[@]}"
+    bash -c 'grep -EHn "https?://[a-zA-Z0-9][a-zA-Z0-9.-]+\.(com|io|net|org|dev|app)" "$@" | grep -v "localhost\|127\.0\.0\.1\|example\.com" | grep -Ev ":[0-9]+:\s*(//|#|/\*|\*)"' _ "${FILES[@]}"
 
 # S9: CORS wildcard with credentials (security risk)
 check "S9: No CORS wildcard (*) with credentials" \
@@ -290,7 +297,7 @@ printf 'ℹ️  Files with auth handling: %s\n' "$HAS_AUTH"
 HAS_VALIDATION=$( (grep -l "validate\|schema\|joi\|yup\|zod\|class-validator" "${FILES[@]}" 2>/dev/null || true) | wc -l | tr -d ' ')
 printf 'ℹ️  Files with validation: %s\n' "$HAS_VALIDATION"
 
-HAS_REQUEST_ID=$( (grep -l "request.?id\|trace.?id\|correlation.?id\|x-request-id" "${FILES[@]}" 2>/dev/null || true) | wc -l | tr -d ' ')
+HAS_REQUEST_ID=$( (grep -li "request.?id\|trace.?id\|correlation.?id\|x-request-id" "${FILES[@]}" 2>/dev/null || true) | wc -l | tr -d ' ')
 printf 'ℹ️  Files with request ID handling: %s\n' "$HAS_REQUEST_ID"
 
 printf '\n%s\n' "═══════════════════════════════════════════"
