@@ -66,10 +66,8 @@ elif [[ "$FLIGHT_HAS_EXCLUSIONS" == true ]]; then
     # Use exclusions-aware file discovery
     mapfile -t FILES < <(flight_get_files "*.c" "*.h")
 else
-    # Fallback: glob expansion without exclusions
-    shopt -s nullglob globstar
-    FILES=($DEFAULT_PATTERNS)
-    shopt -u nullglob globstar
+    # Fallback: use find (works on bash 3.2+, no globstar needed)
+    mapfile -t FILES < <(find . -type f \( -name "*.c" -o -name "*.h" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" 2>/dev/null | sort)
 fi
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
