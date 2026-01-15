@@ -1,0 +1,358 @@
+# javascript.flight - JavaScript Hygiene Domain
+# Source: Migrated from javascript.md and javascript.validate.sh
+
+domain: javascript
+version: 1.0.0
+description: >
+  Code quality patterns that prevent common mistakes in JavaScript/Node.js projects.
+  JavaScript-specific patterns while code-hygiene covers universal patterns.
+
+file_patterns:
+  - "**/*.js"
+  - "**/*.mjs"
+  - "**/*.cjs"
+
+exclude_patterns:
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/.next/**"
+  - "**/.git/**"
+
+suppression:
+  comment: "flight:ok"
+  guidance: |
+    Add `// flight:ok` comment on the same line to suppress.
+    Use sparingly. Document why the suppression is acceptable.
+
+# ===========================================================================
+# RULES
+# ===========================================================================
+# JavaScript-SPECIFIC rules. Universal code hygiene rules are in code-hygiene.flight.
+#
+# ID format: {severity_prefix}{number}
+#   N = NEVER (check - fails build)
+#   S = SHOULD (warn - advisory)
+#   G = GUIDANCE (not checked)
+# ===========================================================================
+
+rules:
+
+  # =========================================================================
+  # NEVER - JavaScript anti-patterns (validator will reject)
+  # =========================================================================
+
+  N1:
+    title: Generic Variable Names
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use generic names like data, result, temp, info, item, value, obj, thing,
+      stuff, foo, bar, baz, tmp, ret, val. Use domain-specific names instead.
+    check:
+      type: grep
+      pattern: '\b(const|let|var)\s+(data|result|temp|info|item|value|obj|thing|stuff|tmp|ret|val)\s*='
+      flags: -En
+    note: |
+      Generic names provide no context about what the variable holds. Domain-specific
+      names make code self-documenting and easier to understand.
+    examples:
+      bad:
+        - "const data = fetchUser();"
+        - "const result = processOrder();"
+        - "const temp = calculateTotal();"
+      good:
+        - "const user = fetchUser();"
+        - "const processedOrder = processOrder();"
+        - "const invoiceTotal = calculateTotal();"
+
+  N2:
+    title: Redundant Conditional Returns
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never write 'if (condition) return true; else return false' or equivalent.
+      Return the condition directly.
+    check:
+      type: grep
+      pattern: 'return true;?\s*(else|})?\s*return false|return false;?\s*(else|})?\s*return true'
+      flags: -En
+    note: |
+      Redundant conditionals add unnecessary code. The condition itself is already
+      a boolean expression that can be returned directly.
+    examples:
+      bad:
+        - "if (condition) return true; else return false;"
+        - "if (condition) { return true; } return false;"
+      good:
+        - "return condition;"
+
+  N3:
+    title: Ternary Returning Boolean Literals
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never write 'condition ? true : false'. The condition is already boolean.
+    check:
+      type: grep
+      pattern: '\?\s*true\s*:\s*false|\?\s*false\s*:\s*true'
+      flags: -En
+    note: |
+      A ternary that returns true/false is redundant. Use ternaries for non-boolean
+      value selection, not boolean coercion.
+    examples:
+      bad:
+        - "return isValid ? true : false;"
+        - "const result = hasPermission ? true : false;"
+      good:
+        - "return isValid;"
+        - "const result = hasPermission;"
+        - "const status = isActive ? 'active' : 'inactive';  // OK: non-boolean"
+
+  N4:
+    title: Redundant Boolean Comparisons
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never write '=== true', '=== false', '!== true', or '!== false'.
+      Use the boolean directly.
+    check:
+      type: grep
+      pattern: '===\s*true|===\s*false|!==\s*true|!==\s*false'
+      flags: -En
+    note: |
+      Comparing to boolean literals is redundant. Use the variable directly
+      or with ! for negation.
+    examples:
+      bad:
+        - "if (x === true) { ... }"
+        - "if (y === false) { ... }"
+        - "if (z !== true) { ... }"
+      good:
+        - "if (x) { ... }"
+        - "if (!y) { ... }"
+        - "if (!z) { ... }"
+
+  N5:
+    title: Magic Number Calculations
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never compute at runtime what can be a constant. Pre-calculate time values
+      and other derived constants.
+    check:
+      type: grep
+      pattern: '[0-9]+\s*\*\s*[0-9]+\s*\*\s*[0-9]+'
+      flags: -En
+    note: |
+      Runtime calculations like 60 * 60 * 1000 are harder to read than named constants.
+      Pre-calculate and use descriptive constant names like MS_PER_HOUR = 3600000.
+    examples:
+      bad:
+        - "const timeout = 60 * 60 * 1000;"
+        - "const days = 24 * 60 * 60;"
+        - "const interval = 7 * 24 * 60 * 60 * 1000;"
+      good:
+        - "const MS_PER_HOUR = 3600000;"
+        - "const SECONDS_PER_DAY = 86400;"
+        - "const MS_PER_WEEK = 604800000;"
+
+  N6:
+    title: Generic Function Names
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use generic verbs like handle, process, do, run, execute, manage
+      combined with generic nouns without specific context.
+    check:
+      type: grep
+      pattern: 'function\s+(handle|process|do|run|execute|manage)(Data|Item|Value|Info|Result|Object)\s*\('
+      flags: -En
+    note: |
+      Function names should describe what they do specifically. 'handleData' tells
+      nothing about what handling occurs. 'validateUserInput' is clear.
+    examples:
+      bad:
+        - "function handleData(data) { ... }"
+        - "function processItem(item) { ... }"
+        - "function doValue(value) { ... }"
+      good:
+        - "function validateUserInput(input) { ... }"
+        - "function transformOrderToInvoice(order) { ... }"
+        - "function calculateShippingCost(order) { ... }"
+
+  N7:
+    title: Single-Letter Variables
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use single-letter variables except i, j, k as loop counters.
+    check:
+      type: grep
+      pattern: '\b(const|let|var)\s+[a-hln-z]\s*='
+      flags: -En
+    note: |
+      Single-letter variables provide no context. Even short loops benefit from
+      descriptive names like 'index' or 'user'.
+    examples:
+      bad:
+        - "const x = getUser();"
+        - "const n = calculateTotal();"
+        - "let a = [];"
+      good:
+        - "const user = getUser();"
+        - "const total = calculateTotal();"
+        - "let items = [];"
+        - "for (let i = 0; i < items.length; i++) { ... }  // OK: loop counter"
+
+  N8:
+    title: console.log in Source Files
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never leave console.log statements in production source files.
+      Test files are excluded from this rule.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if [[ "$f" != *test* ]] && [[ "$f" != *spec* ]]; then
+            grep -n 'console\.log' "$f" 2>/dev/null
+          fi
+        done
+    note: |
+      console.log is for debugging. Production code should use proper logging
+      infrastructure. Test files may use console.log for debugging.
+    examples:
+      bad:
+        - "// src/user.js"
+        - "console.log('user:', user);"
+        - "console.log('debug: processing order');"
+      good:
+        - "// Use proper logging"
+        - "logger.debug('Processing order', { orderId });"
+
+  # =========================================================================
+  # GUIDANCE - Best practices (not mechanically checked)
+  # =========================================================================
+
+  G1:
+    title: Domain-Specific Names
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Use vocabulary from the problem domain. Names should reflect business
+      concepts, not implementation details.
+    guidance: |
+      // Domain-specific naming
+      const customerOrder = fetchOrder(orderId);
+      const invoiceTotal = calculateInvoiceTotal(lineItems);
+      const isPaymentComplete = payment.status === 'complete';
+
+      // Avoid generic names even when 'technically correct'
+      // BAD: const obj = fetchOrder(orderId);
+      // GOOD: const customerOrder = fetchOrder(orderId);
+
+  G2:
+    title: Boolean Prefixes
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Use is, has, can, should, will prefixes for boolean variables.
+    guidance: |
+      const isActive = user.status === 'active';
+      const hasPermission = user.roles.includes('admin');
+      const canEdit = hasPermission && !document.isLocked;
+      const shouldRetry = attempts < MAX_RETRIES;
+      const willExpire = expiryDate < Date.now();
+
+  G3:
+    title: Async Function Naming
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Consider Async suffix or verb prefixes for async functions to make
+      async nature clear at call sites.
+    guidance: |
+      // Option 1: Async suffix
+      async function fetchUserAsync(id) { ... }
+
+      // Option 2: Verb prefix that implies async
+      async function loadUserData(id) { ... }
+      async function fetchOrder(orderId) { ... }
+
+  G4:
+    title: Plural Collections
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Arrays and collections should use plural names.
+    guidance: |
+      const users = await fetchUsers();
+      const validOrders = orders.filter(isValidOrder);
+      const lineItems = order.items;
+
+      // BAD: const user = await fetchUsers();  // confusing!
+      // GOOD: const users = await fetchUsers();
+
+  G5:
+    title: Constants Uppercase
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Use UPPER_SNAKE_CASE for true constants (values that never change).
+    guidance: |
+      const MAX_RETRIES = 3;
+      const DEFAULT_TIMEOUT_MS = 5000;
+      const API_BASE_URL = 'https://api.example.com';
+
+      // Pre-calculated time constants
+      const MS_PER_SECOND = 1000;
+      const MS_PER_MINUTE = 60000;
+      const MS_PER_HOUR = 3600000;
+      const MS_PER_DAY = 86400000;
+
+  G6:
+    title: Descriptive Error Messages
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Error messages should state what went wrong and what was expected.
+    guidance: |
+      // BAD
+      throw new Error('Invalid input');
+      throw new Error('Failed');
+
+      // GOOD
+      throw new Error(`Expected orderId to be a string, got ${typeof orderId}`);
+      throw new Error(`User ${userId} not found in database`);
+      throw new Error(`Payment failed: ${response.errorCode} - ${response.message}`);
+
+info_metrics:
+  - name: "Boolean-prefixed variables"
+    pattern: '\b(is|has|can|should|will)[A-Z]'
+  - name: "UPPER_CASE constants"
+    pattern: 'const\s+[A-Z][A-Z_]+\s*='
+
+anti_patterns:
+  - pattern: "const data = ..."
+    problem: "Generic name"
+    fix: "Use domain term"
+  - pattern: "function handleX()"
+    problem: "Vague verb"
+    fix: "Describe action"
+  - pattern: "if (x) return true"
+    problem: "Redundant"
+    fix: "return x"
+  - pattern: "60 * 60 * 1000"
+    problem: "Magic calc"
+    fix: "Pre-computed constant"
+  - pattern: "x === true"
+    problem: "Redundant"
+    fix: "x"
+  - pattern: "items.map(i => ...)"
+    problem: "Generic 'i'"
+    fix: "items.map(item => ...)"
+  - pattern: "const temp = ..."
+    problem: "Temporary smell"
+    fix: "Name by purpose"
