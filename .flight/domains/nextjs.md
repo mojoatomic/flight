@@ -1,48 +1,70 @@
-# Domain: Next.js
+# Domain: Nextjs Design
 
-Next.js 14+ App Router patterns for server components, routing, and data fetching.
+Next.js 14+ App Router patterns for server components, routing, and data fetching. Enforces proper client/server boundaries, prevents secret exposure, and promotes parallel data fetching.
+
+
+**Validation:** `nextjs.validate.sh` enforces NEVER/MUST rules. SHOULD rules trigger warnings. GUIDANCE is not mechanically checked.
+
+### Suppressing Warnings
+
+
+
+```javascript
+// Legacy endpoint, scheduled for deprecation in v3
+router.get('/getUser/:id', handler)  // flight:ok
+```
 
 ---
 
 ## Invariants
 
-### NEVER
+### NEVER (validator will reject)
 
-1. **`use client` at Top of Server Component**
-   ```tsx
-   // BAD - makes entire tree client
+1. **'use client' in page.tsx Files** - Page components should be server components by default. Adding 'use client' at the page level kills SSR benefits for the entire page tree.
+
+   ```
+   // BAD
+   // page.tsx
    'use client';
-   export default function Page() { ... }
+   export default function Page() { ... }  // Entire tree is now client
    
-   // GOOD - only mark interactive parts
+
+   // GOOD
    // page.tsx (server by default)
    export default function Page() {
      return (
        <div>
          <StaticContent />
-         <InteractiveWidget /> {/* this file has 'use client' */}
+         <InteractiveWidget />  {/* Only this file has 'use client' */}
        </div>
      );
    }
+   
    ```
 
-2. **`useState`/`useEffect` in Server Components**
-   ```tsx
-   // BAD - hooks don't work server-side
+2. **React Hooks in Server Components** - useState, useEffect, and other React hooks cannot be used in server components. Files without 'use client' directive are server components.
+
+   ```
+   // BAD
+   // No 'use client' = server component
    export default function Page() {
-     const [count, setCount] = useState(0); // Error
+     const [count, setCount] = useState(0);  // Error!
    }
    
-   // GOOD - fetch data directly
+
+   // GOOD
+   // Server component with direct data fetching
    export default async function Page() {
      const data = await fetchData();
      return <Display data={data} />;
    }
+   
    ```
 
-3. **Fetch in `useEffect` for Initial Data**
-   ```tsx
-   // BAD - client fetch when server fetch works
+3. **useEffect Fetch for Initial Page Data** - Don't use useEffect to fetch initial page data. Server components can fetch data directly, avoiding the extra round trip.
+
+   ```
+   // BAD
    'use client';
    export default function Page() {
      const [data, setData] = useState(null);
@@ -51,280 +73,165 @@ Next.js 14+ App Router patterns for server components, routing, and data fetchin
      }, []);
    }
    
-   // GOOD - server component fetches
+
+   // GOOD
+   // Server component fetches directly
    export default async function Page() {
      const data = await fetch('https://api.example.com/data');
      return <Display data={data} />;
    }
-   ```
-
-4. **Secrets in Client Components**
-   ```tsx
-   // BAD - exposed to browser
-   'use client';
-   const API_KEY = process.env.API_KEY; // undefined or exposed
    
-   // GOOD - server only
-   // In server component or route handler
-   const API_KEY = process.env.API_KEY; // safe
    ```
 
-5. **Direct Database Calls in Client Components**
-   ```tsx
+4. **process.env in Client Components** - Non-NEXT_PUBLIC_ environment variables are not available in client components and would expose secrets if they were. Only NEXT_PUBLIC_ vars are safe client-side.
+
+   ```
    // BAD
    'use client';
-   import { db } from '@/lib/db';
-   const users = await db.user.findMany(); // Won't work
+   const API_KEY = process.env.API_KEY;  // undefined or exposed!
    
-   // GOOD - server action or route handler
-   // actions.ts
-   'use server';
-   export async function getUsers() {
-     return db.user.findMany();
-   }
+
+   // GOOD
+   // Server component or route handler
+   const API_KEY = process.env.API_KEY;  // Safe, server only
+   
+   // GOOD
+   'use client';
+   const PUBLIC_URL = process.env.NEXT_PUBLIC_API_URL;  // Safe
+   
    ```
 
-6. **Hardcoded Routes**
-   ```tsx
+5. **'any' Type in Route Handlers** - Route handlers should validate input, not use 'any'. External data from requests is unknown until validated.
+
+   ```
+   // BAD
+   export async function POST(req: Request) {
+     const body: any = await req.json();
+   }
+   
+
+   // GOOD
+   export async function POST(req: Request) {
+     const body: unknown = await req.json();
+     const validated = orderSchema.parse(body);
+   }
+   
+   ```
+
+6. **Hardcoded Multi-segment Routes** - Hardcoded route strings with multiple segments are fragile. Use centralized route constants for maintainability.
+
+   ```
    // BAD
    <Link href="/dashboard/settings/profile">
+   // BAD
    router.push('/dashboard/settings/profile');
-   
-   // GOOD - centralized routes
+
+   // GOOD
    // lib/routes.ts
    export const routes = {
-     dashboard: '/dashboard',
-     settings: '/dashboard/settings',
      profile: '/dashboard/settings/profile',
    } as const;
    
    <Link href={routes.profile}>
-   ```
-
-7. **`router.push` for Data Mutations**
-   ```tsx
-   // BAD - navigation for side effects
-   const handleSubmit = () => {
-     fetch('/api/submit', { method: 'POST', body });
-     router.push('/success');
-   };
    
-   // GOOD - server action with redirect
-   'use server';
-   export async function submitForm(formData: FormData) {
-     await saveToDb(formData);
-     redirect('/success');
-   }
    ```
 
-8. **Importing Server-Only Code in Client**
-   ```tsx
-   // BAD - db code bundled to client
-   'use client';
-   import { db } from '@/lib/db';
-   
-   // GOOD - mark server-only explicitly
-   // lib/db.ts
-   import 'server-only';
-   export const db = ...;
-   // Now importing in client component = build error
+7. **console.log in App Directory** - Console statements in production code indicate incomplete development or forgotten debugging. Remove before deploying.
+
+   ```
+   // BAD
+   console.log('data:', data);
+
+   // GOOD
+   // Use proper logging service for production
    ```
 
-9. **Missing Loading/Error Boundaries**
+8. **Fat Route Handlers (>50 lines)** - Route handlers should be thin orchestrators. Extract business logic to separate functions for testability and reuse.
+
    ```
-   // BAD - no loading states
-   app/
-     dashboard/
-       page.tsx
-   
-   // GOOD - proper boundaries
-   app/
-     dashboard/
-       page.tsx
-       loading.tsx
-       error.tsx
-       not-found.tsx
-   ```
-
-10. **Blocking Waterfalls in Server Components**
-    ```tsx
-    // BAD - sequential fetches
-    export default async function Page() {
-      const user = await fetchUser();
-      const posts = await fetchPosts(user.id);
-      const comments = await fetchComments(posts);
-    }
-    
-    // GOOD - parallel when possible
-    export default async function Page() {
-      const [user, config] = await Promise.all([
-        fetchUser(),
-        fetchConfig()
-      ]);
-      // Only sequential when dependent
-      const posts = await fetchPosts(user.id);
-    }
-    ```
-
-11. **Giant Route Handlers**
-    ```tsx
-    // BAD - all logic in route
-    export async function POST(req: Request) {
-      // 200 lines of validation, db calls, emails...
-    }
-    
-    // GOOD - thin route, logic extracted
-    export async function POST(req: Request) {
-      const body = await req.json();
-      const result = await createOrder(body);
-      return Response.json(result);
-    }
-    ```
-
-12. **`any` in Route Handlers**
-    ```tsx
-    // BAD
-    export async function POST(req: Request) {
-      const body: any = await req.json();
-    }
-    
-    // GOOD
-    export async function POST(req: Request) {
-      const body: unknown = await req.json();
-      const validated = orderSchema.parse(body);
-    }
-    ```
-
-### MUST
-
-1. **Use `async` Server Components for Data**
-   ```tsx
-   export default async function UsersPage() {
-     const users = await getUsers();
-     return <UserList users={users} />;
-   }
-   ```
-
-2. **Validate All Route Handler Input**
-   ```tsx
-   import { z } from 'zod';
-   
-   const schema = z.object({
-     email: z.string().email(),
-     name: z.string().min(1),
-   });
-   
+   // BAD
    export async function POST(req: Request) {
-     const body: unknown = await req.json();
-     const result = schema.safeParse(body);
-     
-     if (!result.success) {
-       return Response.json(
-         { error: result.error.flatten() },
-         { status: 400 }
-       );
-     }
-     
-     // result.data is typed
+     // 200 lines of validation, db calls, emails...
    }
+   
+
+   // GOOD
+   export async function POST(req: Request) {
+     const body = await req.json();
+     const result = await createOrder(body);  // Logic extracted
+     return Response.json(result);
+   }
+   
    ```
 
-3. **Use `notFound()` for Missing Resources**
-   ```tsx
+### SHOULD (validator warns)
+
+1. **Dynamic Routes Should Use notFound()** - Dynamic route pages ([id], [slug]) should call notFound() when the resource doesn't exist, rendering the not-found.tsx boundary.
+
+   ```
    import { notFound } from 'next/navigation';
    
    export default async function UserPage({ params }: Props) {
      const user = await getUser(params.id);
-     
-     if (!user) {
-       notFound(); // Renders not-found.tsx
-     }
-     
+     if (!user) notFound();  // Renders not-found.tsx
      return <UserProfile user={user} />;
    }
    ```
 
-4. **Type Route Params and SearchParams**
-   ```tsx
-   interface PageProps {
-     params: { slug: string };
-     searchParams: { page?: string; sort?: string };
-   }
+2. **Consider Promise.all for Independent Fetches** - Multiple sequential awaits that don't depend on each other should use Promise.all to fetch in parallel and reduce load time.
+
+   ```
+   // BAD
+   const user = await fetchUser();
+   const config = await fetchConfig();  // Waits for user unnecessarily
+   const posts = await fetchPosts();    // Waits for config unnecessarily
    
-   export default async function Page({ params, searchParams }: PageProps) {
-     const page = Number(searchParams.page) || 1;
-   }
+
+   // GOOD
+   const [user, config, posts] = await Promise.all([
+     fetchUser(),
+     fetchConfig(),
+     fetchPosts(),
+   ]);
+   
    ```
 
-5. **Colocate Loading States**
+3. **Pages Should Have loading.tsx** - Directories with page.tsx should have loading.tsx to show instant loading state while the page suspends.
+
    ```
    app/
-     users/
+     dashboard/
        page.tsx
-       loading.tsx      # Shows while page.tsx suspends
-       [id]/
-         page.tsx
-         loading.tsx    # Shows while [id]/page.tsx suspends
+       loading.tsx    # Shows while page.tsx suspends
    ```
 
-6. **Use Route Groups for Organization**
+4. **Pages Should Have error.tsx** - Directories with page.tsx should have error.tsx to handle errors gracefully instead of crashing the entire app.
+
    ```
    app/
-     (marketing)/
-       page.tsx         # Landing page
-       about/
-       pricing/
-     (dashboard)/
-       layout.tsx       # Dashboard layout with nav
-       dashboard/
-       settings/
-     (auth)/
-       login/
-       register/
+     dashboard/
+       page.tsx
+       error.tsx      # Catches errors, allows recovery
    ```
 
-7. **Server Actions for Mutations**
-   ```tsx
-   // actions.ts
-   'use server';
-   
-   export async function createPost(formData: FormData) {
-     const title = formData.get('title');
-     
-     await db.post.create({ data: { title } });
-     revalidatePath('/posts');
-     redirect('/posts');
-   }
-   
-   // form.tsx
-   <form action={createPost}>
-     <input name="title" />
-     <button type="submit">Create</button>
-   </form>
+5. **Server-Only Import for Sensitive Files** - Database and auth files should import 'server-only' to prevent accidental import in client components.
+
+   ```
+   // lib/db.ts
+   import 'server-only';
+   export const db = new PrismaClient();
    ```
 
-8. **Use `revalidatePath`/`revalidateTag` After Mutations**
-   ```tsx
-   'use server';
-   
-   export async function updateUser(id: string, data: UserData) {
-     await db.user.update({ where: { id }, data });
-     revalidatePath(`/users/${id}`);
-     revalidateTag('users');
-   }
-   ```
+### GUIDANCE (not mechanically checked)
 
----
+1. **App Directory File Structure** - Recommended file structure for Next.js App Router projects.
 
-## Patterns
 
-### File Structure
-```
-app/
-├── (marketing)/
-│   ├── page.tsx              # Home
+   > app/
+├── (marketing)/           # Route group for marketing pages
+│   ├── page.tsx           # Home
 │   └── layout.tsx
-├── (dashboard)/
+├── (dashboard)/           # Route group for authenticated pages
 │   ├── dashboard/
 │   │   ├── page.tsx
 │   │   ├── loading.tsx
@@ -334,29 +241,23 @@ app/
 │   └── webhooks/
 │       └── stripe/
 │           └── route.ts
-├── layout.tsx                 # Root layout
-├── not-found.tsx             # Global 404
-└── error.tsx                 # Global error
+├── layout.tsx             # Root layout
+├── not-found.tsx          # Global 404
+└── error.tsx              # Global error
 
 lib/
-├── db.ts                     # Database (server-only)
-├── auth.ts                   # Auth helpers
-├── routes.ts                 # Route constants
+├── db.ts                  # Database (with server-only)
+├── auth.ts                # Auth helpers
+├── routes.ts              # Route constants
 └── validations/
-    └── user.ts               # Zod schemas
+    └── user.ts            # Zod schemas
 
-components/
-├── ui/                       # Generic UI
-└── features/
-    └── users/                # Feature-specific
-```
 
-### Server Component with Suspense
-```tsx
-// app/users/page.tsx
+2. **Server Component with Suspense** - Pattern for async server components with Suspense boundaries.
+
+
+   > // app/users/page.tsx
 import { Suspense } from 'react';
-import { UserList } from './user-list';
-import { UserListSkeleton } from './user-list-skeleton';
 
 export default function UsersPage() {
   return (
@@ -371,20 +272,19 @@ export default function UsersPage() {
 
 // app/users/user-list.tsx
 export async function UserList() {
-  const users = await getUsers(); // This suspends
+  const users = await getUsers();  // This suspends
   return (
     <ul>
-      {users.map(user => (
-        <li key={user.id}>{user.name}</li>
-      ))}
+      {users.map(user => <li key={user.id}>{user.name}</li>)}
     </ul>
   );
 }
-```
 
-### Route Handler with Validation
-```tsx
-// app/api/users/route.ts
+
+3. **Route Handler with Validation** - Pattern for type-safe route handlers with Zod validation.
+
+
+   > // app/api/users/route.ts
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -396,57 +296,56 @@ const createUserSchema = z.object({
 export async function POST(request: Request) {
   const body: unknown = await request.json();
   const parsed = createUserSchema.safeParse(body);
-  
+
   if (!parsed.success) {
     return NextResponse.json(
       { error: 'Validation failed', details: parsed.error.flatten() },
       { status: 400 }
     );
   }
-  
+
   const user = await createUser(parsed.data);
   return NextResponse.json(user, { status: 201 });
 }
-```
 
-### Middleware Pattern
-```tsx
-// middleware.ts
+
+4. **Middleware Pattern** - Pattern for Next.js middleware with auth checks and path matching.
+
+
+   > // middleware.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  
-  // Auth check
+
   if (pathname.startsWith('/dashboard')) {
     const token = request.cookies.get('token');
     if (!token) {
       return NextResponse.redirect(new URL('/login', request.url));
     }
   }
-  
+
   return NextResponse.next();
 }
 
 export const config = {
   matcher: ['/dashboard/:path*', '/api/:path*'],
 };
-```
+
 
 ---
 
 ## Anti-Patterns
 
-| Pattern | Problem | Fix |
-|---------|---------|-----|
-| `'use client'` on page | Kills SSR benefits | Push client boundary down |
-| `useEffect` fetch | Extra round trip | Server component fetch |
-| `process.env.X` client | Secrets exposed | Server only |
-| Sequential fetches | Slow load | `Promise.all` |
-| No loading.tsx | Layout shift | Add loading boundary |
-| No error.tsx | Crashes bubble up | Add error boundary |
-| Fat route handlers | Hard to test | Extract to functions |
-| Hardcoded paths | Refactor hell | Route constants |
-| `any` in handlers | No validation | Zod + unknown |
-| No revalidation | Stale data | `revalidatePath` |
+| Anti-Pattern | Description | Fix |
+|--------------|-------------|-----|
+| 'use client' on page |  | Push client boundary down |
+| useEffect fetch |  | Server component fetch |
+| process.env.X client |  | Server only or NEXT_PUBLIC_ |
+| Sequential awaits |  | Promise.all for independent |
+| No loading.tsx |  | Add loading boundary |
+| No error.tsx |  | Add error boundary |
+| Fat route handlers |  | Extract to functions |
+| Hardcoded paths |  | Route constants |
+| 'any' in handlers |  | Zod + unknown |
