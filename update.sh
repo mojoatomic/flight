@@ -17,8 +17,9 @@ cp -r "$TMP/.claude/commands/"* .claude/commands/ 2>/dev/null || true
 # Update FLIGHT.md (core methodology)
 [ -f "$TMP/.flight/FLIGHT.md" ] && cp "$TMP/.flight/FLIGHT.md" .flight/FLIGHT.md
 
-# Update validate-all.sh
+# Update validate-all.sh and exclusions.sh
 [ -f "$TMP/.flight/validate-all.sh" ] && cp "$TMP/.flight/validate-all.sh" .flight/validate-all.sh
+[ -f "$TMP/.flight/exclusions.sh" ] && cp "$TMP/.flight/exclusions.sh" .flight/exclusions.sh
 
 # Update all domain files from source (preserves custom domains not in source)
 # This copies both .md and .validate.sh files - no hardcoded list needed
@@ -33,6 +34,7 @@ done
 
 # Make scripts executable
 chmod +x .flight/validate-all.sh 2>/dev/null || true
+chmod +x .flight/exclusions.sh 2>/dev/null || true
 chmod +x .flight/domains/*.validate.sh 2>/dev/null || true
 chmod +x .flight/domains/*.sh 2>/dev/null || true
 
@@ -43,7 +45,7 @@ echo ""
 echo "Updated:"
 echo "  - .claude/commands/* (all slash commands)"
 echo "  - .flight/FLIGHT.md (core methodology)"
-echo "  - .flight/validate-all.sh"
+echo "  - .flight/validate-all.sh, exclusions.sh"
 echo "  - .flight/domains/* (all stock domains)"
 echo "  - .flight/examples/, exercises/, templates/"
 echo ""
