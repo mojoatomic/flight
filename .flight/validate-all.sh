@@ -209,35 +209,153 @@ run_validator "go" "$GO_FILES"
 run_validator "rust" "$RS_FILES"
 
 # -----------------------------------------------------------------------------
-# Check for pattern-based validators
+# Dynamic domain detection from .flight files
 # -----------------------------------------------------------------------------
 
-# API files (by naming convention)
-API_FILES=$(echo "$ALL_CODE_FILES" | tr ' ' '\n' | grep -iE '(api|service|fetch|endpoint|route)' | tr '\n' ' ' || echo "")
-run_validator "api" "$API_FILES"
+# Parse file_patterns from a .flight file
+# Returns patterns one per line
+parse_file_patterns() {
+    local flight_file="$1"
+    # Extract file_patterns section and get the pattern values
+    # Handles YAML array format like:
+    #   file_patterns:
+    #     - "**/*.ts"
+    #     - "**/webhook*.js"
+    awk '
+        /^file_patterns:/ { in_patterns=1; next }
+        in_patterns && /^[a-zA-Z_]/ { exit }
+        in_patterns && /^  - / {
+            gsub(/^  - ["'"'"']?/, "")
+            gsub(/["'"'"']$/, "")
+            print
+        }
+    ' "$flight_file"
+}
 
-# Test files
-TEST_FILES=$(echo "$ALL_CODE_FILES" | tr ' ' '\n' | grep -E '\.(test|spec)\.' | tr '\n' ' ' || echo "")
-run_validator "testing" "$TEST_FILES"
+# Check if a file matches a glob pattern
+# Converts glob to regex for matching
+matches_pattern() {
+    local file="$1"
+    local pattern="$2"
 
-# Webhook files
-WEBHOOK_FILES=$(echo "$ALL_CODE_FILES" | tr ' ' '\n' | grep -iE 'webhook' | tr '\n' ' ' || echo "")
-run_validator "webhooks" "$WEBHOOK_FILES"
+    # Convert glob pattern to regex:
+    # **/ -> match any path prefix
+    # * -> match any characters except /
+    # . -> literal dot
+    local regex="$pattern"
+    regex="${regex//./\\.}"           # Escape dots
+    regex="${regex//\*\*\//.*}"       # **/ -> .*
+    regex="${regex//\*/[^/]*}"        # * -> [^/]*
+    regex="${regex//\{/\(}"           # { -> (
+    regex="${regex//\}/\)}"           # } -> )
+    regex="${regex//,/|}"             # , -> |
+    regex="^${regex}$"
 
-# SMS/Twilio files
-SMS_FILES=$(echo "$ALL_CODE_FILES" | tr ' ' '\n' | grep -iE '(sms|twilio|message)' | tr '\n' ' ' || echo "")
-run_validator "sms-twilio" "$SMS_FILES"
+    echo "$file" | grep -qE "$regex" 2>/dev/null
+}
 
-# Prisma files
-PRISMA_FILES=$(echo "$TYPESCRIPT_FILES" | tr ' ' '\n' | grep -iE '(prisma|\.server\.|/api/|/actions/)' | tr '\n' ' ' || echo "")
+# Check if patterns are "specific" (good for auto-detection) vs "broad" (match everything)
+# Broad patterns: **/*.ts, **/*.js, **/*.tsx, **/*.jsx, **/*.py
+# Specific patterns: **/webhook*.js, **/sms*.ts, **/prisma*.ts
+is_broad_pattern() {
+    local pattern="$1"
+    # Patterns like **/*.ts or **/*.{ts,tsx} are too broad
+    [[ "$pattern" =~ ^\*\*/\*\.[a-z]+$ ]] || \
+    [[ "$pattern" =~ ^\*\*/\*\.\{[a-z,]+\}$ ]]
+}
+
+# Get files matching a domain's file_patterns
+# Returns matching files space-separated
+get_domain_files() {
+    local flight_file="$1"
+    local all_files="$2"
+    local matched_files=""
+    local has_specific_pattern=false
+
+    while IFS= read -r pattern; do
+        [[ -z "$pattern" ]] && continue
+
+        # Skip broad patterns - they'd match everything
+        if is_broad_pattern "$pattern"; then
+            continue
+        fi
+
+        has_specific_pattern=true
+
+        # Check each file against this pattern
+        for file in $all_files; do
+            if matches_pattern "$file" "$pattern"; then
+                matched_files="$matched_files $file"
+            fi
+        done
+    done < <(parse_file_patterns "$flight_file")
+
+    # If no specific patterns, domain uses content-based detection (skip auto-detect)
+    if [[ "$has_specific_pattern" == false ]]; then
+        echo ""
+        return
+    fi
+
+    # Dedupe and return
+    echo "$matched_files" | tr ' ' '\n' | grep -v '^$' | sort -u | tr '\n' ' '
+}
+
+# Domains that always run based on language (handled above)
+LANGUAGE_DOMAINS="code-hygiene typescript javascript react python bash sql go rust"
+
+# Domains that need content-based detection (have only broad patterns like **/*.ts)
+# These require explicit enabling or smarter content detection
+CONTENT_DETECT_DOMAINS="prisma clerk supabase"
+
+# Run pattern-based validators dynamically
+echo -e "${BLUE}▶ Auto-detecting domain validators...${NC}"
+echo ""
+
+for flight_file in "$DOMAINS_DIR"/*.flight; do
+    [[ ! -f "$flight_file" ]] && continue
+
+    domain=$(basename "$flight_file" .flight)
+
+    # Skip language-based domains (already handled above)
+    if echo "$LANGUAGE_DOMAINS" | grep -qw "$domain"; then
+        continue
+    fi
+
+    # Skip content-detect domains for now (need explicit enable or content detection)
+    if echo "$CONTENT_DETECT_DOMAINS" | grep -qw "$domain"; then
+        continue
+    fi
+
+    # Skip domains without validators
+    validator="$DOMAINS_DIR/${domain}.validate.sh"
+    [[ ! -x "$validator" ]] && continue
+
+    # Get matching files based on file_patterns
+    domain_files=$(get_domain_files "$flight_file" "$ALL_CODE_FILES")
+
+    if [[ -n "$domain_files" ]]; then
+        run_validator "$domain" "$domain_files"
+    fi
+done
+
+# -----------------------------------------------------------------------------
+# Content-based detection for domains with broad file patterns
+# These domains have **/*.ts patterns so we check for actual usage
+# -----------------------------------------------------------------------------
+
+# Prisma: Look for prisma imports or schema.prisma
+PRISMA_FILES=""
+if [[ -f "prisma/schema.prisma" ]] || [[ -f "schema.prisma" ]]; then
+    PRISMA_FILES=$(echo "$TYPESCRIPT_FILES" | tr ' ' '\n' | xargs grep -l "from ['\"]@prisma" 2>/dev/null | tr '\n' ' ' || echo "")
+fi
 run_validator "prisma" "$PRISMA_FILES"
 
-# Clerk files
-CLERK_FILES=$(echo "$TYPESCRIPT_FILES" | tr ' ' '\n' | grep -iE '(clerk|auth|middleware)' | tr '\n' ' ' || echo "")
+# Clerk: Look for @clerk imports
+CLERK_FILES=$(echo "$TYPESCRIPT_FILES" | tr ' ' '\n' | xargs grep -l "from ['\"]@clerk" 2>/dev/null | tr '\n' ' ' || echo "")
 run_validator "clerk" "$CLERK_FILES"
 
-# Supabase files
-SUPABASE_FILES=$(echo "$TYPESCRIPT_FILES" | tr ' ' '\n' | grep -iE 'supabase' | tr '\n' ' ' || echo "")
+# Supabase: Look for @supabase imports
+SUPABASE_FILES=$(echo "$TYPESCRIPT_FILES" | tr ' ' '\n' | xargs grep -l "from ['\"]@supabase" 2>/dev/null | tr '\n' ' ' || echo "")
 run_validator "supabase" "$SUPABASE_FILES"
 
 # -----------------------------------------------------------------------------
