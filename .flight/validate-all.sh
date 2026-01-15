@@ -246,8 +246,8 @@ run_validator() {
     if [[ "$exit_code" -ne 0 ]] || [[ "$fail" -gt 0 ]]; then
         echo -e "${RED}✗ $domain: FAIL (Pass: $pass, Fail: $fail, Warn: $warn)${NC}"
         FAILED_DOMAINS+=("$domain")
-        # Show failure details
-        echo "$output" | grep -E "(❌|ERROR)" | head -10
+        # Show failure details with file:line violations (strip color codes for matching)
+        echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^(❌|   )" | head -30
         echo ""
     else
         echo -e "${GREEN}✓ $domain: PASS (Pass: $pass, Fail: $fail, Warn: $warn)${NC}"
