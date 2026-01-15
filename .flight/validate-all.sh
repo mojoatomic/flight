@@ -249,6 +249,10 @@ run_validator() {
         # Show failure details with file:line violations (strip color codes for matching)
         echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^(❌|   )" | head -30
         echo ""
+    elif [[ "$warn" -gt 0 ]]; then
+        echo -e "${GREEN}✓ $domain: PASS (Pass: $pass, Fail: $fail, Warn: ${YELLOW}$warn${NC}${GREEN})${NC}"
+        # Show warning details
+        echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^(⚠️|   )" | head -20
     else
         echo -e "${GREEN}✓ $domain: PASS (Pass: $pass, Fail: $fail, Warn: $warn)${NC}"
     fi
