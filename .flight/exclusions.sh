@@ -60,6 +60,7 @@ FLIGHT_EXCLUDE_DIRS=(
 
     # Flight internal
     ".flight/examples"
+    ".flight/domains"
 )
 
 # -----------------------------------------------------------------------------
