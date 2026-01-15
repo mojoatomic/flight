@@ -141,7 +141,12 @@ flight_get_files() {
         else
             find_cmd+="-o "
         fi
-        find_cmd+="-type d -name \"$dir\" "
+        # Use -path for entries containing /, -name for simple directory names
+        if [[ "$dir" == */* ]]; then
+            find_cmd+="-type d -path \"*/$dir\" "
+        else
+            find_cmd+="-type d -name \"$dir\" "
+        fi
     done
     find_cmd+="\\) -prune -o "
 
