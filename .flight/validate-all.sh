@@ -13,6 +13,22 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOMAINS_DIR="$SCRIPT_DIR/domains"
+CONFIG_FILE="$SCRIPT_DIR/flight.json"
+
+# -----------------------------------------------------------------------------
+# Config-driven mode: read enabled domains from flight.json
+# -----------------------------------------------------------------------------
+
+if [[ -f "$CONFIG_FILE" ]]; then
+    ENABLED_DOMAINS=$(jq -r '.enabled_domains[]' "$CONFIG_FILE" 2>/dev/null || echo "")
+    CONFIG_MODE=true
+    if [[ -z "$ENABLED_DOMAINS" ]]; then
+        echo "Warning: flight.json exists but enabled_domains is empty or invalid" >&2
+        CONFIG_MODE=false
+    fi
+else
+    CONFIG_MODE=false
+fi
 
 # Source exclusions helper
 if [[ -f "$SCRIPT_DIR/exclusions.sh" ]]; then
@@ -35,9 +51,26 @@ TOTAL_FAIL=0
 TOTAL_WARN=0
 FAILED_DOMAINS=()
 
+# -----------------------------------------------------------------------------
+# Check if a domain is enabled (config-driven or legacy mode)
+# -----------------------------------------------------------------------------
+
+is_domain_enabled() {
+    local domain="$1"
+    if [[ "$CONFIG_MODE" == false ]]; then
+        return 0  # Legacy mode - all domains enabled
+    fi
+    echo "$ENABLED_DOMAINS" | grep -qw "$domain"
+}
+
 echo -e "${BLUE}═══════════════════════════════════════════${NC}"
 echo -e "${BLUE}       Flight Validation Runner${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════${NC}"
+if [[ "$CONFIG_MODE" == true ]]; then
+    echo -e "${GREEN}Mode: Config-driven (flight.json)${NC}"
+else
+    echo -e "${YELLOW}Mode: Legacy (no flight.json)${NC}"
+fi
 echo ""
 
 # -----------------------------------------------------------------------------
@@ -175,70 +208,21 @@ run_validator() {
 }
 
 # -----------------------------------------------------------------------------
-# Always run code-hygiene (applies to all code)
+# Run validators for enabled domains
 # -----------------------------------------------------------------------------
 
-run_validator "code-hygiene" "$ALL_CODE_FILES"
-
-# -----------------------------------------------------------------------------
-# Run language/framework specific validators
-# -----------------------------------------------------------------------------
-
-# TypeScript
-run_validator "typescript" "$TYPESCRIPT_FILES"
-
-# JavaScript
-run_validator "javascript" "$JAVASCRIPT_FILES"
-
-# React (TSX/JSX files)
-run_validator "react" "$REACT_FILES"
-
-# Python
-run_validator "python" "$PY_FILES"
-
-# Bash
-run_validator "bash" "$SH_FILES"
-
-# SQL
-run_validator "sql" "$SQL_FILES"
-
-# Go
-run_validator "go" "$GO_FILES"
-
-# Rust
-run_validator "rust" "$RS_FILES"
-
-# -----------------------------------------------------------------------------
-# Check for pattern-based validators
-# -----------------------------------------------------------------------------
-
-# API files (by naming convention)
-API_FILES=$(echo "$ALL_CODE_FILES" | tr ' ' '\n' | grep -iE '(api|service|fetch|endpoint|route)' | tr '\n' ' ' || echo "")
-run_validator "api" "$API_FILES"
-
-# Test files
-TEST_FILES=$(echo "$ALL_CODE_FILES" | tr ' ' '\n' | grep -E '\.(test|spec)\.' | tr '\n' ' ' || echo "")
-run_validator "testing" "$TEST_FILES"
-
-# Webhook files
-WEBHOOK_FILES=$(echo "$ALL_CODE_FILES" | tr ' ' '\n' | grep -iE 'webhook' | tr '\n' ' ' || echo "")
-run_validator "webhooks" "$WEBHOOK_FILES"
-
-# SMS/Twilio files
-SMS_FILES=$(echo "$ALL_CODE_FILES" | tr ' ' '\n' | grep -iE '(sms|twilio|message)' | tr '\n' ' ' || echo "")
-run_validator "sms-twilio" "$SMS_FILES"
-
-# Prisma files
-PRISMA_FILES=$(echo "$TYPESCRIPT_FILES" | tr ' ' '\n' | grep -iE '(prisma|\.server\.|/api/|/actions/)' | tr '\n' ' ' || echo "")
-run_validator "prisma" "$PRISMA_FILES"
-
-# Clerk files
-CLERK_FILES=$(echo "$TYPESCRIPT_FILES" | tr ' ' '\n' | grep -iE '(clerk|auth|middleware)' | tr '\n' ' ' || echo "")
-run_validator "clerk" "$CLERK_FILES"
-
-# Supabase files
-SUPABASE_FILES=$(echo "$TYPESCRIPT_FILES" | tr ' ' '\n' | grep -iE 'supabase' | tr '\n' ' ' || echo "")
-run_validator "supabase" "$SUPABASE_FILES"
+if [[ "$CONFIG_MODE" == true ]]; then
+    # Config-driven: loop over enabled domains from flight.json
+    for domain in $ENABLED_DOMAINS; do
+        run_validator "$domain" "$ALL_CODE_FILES"
+    done
+else
+    # Legacy mode: no flight.json found
+    echo -e "${YELLOW}No flight.json found. Run /flight-scan to detect domains.${NC}"
+    echo -e "${YELLOW}Falling back to code-hygiene only...${NC}"
+    echo ""
+    run_validator "code-hygiene" "$ALL_CODE_FILES"
+fi
 
 # -----------------------------------------------------------------------------
 # Summary
