@@ -1,0 +1,791 @@
+# bash.flight - Production shell script patterns
+# Source: Migrated from bash.md and bash.validate.sh
+
+domain: bash
+version: 1.0.0
+description: >
+  Production shell script patterns. Safe, portable, maintainable.
+  Enforces quoting, strict mode, error handling, and security best practices.
+
+file_patterns:
+  - "*.sh"
+  - "**/*.sh"
+
+exclude_patterns:
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/.git/**"
+  - "**/vendor/**"
+
+suppression:
+  comment: "# shellcheck"
+  guidance: |
+    ShellCheck directives suppress specific warnings.
+    Example: # shellcheck disable=SC2086
+
+# ===========================================================================
+# RULES
+# ===========================================================================
+# Bash/Shell-SPECIFIC rules. Universal code hygiene rules are in
+# code-hygiene.flight.
+#
+# ID format: {severity_prefix}{number}
+#   N = NEVER (check - fails build)
+#   M = MUST (check - fails build)
+#   S = SHOULD (warn - advisory)
+#   G = GUIDANCE (not checked)
+# ===========================================================================
+
+rules:
+
+  # =========================================================================
+  # NEVER - Shell scripting anti-patterns (validator will reject)
+  # =========================================================================
+
+  N1:
+    title: Unquoted Variables in Commands
+    severity: NEVER
+    mechanical: true
+    description: >
+      Unquoted variables undergo word splitting and glob expansion.
+      This breaks on filenames with spaces and can match unintended files.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+            grep -En '\b(rm|cp|mv|cd|cat|chmod|chown)\s+[^"'\''|&;>]*\$[a-zA-Z_]' "$f" 2>/dev/null | grep -v '# shellcheck'
+        done
+    note: |
+      Word splitting: $var with spaces becomes multiple arguments.
+      Glob expansion: $var with * matches files.
+      Always quote: "$var"
+    examples:
+      bad:
+        - "rm $files"
+        - "cp $src $dest"
+      good:
+        - 'rm "$files"'
+        - 'cp "$src" "$dest"'
+
+  N2:
+    title: Unquoted $(cmd) Substitution
+    severity: NEVER
+    mechanical: true
+    description: >
+      Unquoted command substitution has the same word splitting and
+      glob expansion issues as unquoted variables.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+            grep -En '[^"=]\$\([^)]+\)[^"]' "$f" 2>/dev/null | grep -v '# shellcheck' | head -5
+        done
+    note: |
+      The output of $(cmd) can contain spaces or glob characters.
+      Always quote: "$(cmd)"
+    examples:
+      bad:
+        - |
+          result=$(get_path)
+          cd $result
+      good:
+        - |
+          result="$(get_path)"
+          cd "$result"
+
+  N3:
+    title: Parsing ls Output
+    severity: NEVER
+    mechanical: true
+    description: >
+      Parsing ls output breaks on filenames with spaces, newlines, or
+      special characters. Use globs or find instead.
+    check:
+      type: grep
+      pattern: 'for\s+\w+\s+in\s+\$\(ls|\`ls|ls\s+\|'
+      flags: -En
+    note: |
+      ls output is for humans, not scripts. Filenames can contain
+      any character except / and NUL. Use glob patterns or find -print0.
+    examples:
+      bad:
+        - "for f in $(ls *.txt); do"
+        - "for f in `ls`; do"
+      good:
+        - "for f in *.txt; do"
+        - "for f in *; do"
+        - |
+          find . -name "*.txt" -print0 | while IFS= read -r -d '' f; do
+
+  N4:
+    title: Backticks for Command Substitution
+    severity: NEVER
+    mechanical: true
+    description: >
+      Backticks are the old style command substitution. They can't nest
+      easily and are harder to read than $().
+    check:
+      type: grep
+      pattern: '\`[^\`]+\`'
+      flags: -En
+    note: |
+      $() can nest: $(cmd1 $(cmd2))
+      Backticks require escaping: `cmd1 \`cmd2\``
+    examples:
+      bad:
+        - "result=`command`"
+      good:
+        - "result=$(command)"
+
+  N5:
+    title: Single Brackets [ ] in Bash
+    severity: NEVER
+    mechanical: true
+    description: >
+      In bash scripts, use [[ ]] instead of [ ]. Single brackets require
+      quoting and don't support pattern matching or regex.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+            if head -1 "$f" | grep -q 'bash'; then
+                grep -En '^\s*\[\s+|\s+\[\s+[^[]' "$f" | grep -v '\[\[' | head -5
+            fi
+        done
+    note: |
+      [[ ]] is safer: no word splitting on variables.
+      [[ ]] supports: regex (=~), pattern matching (*), logical operators (&&, ||).
+    examples:
+      bad:
+        - '[ -z $var ]'
+        - '[ $var = "foo" ]'
+      good:
+        - '[[ -z "$var" ]]'
+        - '[[ "$var" = "foo" ]]'
+        - '[[ "$string" =~ ^[0-9]+$ ]]'
+
+  N6:
+    title: "'function' Keyword"
+    severity: NEVER
+    mechanical: true
+    description: >
+      The 'function' keyword is bash-specific and not POSIX compliant.
+      Use the portable name() { } syntax.
+    check:
+      type: grep
+      pattern: '^\s*function\s+\w+'
+      flags: -En
+    note: |
+      'function foo {' is bash-only.
+      'foo() {' works in bash, sh, dash, and other shells.
+    examples:
+      bad:
+        - |
+          function do_something {
+              ...
+          }
+      good:
+        - |
+          do_something() {
+              ...
+          }
+
+  N7:
+    title: Bare 'cd' Without Error Handling
+    severity: NEVER
+    mechanical: true
+    description: >
+      cd can fail (permissions, path doesn't exist). Without error handling,
+      the script continues in the wrong directory.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+            grep -En '^\s*cd\s+' "$f" | grep -v '\|\||&&\|exit\|return\|;\|#' | head -5
+        done
+    note: |
+      If cd fails and script continues, subsequent commands run in
+      the wrong directory. rm -rf * could delete the wrong files.
+    examples:
+      bad:
+        - |
+          cd "$some_dir"
+          rm -rf *  # Runs in wrong dir if cd failed!
+      good:
+        - 'cd "$some_dir" || exit 1'
+        - 'cd "$some_dir" || { echo "Failed to cd"; exit 1; }'
+
+  N8:
+    title: Useless Cat
+    severity: NEVER
+    mechanical: true
+    description: >
+      cat file | cmd creates an extra process. Most commands can read
+      files directly or via stdin redirection.
+    check:
+      type: grep
+      pattern: 'cat\s+[^|]+\|\s*(grep|awk|sed|head|tail|wc|sort|uniq|cut)'
+      flags: -En
+    note: |
+      cat file | grep is 2 processes. grep pattern file is 1 process.
+      For stdin: cmd < file
+    examples:
+      bad:
+        - "cat file.txt | grep 'pattern'"
+        - "cat file.txt | wc -l"
+      good:
+        - "grep 'pattern' file.txt"
+        - "wc -l < file.txt"
+
+  N9:
+    title: eval Usage
+    severity: NEVER
+    mechanical: true
+    description: >
+      eval executes arbitrary code. With user input, this is command injection.
+      Use arrays for dynamic commands.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+            grep -En '^\s*eval\s|\seval\s' "$f" | grep -v 'grep.*eval\|check.*eval\|#' | head -5
+        done
+    note: |
+      eval "$cmd" with user input = remote code execution.
+      Use arrays: cmd_args=("$prog" "$arg"); "${cmd_args[@]}"
+    examples:
+      bad:
+        - 'eval "$user_command"'
+      good:
+        - |
+          cmd_args=("$program" "$arg1" "$arg2")
+          "${cmd_args[@]}"
+
+  N10:
+    title: Hardcoded /tmp Files
+    severity: NEVER
+    mechanical: true
+    description: >
+      Hardcoded temp paths are predictable and create race conditions.
+      Use mktemp for unique, secure temporary files.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+            grep -En '"/tmp/[^\$]' "$f" | grep -v 'mktemp\|#' | head -5
+        done
+    note: |
+      /tmp/myscript.tmp is predictable. Attacker can create symlink
+      before your script runs. mktemp creates unique names safely.
+    examples:
+      bad:
+        - 'tmp_file="/tmp/myscript.tmp"'
+      good:
+        - 'tmp_file=$(mktemp)'
+
+  N11:
+    title: curl|bash Remote Code Execution
+    severity: NEVER
+    mechanical: true
+    description: >
+      Piping remote scripts directly to bash executes untrusted code.
+      Download, inspect, then execute.
+    check:
+      type: grep
+      pattern: 'curl.*\|\s*(ba)?sh|wget.*\|\s*(ba)?sh'
+      flags: -En
+    note: |
+      curl | bash executes whatever the server sends.
+      Partial downloads can execute incomplete scripts.
+      Download to file, inspect, then run.
+    examples:
+      bad:
+        - "curl -fsSL https://example.com/install.sh | bash"
+      good:
+        - |
+          curl -fsSL https://example.com/install.sh -o install.sh
+          less install.sh  # review
+          ./install.sh
+
+  N12:
+    title: Unquoted Array Expansion
+    severity: NEVER
+    mechanical: true
+    description: >
+      ${arr[*]} joins array elements into a single string.
+      Use "${arr[@]}" to preserve separate elements.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+            grep -En '\$\{[a-zA-Z_]+\[\*\]\}' "$f" | head -3
+        done
+    note: |
+      ${arr[*]} = "a b c" (one string)
+      "${arr[@]}" = "a" "b" "c" (three strings)
+    examples:
+      bad:
+        - 'echo ${arr[*]}'
+      good:
+        - 'echo "${arr[@]}"'
+
+  # =========================================================================
+  # MUST - Required patterns (validator will reject)
+  # =========================================================================
+
+  M1:
+    title: Shebang Required
+    severity: MUST
+    mechanical: true
+    description: >
+      Every script must have a shebang declaring the interpreter.
+      This ensures the script runs with the intended shell.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+            if ! head -1 "$f" | grep -qE '^#!.*(bash|sh)'; then
+                printf '%s: missing shebang\n' "$f"
+            fi
+        done
+    note: |
+      Without shebang, the system default shell runs the script.
+      #!/bin/bash for bash features, #!/bin/sh for POSIX compatibility.
+    examples:
+      good:
+        - "#!/bin/bash"
+        - "#!/bin/sh"
+        - "#!/usr/bin/env bash"
+
+  M2:
+    title: Strict Mode Required
+    severity: MUST
+    mechanical: true
+    description: >
+      Scripts must enable strict mode with set -euo pipefail.
+      This catches errors early instead of silently continuing.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+            if ! grep -q 'set -euo pipefail' "$f"; then
+                if ! (grep -q 'set.*-e' "$f" && grep -q 'set.*-u' "$f" && grep -q 'pipefail' "$f"); then
+                    printf '%s: missing strict mode\n' "$f"
+                fi
+            fi
+        done
+    note: |
+      -e: Exit on any command failure
+      -u: Error on undefined variables
+      -o pipefail: Pipeline fails if any command fails
+    examples:
+      good:
+        - |
+          #!/bin/bash
+          set -euo pipefail
+
+  # =========================================================================
+  # SHOULD - Best practices (validator warns)
+  # =========================================================================
+
+  S1:
+    title: Safe Path Pattern Before cd
+    severity: SHOULD
+    mechanical: true
+    description: >
+      When using cd, either use pushd/popd or capture the original directory
+      to ensure relative paths still work after directory change.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+            grep -qE '^\s*cd\s+' "$f" || continue
+            if grep -q 'pushd' "$f" 2>/dev/null; then continue; fi
+            if grep -qE '(pwd|realpath|SCRIPT_DIR).*=|original.*=.*pwd' "$f" 2>/dev/null; then continue; fi
+            grep -En '^\s*cd\s+"\$' "$f" 2>/dev/null | head -3 | while IFS= read -r line; do
+                printf '%s (review: paths resolved before cd?)\n' "$line"
+            done
+        done
+    note: |
+      Relative paths break after cd. Either:
+      1. Use pushd/popd to restore directory
+      2. Capture pwd before cd
+      3. Convert relative paths to absolute with realpath
+    examples:
+      good:
+        - |
+          pushd "$target_dir" > /dev/null
+          # ... do work
+          popd > /dev/null
+        - |
+          original_dir="$(pwd)"
+          cd "$project_dir"
+          cat "$original_dir/config.json"
+
+  S2:
+    title: Functions Should Use 'local'
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Variables assigned in functions should use 'local' to avoid
+      polluting the global namespace.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+            awk '/^[a-zA-Z_][a-zA-Z0-9_]*\s*\(\)\s*\{/,/^\}/ {
+                if (/^\s+[a-zA-Z_][a-zA-Z0-9_]*=/ && !/local\s|readonly\s|declare\s|export\s/) {
+                    print FILENAME":"NR": "$0
+                }
+            }' "$f"
+        done | head -10
+    note: |
+      Without local, function variables are global. This causes
+      subtle bugs when function names collide with outer scope.
+    examples:
+      bad:
+        - |
+          process_file() {
+              result="processed"  # Global!
+          }
+      good:
+        - |
+          process_file() {
+              local result="processed"
+          }
+
+  S3:
+    title: mktemp Needs Cleanup Trap
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Scripts using mktemp should set up a trap to clean up temp files
+      on exit, even if the script fails.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+            if grep -q 'mktemp' "$f" && ! grep -q 'trap.*EXIT' "$f"; then
+                printf '%s: mktemp without trap\n' "$f"
+            fi
+        done
+    note: |
+      Without trap, temp files accumulate on failures.
+      trap 'rm -f "$tmp"' EXIT runs on normal exit and signals.
+    examples:
+      good:
+        - |
+          tmp_file=$(mktemp)
+          trap 'rm -f "$tmp_file"' EXIT
+
+  S4:
+    title: Constants Should Use readonly
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Script constants (UPPER_CASE variables) should use readonly
+      to prevent accidental modification.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+            grep -En '^[A-Z_]+=' "$f" | grep -v 'readonly\|declare -r\|export\|local' | head -3
+        done
+    note: |
+      readonly prevents accidental reassignment.
+      Makes script intent clearer.
+    examples:
+      bad:
+        - 'VERSION="1.0.0"'
+      good:
+        - 'readonly VERSION="1.0.0"'
+
+  S5:
+    title: Read Loops Need 'IFS= read -r'
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Read loops should use 'IFS= read -r' to preserve whitespace
+      and backslashes in input.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+            grep -En 'while\s+read\s' "$f" | grep -v 'IFS=\|read -r' | head -3
+        done
+    note: |
+      Without IFS=, leading/trailing whitespace is stripped.
+      Without -r, backslashes are interpreted as escapes.
+    examples:
+      bad:
+        - "while read line; do"
+      good:
+        - "while IFS= read -r line; do"
+
+  S6:
+    title: Lines Under 100 Characters
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Keep lines under 100 characters for readability.
+      Use backslash continuation for long commands.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+            awk 'length > 100 { print FILENAME":"NR": "length" chars" }' "$f" | head -3
+        done
+    note: |
+      Long lines are hard to read and review.
+      Break at logical points with backslash.
+    examples:
+      good:
+        - |
+          long_command \
+              --option1 \
+              --option2
+
+  S7:
+    title: Prefer printf Over echo
+    severity: SHOULD
+    mechanical: true
+    description: >
+      printf behavior is consistent across systems. echo behavior
+      varies (escapes, options) between shells and platforms.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+            grep -En 'echo\s+"\$|echo\s+-e' "$f" | head -3
+        done
+    note: |
+      echo "$var" may interpret escapes or options.
+      printf '%s\n' "$var" is always literal.
+    examples:
+      bad:
+        - 'echo "$user_input"'
+        - 'echo -e "tab:\there"'
+      good:
+        - "printf '%s\\n' \"$user_input\""
+
+  # =========================================================================
+  # GUIDANCE - Design patterns (not mechanically checked)
+  # =========================================================================
+
+  G1:
+    title: Script Template
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Standard template for production shell scripts with error handling,
+      argument parsing, and cleanup.
+    note: |
+      #!/bin/bash
+      # script-name.sh - Brief description
+      set -euo pipefail
+
+      readonly SCRIPT_NAME="${0##*/}"
+      readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+      log() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"; }
+      error() { log "ERROR: $*" >&2; }
+      die() { error "$*"; exit 1; }
+
+      cleanup() {
+          local exit_code=$?
+          # cleanup code here
+          exit "$exit_code"
+      }
+      trap cleanup EXIT
+
+      usage() {
+          cat <<EOF
+      Usage: $SCRIPT_NAME [OPTIONS] <input>
+
+      Options:
+          -h, --help      Show this help
+          -v, --verbose   Verbose output
+      EOF
+      }
+
+      main() {
+          local verbose=false
+
+          while [[ $# -gt 0 ]]; do
+              case "$1" in
+                  -h|--help) usage; exit 0 ;;
+                  -v|--verbose) verbose=true; shift ;;
+                  -*) die "Unknown option: $1" ;;
+                  *) break ;;
+              esac
+          done
+
+          [[ $# -ge 1 ]] || { usage; exit 1; }
+          local input="$1"
+
+          [[ -f "$input" ]] || die "File not found: $input"
+
+          $verbose && log "Processing $input"
+          process_file "$input"
+      }
+
+      main "$@"
+
+  G2:
+    title: Safe File Operations
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Patterns for safe temporary files, directory changes, and file reading.
+    note: |
+      # Safe temporary files
+      tmp_file=$(mktemp) || die "Failed to create temp file"
+      trap 'rm -f "$tmp_file"' EXIT
+
+      # Safe directory change
+      pushd "$target_dir" > /dev/null || die "Cannot cd to $target_dir"
+      # ... do work
+      popd > /dev/null
+
+      # Safe file reading
+      while IFS= read -r line; do
+          process_line "$line"
+      done < "$input_file"
+
+      # Safe find iteration
+      while IFS= read -r -d '' file; do
+          process_file "$file"
+      done < <(find "$dir" -type f -name "*.txt" -print0)
+
+  G3:
+    title: Colored Output
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Pattern for terminal-aware colored output that degrades
+      gracefully when not connected to a terminal.
+    note: |
+      if [[ -t 1 ]]; then
+          readonly RED=$'\033[31m'
+          readonly GREEN=$'\033[32m'
+          readonly YELLOW=$'\033[33m'
+          readonly RESET=$'\033[0m'
+      else
+          readonly RED='' GREEN='' YELLOW='' RESET=''
+      fi
+
+      success() { printf '%s✓ %s%s\n' "$GREEN" "$*" "$RESET"; }
+      warning() { printf '%s⚠ %s%s\n' "$YELLOW" "$*" "$RESET"; }
+      fail() { printf '%s✗ %s%s\n' "$RED" "$*" "$RESET"; }
+
+  G4:
+    title: ShellCheck Codes Reference
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Common ShellCheck error codes and their fixes.
+    note: |
+      Run: shellcheck script.sh
+
+      Common codes:
+      | Code   | Issue                          | Fix                    |
+      |--------|--------------------------------|------------------------|
+      | SC2086 | Unquoted variable              | Quote it: "$var"       |
+      | SC2046 | Unquoted command substitution  | "$(cmd)"               |
+      | SC2006 | Backticks                      | Use $()                |
+      | SC2012 | Parsing ls                     | Use globs or find      |
+      | SC2155 | Declare and assign separately  | local var; var=$(cmd)  |
+      | SC2164 | cd without error check         | cd dir || exit 1       |
+
+# ===========================================================================
+# INFO CHECKS - Statistics for reporting (not pass/fail)
+# ===========================================================================
+
+info:
+  functions:
+    pattern: '^[a-zA-Z_]+\(\)'
+    flags: -cE
+    label: "Functions"
+    aggregate: sum
+
+  readonly_usage:
+    pattern: 'readonly '
+    flags: -c
+    label: "Readonly"
+    aggregate: sum
+
+  local_usage:
+    pattern: 'local '
+    flags: -c
+    label: "Local"
+    aggregate: sum
+
+  traps:
+    pattern: 'trap '
+    flags: -c
+    label: "Traps"
+    aggregate: sum
+
+# ===========================================================================
+# ANTI-PATTERNS - Quick reference table (documentation only)
+# ===========================================================================
+
+anti_patterns:
+  - pattern: "$var unquoted"
+    description: "Word splitting, globs"
+    fix: '"$var"'
+
+  - pattern: "[ ] test"
+    description: "Word splitting, limited"
+    fix: "[[ ]]"
+
+  - pattern: "Backticks"
+    description: "Can't nest, hard to read"
+    fix: "$()"
+
+  - pattern: "cd dir alone"
+    description: "Continues if fails"
+    fix: "cd dir || exit 1"
+
+  - pattern: "for f in $(ls)"
+    description: "Breaks on spaces"
+    fix: "for f in *"
+
+  - pattern: "cat f | grep"
+    description: "Useless cat"
+    fix: "grep pattern f"
+
+  - pattern: "function f {"
+    description: "Not POSIX"
+    fix: "f() {"
+
+  - pattern: "Global in functions"
+    description: "Side effects"
+    fix: "local"
+
+  - pattern: "No set -e"
+    description: "Ignores errors"
+    fix: "set -euo pipefail"
+
+  - pattern: "Predictable /tmp"
+    description: "Race condition"
+    fix: "mktemp"
+
+  - pattern: "curl | bash"
+    description: "Remote code execution"
+    fix: "Download, inspect, run"
+
+# ===========================================================================
+# SOURCES
+# ===========================================================================
+
+sources:
+  - title: "Google Shell Style Guide"
+    url: "https://google.github.io/styleguide/shellguide.html"
+
+  - title: "ShellCheck Wiki"
+    url: "https://www.shellcheck.net/wiki/"
+
+  - title: "Bash Pitfalls"
+    url: "https://mywiki.wooledge.org/BashPitfalls"
