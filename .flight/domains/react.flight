@@ -1,0 +1,622 @@
+# react.flight - Production React patterns for components and hooks
+# Source: Migrated from react.md and react.validate.sh
+
+domain: react
+version: 1.0.0
+description: >
+  Production React patterns for functional components, hooks, and state management.
+  Prevents common performance issues, broken reconciliation, and Rules of Hooks violations.
+
+file_patterns:
+  - "**/*.jsx"
+  - "**/*.tsx"
+
+exclude_patterns:
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/.next/**"
+  - "**/.git/**"
+
+suppression:
+  comment: "flight:ok"
+  guidance: |
+    Add `// flight:ok` comment on the same line to suppress.
+    Use sparingly. Document why the suppression is acceptable.
+
+# ===========================================================================
+# RULES
+# ===========================================================================
+# React-SPECIFIC rules. Universal code hygiene rules (console.log,
+# boolean comparisons, generic names) are in code-hygiene.flight.
+#
+# ID format: {severity_prefix}{number}
+#   N = NEVER (check - fails build)
+#   S = SHOULD (warn - advisory)
+#   G = GUIDANCE (not checked)
+# ===========================================================================
+
+rules:
+
+  # =========================================================================
+  # NEVER - React anti-patterns (validator will reject)
+  # =========================================================================
+
+  N1:
+    title: Inline Objects in JSX Props
+    severity: NEVER
+    mechanical: true
+    description: >
+      Creates new object reference every render, causing unnecessary re-renders
+      of child components even when values haven't changed.
+    check:
+      type: grep
+      pattern: '=[{][{]|=\{\s*\{'
+      flags: -En
+    note: |
+      Every render creates a new object: {} !== {}. This breaks React.memo
+      and causes children to re-render. Extract to const or useMemo.
+    examples:
+      bad:
+        - "<Component style={{ margin: 10 }} />"
+        - "<Component config={{ enabled: true }} />"
+      good:
+        - |
+          const containerStyle = { margin: 10 };
+          <Component style={containerStyle} />
+        - |
+          const config = useMemo(() => ({ enabled: true }), []);
+          <Component config={config} />
+
+  N2:
+    title: Inline Functions in JSX Props
+    severity: NEVER
+    mechanical: true
+    description: >
+      Creates new function reference every render, causing unnecessary re-renders
+      and breaking React.memo optimization.
+    check:
+      type: grep
+      pattern: 'onClick=\{.*=>|onChange=\{.*=>|onSubmit=\{.*=>|onBlur=\{.*=>|onFocus=\{.*=>'
+      flags: -En
+    note: |
+      Arrow functions in JSX create new references each render.
+      Use useCallback for handlers passed to children.
+    examples:
+      bad:
+        - "<Button onClick={() => handleClick(id)} />"
+        - "<Input onChange={(e) => setName(e.target.value)} />"
+      good:
+        - |
+          const handleButtonClick = useCallback(() => handleClick(id), [id]);
+          <Button onClick={handleButtonClick} />
+
+  N3:
+    title: Index as Key
+    severity: NEVER
+    mechanical: true
+    description: >
+      Using array index as key breaks React reconciliation on reorder/delete.
+      Items get wrong state and animations break.
+    check:
+      type: grep
+      pattern: 'key=\{.*index|key=\{i\}|key=\{idx\}'
+      flags: -En
+    note: |
+      React uses keys to track identity. If key={index} and you delete item 2,
+      item 3 becomes index 2 and inherits item 2's state. Use stable IDs.
+    examples:
+      bad:
+        - "items.map((item, index) => <Item key={index} />)"
+        - "items.map((item, i) => <Item key={i} />)"
+      good:
+        - "items.map((item) => <Item key={item.id} />)"
+        - "items.map((item) => <Item key={`${item.type}-${item.id}`} />)"
+
+  N4:
+    title: Direct State Mutation
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never mutate state directly with push/pop/splice. React won't detect
+      the change and won't re-render.
+    check:
+      type: grep
+      pattern: '\.push\(|\.splice\(|\.pop\(|\.shift\(|\.unshift\('
+      flags: -En
+    note: |
+      Mutating arrays in place keeps the same reference.
+      React compares references, not contents. Create new arrays.
+    examples:
+      bad:
+        - |
+          items.push(newItem);
+          setItems(items);  // Same reference, no re-render
+        - |
+          user.name = 'new';
+          setUser(user);
+      good:
+        - "setItems([...items, newItem]);"
+        - "setUser({ ...user, name: 'new' });"
+        - "setItems(items.filter(i => i.id !== removeId));"
+
+  N5:
+    title: Missing Dependency Arrays
+    severity: NEVER
+    mechanical: true
+    description: >
+      useEffect/useMemo/useCallback with empty deps but referencing
+      outer variables causes stale closures.
+    check:
+      type: script
+      code: |
+        grep -Pzo 'useEffect\(\s*\(\)\s*=>\s*\{[^}]*[a-zA-Z]+[^}]*\},\s*\[\]\)' "$@" 2>/dev/null | head -5 || true
+    note: |
+      Empty deps [] means "run once". If the callback uses userId but deps is [],
+      userId will be stale forever. Add all referenced variables to deps.
+    examples:
+      bad:
+        - "useEffect(() => { fetchData(userId); }, []);  // userId stale"
+        - "useEffect(() => { fetchData(userId); });  // runs every render"
+      good:
+        - "useEffect(() => { fetchData(userId); }, [userId]);"
+
+  N6:
+    title: Conditional Hooks
+    severity: NEVER
+    mechanical: true
+    description: >
+      Calling hooks inside conditions/loops breaks Rules of Hooks.
+      React tracks hooks by call order which must be stable.
+    check:
+      type: grep
+      pattern: 'if.*\{[^}]*(useState|useEffect|useMemo|useCallback|useRef)'
+      flags: -En
+    note: |
+      Hooks must be called in the same order every render.
+      Moving useState inside an if-block changes call order conditionally.
+      Instead, call hooks at top level and conditionally use the values.
+    examples:
+      bad:
+        - |
+          if (isLoggedIn) {
+            const [user] = useState(null);  // Hook inside condition!
+          }
+      good:
+        - |
+          const [user] = useState(null);  // Always called
+          if (!isLoggedIn) return null;   // Conditional render is fine
+
+  N7:
+    title: Generic Component Names
+    severity: NEVER
+    mechanical: true
+    description: >
+      Component functions named Item, Card, Component, etc. are too generic.
+      Use domain-specific names that describe what the component represents.
+    check:
+      type: grep
+      pattern: 'function\s+\w+\(\s*\{\s*(data|info|item|value)\s*\}'
+      flags: -En
+    note: |
+      Generic names hurt readability and make refactoring harder.
+      ProductCard tells you what it is. Item tells you nothing.
+    examples:
+      bad:
+        - "function Item({ data }) { ... }"
+        - "function Card({ info }) { ... }"
+        - "function Component({ value }) { ... }"
+      good:
+        - "function ProductCard({ product }) { ... }"
+        - "function UserAvatar({ user }) { ... }"
+        - "function OrderSummary({ order }) { ... }"
+
+  N8:
+    title: Export Default (except Next.js special files)
+    severity: NEVER
+    mechanical: true
+    description: >
+      Use named exports for better refactoring support and explicit imports.
+      Exception: Next.js App Router special files require export default.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+            basename=$(basename "$f")
+            # Skip Next.js special files that require export default
+            if [[ "$basename" =~ ^(page|layout|loading|error|not-found|template|default)\.(tsx|jsx|ts|js)$ ]]; then
+                continue
+            fi
+            grep -En '^export default' "$f" 2>/dev/null || true
+        done
+    note: |
+      export default allows renaming on import, hiding the real name.
+      Named exports keep names consistent across codebase.
+      Next.js page.tsx, layout.tsx, etc. MUST use export default per framework.
+    examples:
+      bad:
+        - "export default function UserCard() { ... }"
+      good:
+        - "export function UserCard() { ... }"
+        - |
+          // page.tsx - Next.js exception
+          export default function HomePage() { ... }
+
+  N9:
+    title: Props Named data/info/item/value
+    severity: NEVER
+    mechanical: true
+    description: >
+      Generic prop names like data, info, item hide intent.
+      Use domain-specific names that describe the prop's purpose.
+    check:
+      type: script
+      code: |
+        grep -En '\{\s*(data|info|item|value)\s*\}' "$@" | grep -v 'const\|let\|var' || true
+    note: |
+      <List data={data}> tells you nothing. <ProductList products={products}>
+      tells you exactly what it does. Domain names prevent misuse.
+    examples:
+      bad:
+        - "function List({ data, onItemClick }) { ... }"
+        - "const { data } = props;"
+      good:
+        - "function ProductList({ products, onProductSelect }) { ... }"
+        - "const { products } = props;"
+
+  N10:
+    title: Console.log in Components
+    severity: NEVER
+    mechanical: true
+    description: >
+      Console statements in components indicate incomplete development
+      or forgotten debugging code. Remove before committing.
+    check:
+      type: grep
+      pattern: 'console\.(log|warn|error)'
+      flags: -En
+    note: |
+      Console.log in components runs on every render, cluttering
+      browser console. Use proper logging or React DevTools instead.
+    examples:
+      bad:
+        - "console.log('rendered', props);"
+        - "console.log('state:', user);"
+      good:
+        - "// Use React DevTools for debugging"
+        - "// Use proper logging service for production"
+
+  N11:
+    title: Ternary Returning Boolean Literals
+    severity: NEVER
+    mechanical: true
+    description: >
+      condition ? true : false is always redundant.
+      The condition is already boolean (or truthy/falsy).
+    check:
+      type: grep
+      pattern: '\?\s*true\s*:\s*false|\?\s*false\s*:\s*true'
+      flags: -En
+    note: |
+      x ? true : false === Boolean(x) === !!x
+      x ? false : true === !x
+      Just use the simpler form.
+    examples:
+      bad:
+        - "const isActive = status === 'active' ? true : false;"
+        - "disabled={isLoading ? true : false}"
+      good:
+        - "const isActive = status === 'active';"
+        - "disabled={isLoading}"
+
+  N12:
+    title: Redundant Boolean Comparisons
+    severity: NEVER
+    mechanical: true
+    description: >
+      Comparing to true/false explicitly is redundant.
+      Booleans are already truthy/falsy.
+    check:
+      type: grep
+      pattern: '===\s*true|===\s*false|!==\s*true|!==\s*false'
+      flags: -En
+    note: |
+      if (x === true) is the same as if (x).
+      if (x === false) is the same as if (!x).
+      The explicit comparison adds noise.
+    examples:
+      bad:
+        - "if (isLoading === true) { ... }"
+        - "if (isValid === false) { ... }"
+      good:
+        - "if (isLoading) { ... }"
+        - "if (!isValid) { ... }"
+
+  # =========================================================================
+  # SHOULD - Best practices (validator warns)
+  # =========================================================================
+
+  S1:
+    title: Handle Loading State
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Components with async operations (fetch, useQuery, useSWR) should
+      handle loading state to prevent flash of empty content.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -q 'fetch\|useQuery\|useSWR\|useEffect.*async' "$f"; then
+            if ! grep -q 'isLoading\|loading' "$f"; then
+              echo "$f: has async but no loading state"
+            fi
+          fi
+        done
+    note: |
+      Users should see a loading indicator, not a blank screen or
+      broken layout while data loads.
+    examples:
+      bad:
+        - |
+          function UserProfile({ userId }) {
+            const { data } = useFetch(`/users/${userId}`);
+            return <div>{data.name}</div>;  // Crashes while loading!
+          }
+      good:
+        - |
+          function UserProfile({ userId }) {
+            const { data, isLoading, error } = useFetch(`/users/${userId}`);
+            if (isLoading) return <LoadingSpinner />;
+            if (error) return <ErrorMessage error={error} />;
+            return <div>{data.name}</div>;
+          }
+
+  S2:
+    title: Handle Error State
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Components with async operations should handle error state
+      to show meaningful feedback instead of crashing.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -q 'fetch\|useQuery\|useSWR\|useEffect.*async' "$f"; then
+            if ! grep -q 'error\|Error' "$f"; then
+              echo "$f: has async but no error handling"
+            fi
+          fi
+        done
+    note: |
+      Network requests fail. APIs return errors. Show users what went wrong
+      instead of crashing or showing stale data.
+    examples:
+      good:
+        - |
+          if (error) return <ErrorMessage error={error} />;
+
+  S3:
+    title: Boolean Props Use Prefix
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Boolean props should use is/has/can/should prefix for clarity.
+      Exception: HTML attributes like disabled, checked, selected.
+    check:
+      type: grep
+      pattern: '^\s*(loading|visible|active)='
+      flags: -En
+    note: |
+      isLoading is clearly boolean. loading could be anything.
+      Prefixes make JSX self-documenting.
+    examples:
+      bad:
+        - "<Modal open={true} loading={true} disabled={true} />"
+      good:
+        - "<Modal isOpen={true} isLoading={true} disabled={true} />"
+
+  S4:
+    title: useCallback for Handlers
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Event handlers defined with const should use useCallback
+      when passed to child components to prevent unnecessary re-renders.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -q 'const handle' "$f"; then
+            if ! grep -q 'useCallback' "$f"; then
+              handlers=$(grep -c 'const handle' "$f")
+              if [ "$handlers" -gt 0 ]; then
+                echo "$f: $handlers handlers without useCallback"
+              fi
+            fi
+          fi
+        done
+    note: |
+      Without useCallback, handlers are recreated every render.
+      This breaks React.memo and causes child re-renders.
+    examples:
+      bad:
+        - |
+          const handleClick = () => { ... };  // New function every render
+          <Button onClick={handleClick} />
+      good:
+        - |
+          const handleClick = useCallback(() => { ... }, [deps]);
+          <Button onClick={handleClick} />
+
+  # =========================================================================
+  # GUIDANCE - Design patterns (not mechanically checked)
+  # =========================================================================
+
+  G1:
+    title: Component Structure
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Recommended structure for React components to improve consistency
+      and readability across the codebase.
+    note: |
+      1. Imports (external, then internal)
+      2. Constants
+      3. Component function
+         3a. Hooks (always at top, same order)
+         3b. Derived state / memoized values
+         3c. Callbacks (useCallback)
+         3d. Effects (useEffect)
+         3e. Early returns / guards
+         3f. Render
+
+  G2:
+    title: Custom Hook Structure
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Pattern for custom hooks that handle async operations with
+      proper cleanup and loading/error states.
+    note: |
+      export function useProducts(categoryId) {
+        const [products, setProducts] = useState([]);
+        const [isLoading, setIsLoading] = useState(true);
+        const [error, setError] = useState(null);
+
+        useEffect(() => {
+          let isMounted = true;  // Cleanup flag
+          setIsLoading(true);
+          setError(null);
+
+          fetchProducts(categoryId)
+            .then((data) => {
+              if (isMounted) {
+                setProducts(data);
+                setIsLoading(false);
+              }
+            })
+            .catch((err) => {
+              if (isMounted) {
+                setError(err);
+                setIsLoading(false);
+              }
+            });
+
+          return () => { isMounted = false; };  // Cleanup
+        }, [categoryId]);
+
+        return { products, isLoading, error };
+      }
+
+  G3:
+    title: Form with useReducer
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      For complex forms, useReducer provides better state management
+      than multiple useState calls.
+    note: |
+      const initialFormState = {
+        values: { email: '', password: '' },
+        errors: {},
+        isSubmitting: false
+      };
+
+      function formReducer(state, action) {
+        switch (action.type) {
+          case 'SET_FIELD':
+            return {
+              ...state,
+              values: { ...state.values, [action.field]: action.value },
+              errors: { ...state.errors, [action.field]: null }
+            };
+          case 'SET_ERROR':
+            return { ...state, errors: { ...state.errors, [action.field]: action.error } };
+          case 'SUBMIT_START':
+            return { ...state, isSubmitting: true };
+          case 'SUBMIT_END':
+            return { ...state, isSubmitting: false };
+          default:
+            return state;
+        }
+      }
+
+# ===========================================================================
+# INFO CHECKS - Statistics for reporting (not pass/fail)
+# ===========================================================================
+
+info:
+  components:
+    pattern: '^export (async )?function [A-Z]|^export const [A-Z].* = '
+    flags: -lE
+    label: "Components found"
+    aggregate: count
+
+  hooks_used:
+    pattern: 'use[A-Z][a-zA-Z]+'
+    flags: -ohE
+    label: "Hooks used"
+    aggregate: unique
+
+  custom_hooks:
+    pattern: '^export function use[A-Z]'
+    flags: -lE
+    label: "Custom hooks"
+    aggregate: count
+
+# ===========================================================================
+# ANTI-PATTERNS - Quick reference table (documentation only)
+# ===========================================================================
+
+anti_patterns:
+  - pattern: "<Comp style={{...}}/>"
+    description: "New ref every render"
+    fix: "Extract to const/useMemo"
+
+  - pattern: "<Comp onClick={() => ...}/>"
+    description: "New fn every render"
+    fix: "useCallback"
+
+  - pattern: "key={index}"
+    description: "Breaks on reorder"
+    fix: "Use stable ID"
+
+  - pattern: "arr.push(); setArr(arr)"
+    description: "Mutation not detected"
+    fix: "setArr([...arr, new])"
+
+  - pattern: "useEffect(() => {}, [])"
+    description: "Missing deps"
+    fix: "Add all deps"
+
+  - pattern: "if (x) useState()"
+    description: "Hook rules violation"
+    fix: "Hooks at top level"
+
+  - pattern: "export default"
+    description: "Refactor issues"
+    fix: "Named exports (except Next.js)"
+
+  - pattern: "function Item({data})"
+    description: "Generic naming"
+    fix: "Domain-specific names"
+
+  - pattern: "{loading && <Spin/>}"
+    description: "Flash of content"
+    fix: "Early return pattern"
+
+# ===========================================================================
+# SOURCES
+# ===========================================================================
+
+sources:
+  - title: "React Documentation - Rules of Hooks"
+    url: "https://react.dev/reference/rules/rules-of-hooks"
+
+  - title: "React Documentation - Thinking in React"
+    url: "https://react.dev/learn/thinking-in-react"
+
+  - title: "React Patterns"
+    url: "https://reactpatterns.com/"
