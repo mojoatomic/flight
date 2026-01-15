@@ -1,0 +1,742 @@
+# python.flight - Python Domain
+# Source: Migrated from python.md and python.validate.sh
+
+domain: python
+version: 1.0.0
+description: >
+  Production Python patterns for clean, maintainable, type-safe code.
+  Prevents common mistakes like mutable defaults, bare exceptions, and
+  silent failures.
+
+file_patterns:
+  - "**/*.py"
+
+exclude_patterns:
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/.venv/**"
+  - "**/venv/**"
+  - "**/__pycache__/**"
+  - "**/.git/**"
+
+suppression:
+  comment: "# noqa"
+  guidance: |
+    Add `# noqa` comment on the same line to suppress.
+    Use sparingly. Document why the suppression is acceptable.
+
+# ===========================================================================
+# RULES
+# ===========================================================================
+# Python-specific rules for production code quality.
+#
+# ID format: {severity_prefix}{number}
+#   N = NEVER (check - fails build)
+#   S = SHOULD (warn - advisory)
+#   G = GUIDANCE (not checked)
+# ===========================================================================
+
+rules:
+
+  # =========================================================================
+  # NEVER - Python anti-patterns (validator will reject)
+  # =========================================================================
+
+  N1:
+    title: "Bare except:"
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use bare 'except:' which catches everything including
+      KeyboardInterrupt and SystemExit.
+    check:
+      type: grep
+      pattern: '^\s*except\s*:'
+      flags: -En
+    note: |
+      Bare except catches KeyboardInterrupt, SystemExit, and GeneratorExit.
+      Always specify the exception type you're handling.
+    examples:
+      bad:
+        - |
+          try:
+              do_something()
+          except:
+              pass
+      good:
+        - |
+          try:
+              do_something()
+          except ValueError as e:
+              handle_error(e)
+
+  N2:
+    title: "except Exception: pass"
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never silently swallow exceptions with 'except Exception: pass'.
+      Silent failures hide bugs and make debugging impossible.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          awk '/except\s+(Exception|BaseException)/ { getline; if (/^\s*pass\s*$/) print FILENAME":"NR-1": except with pass" }' "$f"
+        done
+    examples:
+      bad:
+        - |
+          try:
+              risky_operation()
+          except Exception:
+              pass
+      good:
+        - |
+          try:
+              risky_operation()
+          except SpecificError as e:
+              logger.warning(f"Operation failed: {e}")
+              return default_value
+
+  N3:
+    title: Mutable Default Arguments
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use mutable default arguments (=[], ={}, =set()).
+      Default arguments are evaluated once at function definition,
+      causing shared state across calls.
+    check:
+      type: grep
+      pattern: 'def .+\(.*=\s*(\[\]|\{\}|set\(\))'
+      flags: -En
+    note: |
+      The default value is created once when the function is defined,
+      not each time it's called. Use None and create inside the function.
+    examples:
+      bad:
+        - "def add_item(item, items=[]):"
+        - "def merge_data(data, result={}):"
+      good:
+        - |
+          def add_item(item, items=None):
+              if items is None:
+                  items = []
+              items.append(item)
+              return items
+
+  N4:
+    title: "from x import *"
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use wildcard imports. They pollute the namespace and
+      hide where names come from.
+    check:
+      type: grep
+      pattern: '^from .+ import \*'
+      flags: -En
+    note: |
+      Wildcard imports make it impossible to know where names come from,
+      can shadow built-ins, and break static analysis tools.
+    examples:
+      bad:
+        - "from os import *"
+        - "from utils import *"
+      good:
+        - "from os import path, getcwd"
+        - "from utils import validate_input, format_output"
+
+  N5:
+    title: "type(x) == for Type Checking"
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use type() for type checking. It breaks inheritance
+      and doesn't work with abstract base classes.
+    check:
+      type: grep
+      pattern: 'type\(.+\)\s*==|==\s*type\('
+      flags: -En
+    note: |
+      type() returns the exact type, not accounting for inheritance.
+      isinstance() handles inheritance and ABCs correctly.
+    examples:
+      bad:
+        - "if type(obj) == list:"
+        - "if type(x) == str:"
+      good:
+        - "if isinstance(obj, list):"
+        - "if isinstance(x, (str, bytes)):"
+
+  N6:
+    title: Generic Variable Names at Module Level
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use generic variable names (data, temp, result, info, obj)
+      at module level. Use domain-specific names.
+    check:
+      type: grep
+      pattern: '^(data|temp|result|info|obj)\s*='
+      flags: -En
+    note: |
+      Generic names provide no context. Use names that describe
+      what the variable holds in your domain.
+    examples:
+      bad:
+        - "data = load_users()"
+        - "result = process()"
+      good:
+        - "users = load_users()"
+        - "processed_orders = process()"
+
+  N7:
+    title: print() Outside __main__
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use print() for logging outside of __main__ blocks.
+      Use the logging module for proper log levels and context.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          awk '
+          /__name__.*__main__/ { in_main=1 }
+          /^[^ ]/ && in_main { in_main=0 }
+          /print\(/ && !in_main && !/# noqa/ { print FILENAME":"NR": "$0 }
+          ' "$f"
+        done | head -10
+    examples:
+      bad:
+        - 'print(f"Processing user {user_id}")'
+        - 'print(f"Error: {e}")'
+      good:
+        - |
+          import logging
+          logger = logging.getLogger(__name__)
+          logger.info(f"Processing user {user_id}")
+
+  N8:
+    title: Hardcoded Absolute Paths
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never hardcode absolute paths. They break across environments
+      and operating systems.
+    check:
+      type: grep
+      pattern: "['\"]/(home|usr|var|etc|tmp)/|['\"][A-Z]:\\\\"
+      flags: -En
+    note: |
+      Use pathlib.Path for portable path handling. Use Path(__file__).parent
+      for paths relative to the current file.
+    examples:
+      bad:
+        - 'config_path = "/home/user/app/config.json"'
+        - 'output_dir = "C:\\Users\\app\\output"'
+      good:
+        - |
+          from pathlib import Path
+          CONFIG_PATH = Path(__file__).parent / "config.json"
+
+  N9:
+    title: Deeply Nested Conditionals
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never nest conditionals more than 3 levels deep.
+      Use early returns to flatten the structure.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          awk '
+          /^\s+if / {
+            spaces = length($0) - length(gensub(/^\s+/, "", "g", $0))
+            if (spaces > 16) {
+              print FILENAME":"NR": deeply nested ("int(spaces/4)" levels)"
+            }
+          }
+          ' "$f"
+        done | head -5
+    examples:
+      bad:
+        - |
+          if user:
+              if user.is_active:
+                  if user.has_permission:
+                      if not user.is_banned:
+                          do_action()
+      good:
+        - |
+          if not user:
+              return
+          if not user.is_active:
+              return
+          if not user.has_permission:
+              return
+          if user.is_banned:
+              return
+          do_action()
+
+  # =========================================================================
+  # SHOULD - Best practices (validator warns)
+  # =========================================================================
+
+  S1:
+    title: String += Patterns
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Avoid string concatenation with += in loops. It creates O(n²)
+      complexity due to string immutability.
+    check:
+      type: grep
+      pattern: '\+=\s*[''"]|\+=.*str\('
+      flags: -En
+    note: |
+      Each += creates a new string object. Use str.join() or list
+      accumulation for efficient string building.
+    examples:
+      bad:
+        - |
+          result = ""
+          for item in items:
+              result += str(item) + ", "
+      good:
+        - 'result = ", ".join(str(item) for item in items)'
+
+  S2:
+    title: Magic Numbers in Logic
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Avoid magic numbers in conditionals and function calls.
+      Use named constants for clarity.
+    check:
+      type: grep
+      pattern: 'if .+ [<>=]+ [0-9]{2,}|while .+ [<>=]+ [0-9]{2,}|sleep\([0-9]{2,}\)'
+      flags: -En
+    examples:
+      bad:
+        - "if retry_count > 3:"
+        - "time.sleep(86400)"
+      good:
+        - |
+          MAX_RETRIES = 3
+          SECONDS_PER_DAY = 86400
+          if retry_count > MAX_RETRIES:
+              raise TooManyRetries()
+
+  S3:
+    title: Type Hints on Public Functions
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Public functions should have type hints for parameters and
+      return values to enable static analysis and documentation.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          grep -n '^def [a-z]' "$f" | grep -v '\->' | grep -v '__' | head -3
+        done
+    examples:
+      bad:
+        - |
+          def calculate_total(items, tax_rate):
+              return sum(i.price for i in items) * (1 + tax_rate)
+      good:
+        - |
+          def calculate_total(items: list[LineItem], tax_rate: float) -> Decimal:
+              return sum(i.price for i in items) * (1 + tax_rate)
+
+  S4:
+    title: if __name__ == __main__ Guard
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Scripts with a main() function should have an
+      'if __name__ == "__main__":' guard.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -q '^def main' "$f"; then
+            if ! grep -q '__name__.*__main__' "$f"; then
+              echo "$f: has main() but no __name__ guard"
+            fi
+          fi
+        done
+    examples:
+      good:
+        - |
+          def main():
+              app = create_app()
+              app.run()
+
+          if __name__ == "__main__":
+              main()
+
+  S5:
+    title: Use pathlib for File Operations
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Prefer pathlib over os.path for file operations.
+      pathlib provides a cleaner, more object-oriented API.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -q 'os.path' "$f"; then
+            if ! grep -q 'pathlib' "$f"; then
+              echo "$f: uses os.path, consider pathlib"
+            fi
+          fi
+        done
+    examples:
+      bad:
+        - |
+          import os
+          config_path = os.path.join(base_dir, "config.json")
+      good:
+        - |
+          from pathlib import Path
+          config_path = Path(base_dir) / "config.json"
+
+  S6:
+    title: Use logging Module
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Large files (>50 lines) should use the logging module
+      for proper log levels and configuration.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if [ $(wc -l < "$f") -gt 50 ]; then
+            if ! grep -q 'import logging\|from logging' "$f"; then
+              echo "$f: large file without logging"
+            fi
+          fi
+        done
+    examples:
+      good:
+        - |
+          import logging
+          logger = logging.getLogger(__name__)
+
+          logger.debug("Detailed info for debugging")
+          logger.info("General information")
+          logger.warning("Something unexpected")
+          logger.error("Error occurred", exc_info=True)
+
+  S7:
+    title: Docstrings on Public Functions
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Public functions should have docstrings explaining their
+      purpose, arguments, and return values.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          awk '
+          /^def [a-z][a-z_]+\(/ {
+            fname=$0; getline;
+            if ($0 !~ /"""/ && $0 !~ /\x27\x27\x27/) {
+              print FILENAME":"NR-1": "fname" - no docstring"
+            }
+          }
+          ' "$f" | head -3
+        done
+    examples:
+      good:
+        - |
+          def calculate_shipping(
+              weight: float,
+              destination: str,
+              express: bool = False
+          ) -> Decimal:
+              """Calculate shipping cost for an order.
+
+              Args:
+                  weight: Package weight in kg
+                  destination: Country code (ISO 3166-1)
+                  express: Whether to use express shipping
+
+              Returns:
+                  Shipping cost in USD
+
+              Raises:
+                  InvalidDestination: If country code not supported
+              """
+
+  # =========================================================================
+  # GUIDANCE - Best practices (not mechanically checked)
+  # =========================================================================
+
+  G1:
+    title: Module Structure
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Standard module structure with imports organized by category,
+      module-level constants, and main guard.
+    guidance: |
+      """Module docstring explaining purpose."""
+
+      # Standard library imports
+      import logging
+      from pathlib import Path
+      from typing import Optional
+
+      # Third-party imports
+      import requests
+      from pydantic import BaseModel
+
+      # Local imports
+      from .utils import validate
+      from .models import User
+
+      # Module-level constants
+      MAX_RETRIES = 3
+      DEFAULT_TIMEOUT = 30
+
+      # Logger
+      logger = logging.getLogger(__name__)
+
+
+      # Classes and functions
+      class UserService:
+          ...
+
+
+      def main():
+          ...
+
+
+      if __name__ == "__main__":
+          main()
+
+  G2:
+    title: Error Handling Pattern
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Define custom exception hierarchies for your domain.
+      Catch specific exceptions and log appropriately.
+    guidance: |
+      class OrderError(Exception):
+          """Base exception for order operations."""
+          pass
+
+      class OrderNotFound(OrderError):
+          """Raised when order doesn't exist."""
+          pass
+
+      class InvalidOrderStatus(OrderError):
+          """Raised when order status transition is invalid."""
+          pass
+
+
+      def get_order(order_id: str) -> Order:
+          """Fetch order by ID.
+
+          Raises:
+              OrderNotFound: If order doesn't exist
+          """
+          order = db.orders.get(order_id)
+          if order is None:
+              raise OrderNotFound(f"Order {order_id} not found")
+          return order
+
+
+      # Usage
+      try:
+          order = get_order(order_id)
+      except OrderNotFound:
+          logger.warning(f"Order {order_id} not found")
+          return None
+      except OrderError as e:
+          logger.error(f"Order error: {e}")
+          raise
+
+  G3:
+    title: Configuration Pattern
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Use pydantic-settings for type-safe configuration from
+      environment variables.
+    guidance: |
+      from pydantic_settings import BaseSettings
+
+
+      class Settings(BaseSettings):
+          """Application settings from environment."""
+
+          database_url: str
+          api_key: str
+          debug: bool = False
+          max_connections: int = 10
+
+          class Config:
+              env_file = ".env"
+
+
+      settings = Settings()
+
+  G4:
+    title: Async Pattern
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Use asyncio.gather for concurrent operations and
+      async iterators for streaming.
+    guidance: |
+      import asyncio
+      from typing import AsyncIterator
+
+
+      async def fetch_users(user_ids: list[str]) -> list[User]:
+          """Fetch multiple users concurrently."""
+          tasks = [fetch_user(uid) for uid in user_ids]
+          return await asyncio.gather(*tasks)
+
+
+      async def process_stream(items: AsyncIterator[Item]) -> None:
+          """Process items from async stream."""
+          async for item in items:
+              await process_item(item)
+
+  G5:
+    title: Use Dataclasses or Pydantic
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Use dataclasses or Pydantic models for structured data
+      instead of plain dicts or tuples.
+    guidance: |
+      from dataclasses import dataclass
+      from typing import Optional
+
+      @dataclass
+      class User:
+          id: str
+          email: str
+          name: str
+          is_active: bool = True
+          metadata: Optional[dict] = None
+
+  G6:
+    title: Use Enums for Fixed Choices
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Use Enum classes for values with a fixed set of choices.
+    guidance: |
+      from enum import Enum, auto
+
+      class OrderStatus(Enum):
+          PENDING = auto()
+          PROCESSING = auto()
+          SHIPPED = auto()
+          DELIVERED = auto()
+
+      def update_status(order: Order, status: OrderStatus) -> None:
+          order.status = status
+
+  G7:
+    title: Use Comprehensions
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Use list/dict/set comprehensions for simple transformations
+      instead of explicit loops.
+    guidance: |
+      # List comprehension
+      squares = [x ** 2 for x in range(10)]
+
+      # Dict comprehension
+      user_map = {u.id: u for u in users}
+
+      # Set comprehension
+      unique_names = {u.name for u in users}
+
+      # With conditions
+      active_users = [u for u in users if u.is_active]
+
+  G8:
+    title: Context Managers for Resources
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Use context managers (with statement) for resources that
+      need cleanup.
+    guidance: |
+      # Files
+      with open("data.txt") as f:
+          content = f.read()
+
+      # Database connections
+      with db.connection() as conn:
+          conn.execute(query)
+
+      # Locks
+      with threading.Lock():
+          shared_resource.update()
+
+info_metrics:
+  - name: "Functions defined"
+    pattern: "^def "
+  - name: "Classes defined"
+    pattern: "^class "
+  - name: "Functions with return type"
+    pattern: "def.*->.*:"
+  - name: "Dataclasses"
+    pattern: "@dataclass"
+
+anti_patterns:
+  - pattern: "except:"
+    problem: "Catches everything"
+    fix: "Specific exceptions"
+  - pattern: "except Exception: pass"
+    problem: "Silent failure"
+    fix: "Log or handle"
+  - pattern: "def f(x=[])"
+    problem: "Mutable default"
+    fix: "x=None pattern"
+  - pattern: "from x import *"
+    problem: "Namespace pollution"
+    fix: "Explicit imports"
+  - pattern: "s += item in loop"
+    problem: "O(n²)"
+    fix: '"".join()'
+  - pattern: "type(x) == Y"
+    problem: "Breaks inheritance"
+    fix: "isinstance()"
+  - pattern: "print() for logs"
+    problem: "No levels"
+    fix: "logging module"
+  - pattern: "Magic numbers"
+    problem: "Unclear intent"
+    fix: "Named constants"
+  - pattern: "No type hints"
+    problem: "Hard to maintain"
+    fix: "Add annotations"
+  - pattern: "Nested if > 3"
+    problem: "Hard to read"
+    fix: "Early returns"
+  - pattern: "Hardcoded paths"
+    problem: "Not portable"
+    fix: "pathlib.Path"
+  - pattern: "Generic names"
+    problem: "Unclear purpose"
+    fix: "Domain terms"

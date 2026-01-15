@@ -1,0 +1,779 @@
+# sql.flight - SQL Domain
+# Source: Migrated from sql.md and sql.validate.sh
+
+domain: sql
+version: 1.0.0
+description: >
+  Production SQL patterns for PostgreSQL/Supabase. Security, performance,
+  maintainability. Covers both SQL files and source code containing SQL queries.
+
+file_patterns:
+  - "**/*.sql"
+  - "**/*.js"
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.py"
+
+exclude_patterns:
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/.venv/**"
+  - "**/venv/**"
+  - "**/.git/**"
+
+suppression:
+  comment: "flight:ok"
+  guidance: |
+    Add `-- flight:ok` (SQL) or `// flight:ok` (JS/TS) on the same line.
+    Use sparingly. Document why the suppression is acceptable.
+
+# ===========================================================================
+# RULES
+# ===========================================================================
+# ID format: {severity_prefix}{number}
+#   N = NEVER (check - fails build)
+#   S = SHOULD (warn - advisory)
+#   G = GUIDANCE (not checked)
+# ===========================================================================
+
+rules:
+
+  # =========================================================================
+  # NEVER - Hard failures (validator will reject)
+  # =========================================================================
+
+  N1:
+    title: "SELECT *"
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use SELECT * - breaks on schema changes, wastes bandwidth.
+      Always specify explicit column lists.
+    check:
+      type: grep
+      pattern: 'SELECT\s+\*\s+FROM'
+      flags: -Ein
+    examples:
+      bad:
+        - "SELECT * FROM users WHERE id = $1;"
+      good:
+        - "SELECT id, email, name, created_at FROM users WHERE id = $1;"
+
+  N2:
+    title: String Interpolation in SQL
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use string interpolation in SQL queries. SQL injection risk.
+      Use parameterized queries with placeholders ($1, ?, :param).
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          case "$f" in
+            *.js|*.ts|*.tsx)
+              # Template literals with SQL keywords
+              grep -En '\`[^\`]*SELECT.*\$\{|\`[^\`]*INSERT.*\$\{|\`[^\`]*UPDATE.*\$\{|\`[^\`]*DELETE.*\$\{' "$f" 2>/dev/null
+              # String concat with SQL
+              grep -En "SELECT.*\"\\s*\\+|INSERT.*\"\\s*\\+|UPDATE.*\"\\s*\\+|DELETE.*\"\\s*\\+" "$f" 2>/dev/null
+              ;;
+            *.py)
+              # Python f-strings with SQL
+              grep -En 'f"[^"]*SELECT.*\{|f"[^"]*INSERT.*\{|f"[^"]*UPDATE.*\{' "$f" 2>/dev/null
+              ;;
+          esac
+        done | head -10
+    examples:
+      bad:
+        - 'const query = `SELECT * FROM users WHERE id = ${userId}`;'
+        - 'const query = "SELECT * FROM users WHERE name = " + name;'
+        - 'query = f"SELECT * FROM users WHERE id = {user_id}"'
+      good:
+        - "const query = 'SELECT id, email FROM users WHERE id = $1';"
+        - "await db.query(query, [userId]);"
+
+  N3:
+    title: UPDATE/DELETE Without WHERE
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never run UPDATE or DELETE without a WHERE clause. This modifies or
+      deletes ALL rows in the table, causing catastrophic data loss.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # DELETE FROM table; without WHERE
+          grep -Ein 'DELETE\s+FROM\s+\w+\s*;' "$f" 2>/dev/null
+          # UPDATE without WHERE on same line (basic check)
+          grep -Ein 'UPDATE\s+\w+\s+SET\s+.*;' "$f" 2>/dev/null | grep -iv 'WHERE'
+        done | head -5
+    examples:
+      bad:
+        - "UPDATE users SET status = 'inactive';"
+        - "DELETE FROM orders;"
+      good:
+        - "UPDATE users SET status = 'inactive' WHERE last_login < '2024-01-01';"
+        - "DELETE FROM orders WHERE status = 'cancelled' AND created_at < '2024-01-01';"
+
+  N4:
+    title: LIKE with Leading Wildcard
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use LIKE with a leading wildcard ('%...') - it forces a full
+      table scan and cannot use indexes. Use full text search instead.
+    check:
+      type: grep
+      pattern: "LIKE\\s+['\"]%[^'\"]+['\"]"
+      flags: -Ein
+    examples:
+      bad:
+        - "SELECT * FROM products WHERE name LIKE '%widget%';"
+      good:
+        - "SELECT id, name FROM products WHERE name LIKE 'widget%';"
+        - "SELECT id, name FROM products WHERE to_tsvector(name) @@ to_tsquery('widget');"
+
+  N5:
+    title: Functions on Columns in WHERE
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never apply functions to indexed columns in WHERE clauses. This
+      prevents index usage and forces full table scans.
+    check:
+      type: grep
+      pattern: 'WHERE.*(YEAR|MONTH|DAY|LOWER|UPPER|TRIM)\s*\('
+      flags: -Ein
+    examples:
+      bad:
+        - "SELECT * FROM orders WHERE YEAR(created_at) = 2024;"
+        - "SELECT * FROM users WHERE LOWER(email) = 'test@example.com';"
+      good:
+        - "SELECT id, total FROM orders WHERE created_at >= '2024-01-01' AND created_at < '2025-01-01';"
+        - "CREATE INDEX idx_users_email_lower ON users (LOWER(email));"
+
+  N6:
+    title: Large OFFSET Values
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use large OFFSET values for pagination. OFFSET scans and discards
+      rows, getting slower as offset grows. Use cursor/keyset pagination.
+    check:
+      type: grep
+      pattern: 'OFFSET\s+[0-9]{4,}|OFFSET\s+\$'
+      flags: -Ein
+    examples:
+      bad:
+        - "SELECT * FROM posts ORDER BY created_at DESC LIMIT 20 OFFSET 10000;"
+      good:
+        - |
+          SELECT id, title, created_at FROM posts
+          WHERE created_at < $1
+          ORDER BY created_at DESC
+          LIMIT 20;
+
+  N7:
+    title: Plain Text Password Column
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never store passwords in plain text. Use password_hash, password_digest,
+      or hashed_password columns and store bcrypt/argon2 hashes.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          case "$f" in
+            *.sql)
+              grep -Ein 'password\s+(varchar|text|char)' "$f" 2>/dev/null | grep -iv 'password_hash\|password_digest\|hashed_password'
+              ;;
+          esac
+        done
+    note: Only checks .sql files for password column definitions.
+    examples:
+      bad:
+        - "password varchar(255)"
+        - "password text NOT NULL"
+      good:
+        - "password_hash varchar(255) NOT NULL"
+        - "password_digest text NOT NULL"
+
+  N8:
+    title: timestamp Without Timezone
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use 'timestamp' without timezone. Use 'timestamptz' or
+      'timestamp with time zone' to avoid timezone ambiguity.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          case "$f" in
+            *.sql)
+              grep -Ein '\stimestamp\s' "$f" 2>/dev/null | grep -iv 'timestamptz\|timestamp with time zone'
+              ;;
+          esac
+        done
+    examples:
+      bad:
+        - "created_at timestamp NOT NULL"
+      good:
+        - "created_at timestamptz NOT NULL DEFAULT now()"
+
+  N9:
+    title: float/real for Money
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use float or real types for monetary values. Floating point
+      has precision issues. Use decimal(10,2) for exact currency amounts.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          case "$f" in
+            *.sql)
+              grep -Ein '(price|cost|total|amount|balance|fee|rate)\s+(float|real|double)' "$f" 2>/dev/null
+              ;;
+          esac
+        done
+    examples:
+      bad:
+        - "price float NOT NULL"
+        - "total real"
+      good:
+        - "price decimal(10,2) NOT NULL"
+        - "total numeric(12,2)"
+
+  # =========================================================================
+  # SHOULD - Warnings (validator warns but doesn't fail)
+  # =========================================================================
+
+  S1:
+    title: Boolean Without NOT NULL DEFAULT
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Boolean columns should have NOT NULL DEFAULT to avoid three-state
+      logic (true, false, NULL). Explicit defaults prevent bugs.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          case "$f" in
+            *.sql)
+              grep -Ein '\s+boolean\s*[,)]' "$f" 2>/dev/null | grep -iv 'NOT NULL'
+              ;;
+          esac
+        done
+    examples:
+      bad:
+        - "is_active boolean"
+        - "is_verified boolean,"
+      good:
+        - "is_active boolean NOT NULL DEFAULT true"
+        - "is_verified boolean NOT NULL DEFAULT false"
+
+  S2:
+    title: Missing RLS on user_id Tables
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Tables with user_id columns should have Row Level Security enabled
+      to prevent data leakage in multi-tenant applications.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          case "$f" in
+            *.sql)
+              if grep -qi 'user_id.*REFERENCES\|user_id\s+uuid' "$f"; then
+                if ! grep -qi 'ENABLE ROW LEVEL SECURITY' "$f"; then
+                  echo "$f: has user_id but no RLS"
+                fi
+              fi
+              ;;
+          esac
+        done
+    examples:
+      bad:
+        - |
+          CREATE TABLE documents (
+            id uuid PRIMARY KEY,
+            user_id uuid REFERENCES users(id),
+            content text
+          );
+      good:
+        - |
+          CREATE TABLE documents (
+            id uuid PRIMARY KEY,
+            user_id uuid REFERENCES users(id),
+            content text
+          );
+          ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
+
+  S3:
+    title: Missing Index on Foreign Key
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Foreign key columns should have indexes for efficient JOINs and
+      CASCADE operations. Without indexes, these operations scan full tables.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          case "$f" in
+            *.sql)
+              grep -Eo '[a-z_]+\s+uuid\s+REFERENCES' "$f" 2>/dev/null | while read -r line; do
+                col=$(echo "$line" | awk '{print $1}')
+                if ! grep -qi "INDEX.*$col" "$f"; then
+                  echo "$f: $col has FK but no index"
+                fi
+              done
+              ;;
+          esac
+        done | head -5
+    examples:
+      bad:
+        - |
+          CREATE TABLE orders (
+            id uuid PRIMARY KEY,
+            user_id uuid REFERENCES users(id)
+          );
+      good:
+        - |
+          CREATE TABLE orders (
+            id uuid PRIMARY KEY,
+            user_id uuid REFERENCES users(id)
+          );
+          CREATE INDEX idx_orders_user_id ON orders(user_id);
+
+  S4:
+    title: N+1 Query Pattern
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Avoid executing queries inside loops (N+1 pattern). This causes
+      excessive database round trips. Use JOINs or batch queries instead.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          case "$f" in
+            *.js|*.ts|*.tsx|*.py)
+              awk '/for\s*\(|while\s*\(|for .* in/{inloop=5} inloop>0{inloop--; if(/await.*(query|select|execute|from\()/) print FILENAME":"NR": "$0}' "$f"
+              ;;
+          esac
+        done | head -5
+    examples:
+      bad:
+        - |
+          const users = await db.query('SELECT id FROM users');
+          for (const user of users) {
+            const orders = await db.query('SELECT * FROM orders WHERE user_id = $1', [user.id]);
+          }
+      good:
+        - |
+          const result = await db.query(`
+            SELECT u.id, u.name, o.id as order_id, o.total
+            FROM users u
+            LEFT JOIN orders o ON o.user_id = u.id
+          `);
+
+  S5:
+    title: Multiple Writes Without Transaction
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Multiple INSERT/UPDATE operations should be wrapped in a transaction
+      to ensure atomicity. Partial failures leave data in inconsistent state.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          case "$f" in
+            *.js|*.ts|*.tsx|*.py)
+              inserts=$(grep -c 'INSERT INTO\|UPDATE.*SET' "$f" 2>/dev/null || echo 0)
+              if [ "$inserts" -gt 2 ]; then
+                if ! grep -qi 'BEGIN\|transaction\|\.transaction' "$f"; then
+                  echo "$f: $inserts writes without transaction"
+                fi
+              fi
+              ;;
+          esac
+        done
+    examples:
+      bad:
+        - |
+          await db.query('UPDATE accounts SET balance = balance - 100 WHERE id = $1', [from]);
+          await db.query('UPDATE accounts SET balance = balance + 100 WHERE id = $1', [to]);
+      good:
+        - |
+          await db.query('BEGIN');
+          try {
+            await db.query('UPDATE accounts SET balance = balance - 100 WHERE id = $1', [from]);
+            await db.query('UPDATE accounts SET balance = balance + 100 WHERE id = $1', [to]);
+            await db.query('COMMIT');
+          } catch (e) {
+            await db.query('ROLLBACK');
+            throw e;
+          }
+
+  S6:
+    title: Supabase .select() Without Columns
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Supabase .select() calls should specify columns explicitly. Empty
+      .select() returns all columns like SELECT *.
+    check:
+      type: grep
+      pattern: '\.select\(\s*\)'
+      flags: -En
+    note: Only applies to source files (.js, .ts, .tsx, .py).
+    examples:
+      bad:
+        - "const { data } = await supabase.from('users').select();"
+      good:
+        - "const { data } = await supabase.from('users').select('id, email, name');"
+
+  # =========================================================================
+  # GUIDANCE - Best practices (not mechanically checked)
+  # =========================================================================
+
+  G1:
+    title: Use Parameterized Queries
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Always use parameterized queries with placeholders ($1, ?, :param).
+      Never construct SQL strings with user input.
+    guidance: |
+      // Always use placeholders
+      await db.query('SELECT id, email FROM users WHERE id = $1', [userId]);
+      await db.query('INSERT INTO logs (action, user_id) VALUES ($1, $2)', [action, userId]);
+
+  G2:
+    title: Explicit Column Lists in INSERT
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Always name columns in INSERT statements. Positional inserts break
+      when schema changes.
+    guidance: |
+      -- Always name columns
+      INSERT INTO users (email, name, created_at)
+      VALUES ($1, $2, NOW());
+
+      -- Not positional (BAD)
+      INSERT INTO users VALUES ($1, $2, $3);
+
+  G3:
+    title: Use Transactions for Related Writes
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Wrap related write operations in transactions to ensure atomicity.
+    guidance: |
+      BEGIN;
+      INSERT INTO orders (id, user_id, total) VALUES ($1, $2, $3);
+      INSERT INTO order_items (order_id, product_id, qty) VALUES ($1, $4, $5);
+      UPDATE inventory SET quantity = quantity - $5 WHERE product_id = $4;
+      COMMIT;
+
+  G4:
+    title: Add Indexes for Common Query Patterns
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Create indexes for columns used in WHERE, JOIN, and ORDER BY clauses.
+    guidance: |
+      -- Columns in WHERE clauses
+      CREATE INDEX idx_orders_status ON orders(status);
+
+      -- Columns in JOIN conditions
+      CREATE INDEX idx_order_items_order_id ON order_items(order_id);
+
+      -- Columns in ORDER BY with LIMIT
+      CREATE INDEX idx_posts_created_at ON posts(created_at DESC);
+
+      -- Composite for multi-column filters
+      CREATE INDEX idx_orders_user_status ON orders(user_id, status);
+
+  G5:
+    title: Enable RLS on User-Scoped Tables
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Enable Row Level Security on tables that contain user-specific data.
+    guidance: |
+      ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE documents FORCE ROW LEVEL SECURITY;
+
+      CREATE POLICY documents_select ON documents
+        FOR SELECT USING (user_id = auth.uid());
+
+      CREATE POLICY documents_insert ON documents
+        FOR INSERT WITH CHECK (user_id = auth.uid());
+
+  G6:
+    title: Use EXPLAIN ANALYZE
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Use EXPLAIN ANALYZE to understand query performance and identify
+      bottlenecks.
+    guidance: |
+      EXPLAIN ANALYZE
+      SELECT u.name, COUNT(o.id) as order_count
+      FROM users u
+      LEFT JOIN orders o ON o.user_id = u.id
+      WHERE u.created_at > '2024-01-01'
+      GROUP BY u.id;
+
+  G7:
+    title: Add NOT NULL Where Appropriate
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Use NOT NULL constraints for required fields to prevent null data issues.
+    guidance: |
+      CREATE TABLE orders (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id uuid NOT NULL REFERENCES users(id),
+        status varchar(20) NOT NULL DEFAULT 'pending',
+        total decimal(10,2) NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+
+  G8:
+    title: Use Appropriate Data Types
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Choose data types appropriate for the data: decimal for money,
+      timestamptz for timestamps, uuid for distributed IDs.
+    guidance: |
+      -- Money
+      total decimal(10,2) NOT NULL  -- not float
+
+      -- Timestamps
+      created_at timestamptz NOT NULL  -- not timestamp (no timezone)
+
+      -- UUIDs
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid()  -- not serial for distributed
+
+      -- Enums or check constraints for status
+      status varchar(20) NOT NULL CHECK (status IN ('pending', 'active', 'complete'))
+
+  G9:
+    title: Soft Delete Pattern
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Use soft deletes when data recovery may be needed. Add deleted_at
+      column and partial indexes for active records.
+    guidance: |
+      CREATE TABLE documents (
+        id uuid PRIMARY KEY,
+        -- ... other columns
+        deleted_at timestamptz,  -- NULL = not deleted
+
+        -- Partial index for active records
+        CONSTRAINT documents_unique_name UNIQUE (name) WHERE deleted_at IS NULL
+      );
+
+      CREATE INDEX idx_documents_active ON documents(id) WHERE deleted_at IS NULL;
+
+      -- RLS policy excludes deleted
+      CREATE POLICY documents_select ON documents
+        FOR SELECT USING (user_id = auth.uid() AND deleted_at IS NULL);
+
+  G10:
+    title: Migration Structure
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Organize database migrations with clear up/down sections and
+      consistent naming.
+    guidance: |
+      -- migrations/001_create_users.sql
+
+      -- Up
+      CREATE TABLE users (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        email varchar(255) NOT NULL UNIQUE,
+        name varchar(100) NOT NULL,
+        password_hash varchar(255) NOT NULL,
+        is_active boolean NOT NULL DEFAULT true,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+
+      CREATE INDEX idx_users_email ON users(email);
+      ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+
+      -- Down
+      DROP TABLE users;
+
+  G11:
+    title: Supabase RLS Pattern
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Standard RLS policy pattern for Supabase multi-tenant applications.
+    guidance: |
+      ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
+
+      CREATE POLICY "Users can view own documents" ON documents
+        FOR SELECT
+        USING (auth.uid() = user_id);
+
+      CREATE POLICY "Users can create own documents" ON documents
+        FOR INSERT
+        WITH CHECK (auth.uid() = user_id);
+
+      CREATE POLICY "Users can update own documents" ON documents
+        FOR UPDATE
+        USING (auth.uid() = user_id)
+        WITH CHECK (auth.uid() = user_id);
+
+      CREATE POLICY "Users can delete own documents" ON documents
+        FOR DELETE
+        USING (auth.uid() = user_id);
+
+  G12:
+    title: Cursor Pagination Pattern
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Use cursor/keyset pagination for efficient pagination at scale.
+    guidance: |
+      -- First page
+      SELECT id, title, created_at
+      FROM posts
+      WHERE user_id = $1
+      ORDER BY created_at DESC, id DESC
+      LIMIT 21;  -- fetch n+1 to check if more exist
+
+      -- Next page (pass last item's created_at and id)
+      SELECT id, title, created_at
+      FROM posts
+      WHERE user_id = $1
+        AND (created_at, id) < ($2, $3)  -- cursor
+      ORDER BY created_at DESC, id DESC
+      LIMIT 21;
+
+  G13:
+    title: Upsert Pattern
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Use ON CONFLICT for upsert operations to handle insert-or-update atomically.
+    guidance: |
+      INSERT INTO user_settings (user_id, key, value)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (user_id, key)
+      DO UPDATE SET
+        value = EXCLUDED.value,
+        updated_at = now();
+
+  G14:
+    title: Audit Trail Pattern
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Implement audit logging for tracking changes to important tables.
+    guidance: |
+      CREATE TABLE audit_log (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        table_name varchar(100) NOT NULL,
+        record_id uuid NOT NULL,
+        action varchar(20) NOT NULL,  -- INSERT, UPDATE, DELETE
+        old_data jsonb,
+        new_data jsonb,
+        user_id uuid REFERENCES users(id),
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+
+      CREATE INDEX idx_audit_log_record ON audit_log(table_name, record_id);
+      CREATE INDEX idx_audit_log_created ON audit_log(created_at DESC);
+
+  G15:
+    title: Naming Conventions
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Follow consistent naming conventions for tables, columns, indexes,
+      constraints, aliases, and RLS policies.
+    guidance: |
+      Tables: snake_case, plural nouns
+        users, orders, order_items, product_categories
+
+      Columns: snake_case, descriptive names
+        user_id, created_at, is_active, total_amount, password_hash
+
+      Indexes: idx_table_column(s)
+        CREATE INDEX idx_users_email ON users(email);
+        CREATE INDEX idx_orders_user_status ON orders(user_id, status);
+
+      Constraints:
+        PRIMARY KEY: pk_table
+        FOREIGN KEY: fk_table_reftable
+        UNIQUE: uq_table_column(s)
+        CHECK: chk_table_rule
+
+      Aliases: first letter or short abbreviation
+        SELECT u.id, o.total FROM users u JOIN orders o ON o.user_id = u.id;
+
+      RLS Policies: "Entity can action own entity"
+        CREATE POLICY "Users can view own orders" ON orders FOR SELECT ...
+
+anti_patterns:
+  - pattern: "SELECT *"
+    problem: "Schema changes break code"
+    fix: "Explicit columns"
+  - pattern: "String interpolation"
+    problem: "SQL injection"
+    fix: "Parameterized queries"
+  - pattern: "UPDATE no WHERE"
+    problem: "Updates all rows"
+    fix: "Always filter"
+  - pattern: "LIKE '%x%'"
+    problem: "Full table scan"
+    fix: "Full text search"
+  - pattern: "WHERE YEAR(col)"
+    problem: "Can't use index"
+    fix: "Range comparison"
+  - pattern: "N+1 queries"
+    problem: "Death by latency"
+    fix: "JOIN or batch"
+  - pattern: "No transaction"
+    problem: "Partial failure"
+    fix: "BEGIN/COMMIT"
+  - pattern: "Plain text passwords"
+    problem: "Security breach"
+    fix: "Hash (bcrypt/argon2)"
+  - pattern: "No RLS"
+    problem: "Data leakage"
+    fix: "Enable + policies"
+  - pattern: "OFFSET 10000"
+    problem: "Scans 10k rows"
+    fix: "Cursor pagination"
+  - pattern: "No FK index"
+    problem: "Slow JOINs"
+    fix: "Add index"
+  - pattern: "Nullable boolean"
+    problem: "Three states"
+    fix: "NOT NULL DEFAULT"
+  - pattern: "float for money"
+    problem: "Precision loss"
+    fix: "decimal(10,2)"
+  - pattern: "timestamp"
+    problem: "No timezone"
+    fix: "timestamptz"

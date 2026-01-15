@@ -4,10 +4,23 @@ set -euo pipefail
 # =============================================================================
 # Flight Validator Runner
 # Auto-detects which domain validators to run based on file extensions
+#
+# Usage:
+#   .flight/validate-all.sh                    # Scan current directory
+#   .flight/validate-all.sh src                # Scan src/ only
+#   .flight/validate-all.sh packages/app lib   # Scan multiple directories
 # =============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOMAINS_DIR="$SCRIPT_DIR/domains"
+
+# Source exclusions helper
+if [[ -f "$SCRIPT_DIR/exclusions.sh" ]]; then
+    source "$SCRIPT_DIR/exclusions.sh"
+    HAS_EXCLUSIONS=true
+else
+    HAS_EXCLUSIONS=false
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -28,36 +41,82 @@ echo -e "${BLUE}═════════════════════�
 echo ""
 
 # -----------------------------------------------------------------------------
-# Collect files by type
+# Collect files
 # -----------------------------------------------------------------------------
 
-# Get files to validate (from args, or find all in src/)
-if [ $# -gt 0 ]; then
-    ALL_FILES="$*"
+# Determine search paths
+if [[ $# -gt 0 ]]; then
+    SEARCH_PATHS=("$@")
 else
-    ALL_FILES=$(find src -type f \( \
-        -name "*.ts" -o \
-        -name "*.tsx" -o \
-        -name "*.js" -o \
-        -name "*.jsx" -o \
-        -name "*.py" -o \
-        -name "*.sh" -o \
-        -name "*.sql" \
-    \) 2>/dev/null | tr '\n' ' ' || echo "")
+    SEARCH_PATHS=(".")
 fi
 
-# Filter files by extension
-filter_files() {
+echo -e "${BLUE}Scanning:${NC} ${SEARCH_PATHS[*]}"
+
+# Collect all files with exclusions
+collect_files() {
     local pattern="$1"
-    echo "$ALL_FILES" | tr ' ' '\n' | grep -E "$pattern" | tr '\n' ' ' || echo ""
+    local files=""
+
+    for search_path in "${SEARCH_PATHS[@]}"; do
+        if [[ -d "$search_path" ]]; then
+            if [[ "$HAS_EXCLUSIONS" == true ]]; then
+                # Use exclusions-aware discovery
+                local found
+                found=$(FLIGHT_SEARCH_DIR="$search_path" flight_get_files "$pattern")
+                if [[ -n "$found" ]]; then
+                    files="$files $found"
+                fi
+            else
+                # Fallback: basic find
+                local found
+                found=$(find "$search_path" -name "$pattern" -type f 2>/dev/null | tr '\n' ' ')
+                files="$files $found"
+            fi
+        elif [[ -f "$search_path" ]]; then
+            # Direct file argument
+            if [[ "$search_path" == *"$pattern"* ]] || [[ "$pattern" == "*" ]]; then
+                files="$files $search_path"
+            fi
+        fi
+    done
+
+    echo "$files" | tr ' ' '\n' | (grep -v '^$' || true) | sort -u | tr '\n' ' '
 }
 
-TS_FILES=$(filter_files '\.(ts|tsx)$')
-JS_FILES=$(filter_files '\.(js|jsx)$')
-REACT_FILES=$(filter_files '\.(tsx|jsx)$')
-PY_FILES=$(filter_files '\.py$')
-SH_FILES=$(filter_files '\.sh$')
-SQL_FILES=$(filter_files '\.sql$')
+# Collect files by type
+TS_FILES=$(collect_files "*.ts")
+TSX_FILES=$(collect_files "*.tsx")
+JS_FILES=$(collect_files "*.js")
+JSX_FILES=$(collect_files "*.jsx")
+PY_FILES=$(collect_files "*.py")
+SH_FILES=$(collect_files "*.sh")
+SQL_FILES=$(collect_files "*.sql")
+GO_FILES=$(collect_files "*.go")
+RS_FILES=$(collect_files "*.rs")
+
+# Combine related file types
+TYPESCRIPT_FILES="$TS_FILES $TSX_FILES"
+JAVASCRIPT_FILES="$JS_FILES $JSX_FILES"
+REACT_FILES="$TSX_FILES $JSX_FILES"
+ALL_CODE_FILES="$TYPESCRIPT_FILES $JAVASCRIPT_FILES $PY_FILES $SH_FILES $SQL_FILES $GO_FILES $RS_FILES"
+
+# Count files
+count_files() {
+    local count
+    count=$(echo "$1" | tr ' ' '\n' | grep -cv '^$' 2>/dev/null) || count=0
+    echo "$count"
+}
+
+TOTAL_FILES=$(count_files "$ALL_CODE_FILES")
+echo -e "${BLUE}Total files:${NC} $TOTAL_FILES"
+echo ""
+
+if [[ "$TOTAL_FILES" -eq 0 ]]; then
+    echo -e "${YELLOW}No code files found in search paths${NC}"
+    echo ""
+    exit 0
+fi
 
 # -----------------------------------------------------------------------------
 # Run a validator if files exist
@@ -68,14 +127,14 @@ run_validator() {
     local files="$2"
     local validator="$DOMAINS_DIR/${domain}.validate.sh"
 
-    # Skip if no files
-    if [ -z "$files" ] || [ "$files" = " " ]; then
+    # Trim whitespace and check if empty
+    files=$(echo "$files" | xargs)
+    if [[ -z "$files" ]]; then
         return 0
     fi
 
     # Skip if validator doesn't exist
-    if [ ! -x "$validator" ]; then
-        echo -e "${YELLOW}⚠ Skipping $domain (no validator found)${NC}"
+    if [[ ! -x "$validator" ]]; then
         return 0
     fi
 
@@ -102,11 +161,11 @@ run_validator() {
     TOTAL_WARN=$((TOTAL_WARN + warn))
 
     # Check result
-    if [ "$exit_code" -ne 0 ] || [ "$fail" -gt 0 ]; then
+    if [[ "$exit_code" -ne 0 ]] || [[ "$fail" -gt 0 ]]; then
         echo -e "${RED}✗ $domain: FAIL (Pass: $pass, Fail: $fail, Warn: $warn)${NC}"
         FAILED_DOMAINS+=("$domain")
         # Show failure details
-        echo "$output" | grep -E "(FAIL|ERROR|✗)" | head -10
+        echo "$output" | grep -E "(❌|ERROR)" | head -10
         echo ""
     else
         echo -e "${GREEN}✓ $domain: PASS (Pass: $pass, Fail: $fail, Warn: $warn)${NC}"
@@ -119,79 +178,67 @@ run_validator() {
 # Always run code-hygiene (applies to all code)
 # -----------------------------------------------------------------------------
 
-if [ -n "$ALL_FILES" ] && [ "$ALL_FILES" != " " ]; then
-    run_validator "code-hygiene" "$ALL_FILES"
-fi
+run_validator "code-hygiene" "$ALL_CODE_FILES"
 
 # -----------------------------------------------------------------------------
 # Run language/framework specific validators
 # -----------------------------------------------------------------------------
 
 # TypeScript
-if [ -n "$TS_FILES" ]; then
-    run_validator "typescript" "$TS_FILES"
-fi
+run_validator "typescript" "$TYPESCRIPT_FILES"
 
-# JavaScript (if you have a js validator)
-if [ -n "$JS_FILES" ]; then
-    run_validator "javascript" "$JS_FILES"
-fi
+# JavaScript
+run_validator "javascript" "$JAVASCRIPT_FILES"
 
 # React (TSX/JSX files)
-if [ -n "$REACT_FILES" ]; then
-    run_validator "react" "$REACT_FILES"
-fi
+run_validator "react" "$REACT_FILES"
 
 # Python
-if [ -n "$PY_FILES" ]; then
-    run_validator "python" "$PY_FILES"
-fi
+run_validator "python" "$PY_FILES"
 
 # Bash
-if [ -n "$SH_FILES" ]; then
-    run_validator "bash" "$SH_FILES"
-fi
+run_validator "bash" "$SH_FILES"
 
 # SQL
-if [ -n "$SQL_FILES" ]; then
-    run_validator "sql" "$SQL_FILES"
-fi
+run_validator "sql" "$SQL_FILES"
+
+# Go
+run_validator "go" "$GO_FILES"
+
+# Rust
+run_validator "rust" "$RS_FILES"
 
 # -----------------------------------------------------------------------------
-# Check for API-related files
+# Check for pattern-based validators
 # -----------------------------------------------------------------------------
 
-API_FILES=$(echo "$ALL_FILES" | tr ' ' '\n' | grep -iE '(api|service|fetch|endpoint)' | tr '\n' ' ' || echo "")
-if [ -n "$API_FILES" ] && [ "$API_FILES" != " " ]; then
-    run_validator "api" "$API_FILES"
-fi
+# API files (by naming convention)
+API_FILES=$(echo "$ALL_CODE_FILES" | tr ' ' '\n' | grep -iE '(api|service|fetch|endpoint|route)' | tr '\n' ' ' || echo "")
+run_validator "api" "$API_FILES"
 
-# -----------------------------------------------------------------------------
-# Check for test files
-# -----------------------------------------------------------------------------
+# Test files
+TEST_FILES=$(echo "$ALL_CODE_FILES" | tr ' ' '\n' | grep -E '\.(test|spec)\.' | tr '\n' ' ' || echo "")
+run_validator "testing" "$TEST_FILES"
 
-TEST_FILES=$(echo "$ALL_FILES" | tr ' ' '\n' | grep -E '\.(test|spec)\.(ts|tsx|js|jsx)$' | tr '\n' ' ' || echo "")
-if [ -n "$TEST_FILES" ] && [ "$TEST_FILES" != " " ]; then
-    run_validator "testing" "$TEST_FILES"
-fi
+# Webhook files
+WEBHOOK_FILES=$(echo "$ALL_CODE_FILES" | tr ' ' '\n' | grep -iE 'webhook' | tr '\n' ' ' || echo "")
+run_validator "webhooks" "$WEBHOOK_FILES"
 
-# -----------------------------------------------------------------------------
-# Check for webhook files
-# -----------------------------------------------------------------------------
+# SMS/Twilio files
+SMS_FILES=$(echo "$ALL_CODE_FILES" | tr ' ' '\n' | grep -iE '(sms|twilio|message)' | tr '\n' ' ' || echo "")
+run_validator "sms-twilio" "$SMS_FILES"
 
-WEBHOOK_FILES=$(echo "$ALL_FILES" | tr ' ' '\n' | grep -iE 'webhook' | tr '\n' ' ' || echo "")
-if [ -n "$WEBHOOK_FILES" ] && [ "$WEBHOOK_FILES" != " " ]; then
-    run_validator "webhooks" "$WEBHOOK_FILES"
-fi
+# Prisma files
+PRISMA_FILES=$(echo "$TYPESCRIPT_FILES" | tr ' ' '\n' | grep -iE '(prisma|\.server\.|/api/|/actions/)' | tr '\n' ' ' || echo "")
+run_validator "prisma" "$PRISMA_FILES"
 
-# -----------------------------------------------------------------------------
-# Check for SMS/Twilio files
-# -----------------------------------------------------------------------------
+# Clerk files
+CLERK_FILES=$(echo "$TYPESCRIPT_FILES" | tr ' ' '\n' | grep -iE '(clerk|auth|middleware)' | tr '\n' ' ' || echo "")
+run_validator "clerk" "$CLERK_FILES"
 
-SMS_FILES=$(echo "$ALL_FILES" | tr ' ' '\n' | grep -iE '(sms|twilio|message)' | tr '\n' ' ' || echo "")
-if [ -n "$SMS_FILES" ] && [ "$SMS_FILES" != " " ]; then
-    run_validator "sms-twilio" "$SMS_FILES"
-fi
+# Supabase files
+SUPABASE_FILES=$(echo "$TYPESCRIPT_FILES" | tr ' ' '\n' | grep -iE 'supabase' | tr '\n' ' ' || echo "")
+run_validator "supabase" "$SUPABASE_FILES"
 
 # -----------------------------------------------------------------------------
 # Summary
@@ -206,7 +253,7 @@ echo -e "  Total Checks Failed: ${RED}$TOTAL_FAIL${NC}"
 echo -e "  Total Warnings:      ${YELLOW}$TOTAL_WARN${NC}"
 echo ""
 
-if [ ${#FAILED_DOMAINS[@]} -gt 0 ]; then
+if [[ ${#FAILED_DOMAINS[@]} -gt 0 ]]; then
     echo -e "${RED}✗ VALIDATION FAILED${NC}"
     echo -e "${RED}  Failed domains: ${FAILED_DOMAINS[*]}${NC}"
     echo ""

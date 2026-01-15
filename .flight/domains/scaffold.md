@@ -1,232 +1,109 @@
-# Scaffold Domain
+# Domain: Scaffold Design
 
-> Safe project scaffolding operations that preserve existing infrastructure
+Safe project scaffolding operations that preserve existing infrastructure. Governs use of scaffolding tools (create-vite, create-next-app, etc.) to prevent destructive overwrites of project infrastructure.
 
-## Overview
 
-This domain governs the use of scaffolding tools (create-vite, create-react-app, create-next-app, etc.) to prevent destructive overwrites of project infrastructure.
+**Validation:** `scaffold.validate.sh` enforces NEVER/MUST rules. SHOULD rules trigger warnings. GUIDANCE is not mechanically checked.
 
-## Rules
+### Suppressing Warnings
 
-### SCF-001: Never Use Destructive Flags
-**NEVER** use `--overwrite`, `--force`, or similar flags that delete existing directories.
 
-```bash
-# FORBIDDEN
-npx create-vite . --overwrite
-npx create-vite my-app --force
-npm init vite@latest . -- --overwrite
 
-# ALLOWED
-npx create-vite my-app
-npm init vite@latest my-app
+```javascript
+// Legacy endpoint, scheduled for deprecation in v3
+router.get('/getUser/:id', handler)  // flight:ok
 ```
 
-### SCF-002: Protected Directories
-The following directories MUST be preserved during any scaffold operation:
+---
 
-- `.flight/` - Flight methodology infrastructure
-- `tasks/` - Task definitions
-- `.git/` - Version control
-- `docs/` - Documentation
-- `scripts/` - Project scripts
+## Invariants
 
-### SCF-003: Scaffold in Temp Directory
-When adding a scaffold to an existing project, use a temp directory and merge:
+### NEVER (validator will reject)
 
-```bash
-# Step 1: Scaffold to temp location
-npx create-vite temp-scaffold
+1. **Destructive Scaffold Flags** - Never use --overwrite, --force, or similar flags that delete existing directories. These can destroy project infrastructure (.flight/, tasks/, .git/, etc.).
 
-# Step 2: Copy needed files (don't overwrite existing)
-cp -n temp-scaffold/vite.config.ts .
-cp -n temp-scaffold/tsconfig.json .
-cp -rn temp-scaffold/src/* src/
+   ```
+   // BAD
+   npx create-vite . --overwrite
+   // BAD
+   npx create-vite my-app --force
+   // BAD
+   npm init vite@latest . -- --overwrite
 
-# Step 3: Merge package.json dependencies manually or with jq
-# Step 4: Clean up
-rm -rf temp-scaffold
-```
+   // GOOD
+   npx create-vite my-app
+   // GOOD
+   npm init vite@latest my-app
+   // GOOD
+   npx create-vite temp-scaffold  # then merge
+   ```
 
-### SCF-004: Backup Before Scaffold
-If scaffold MUST run in project root, backup first:
+### SHOULD (validator warns)
 
-```bash
-# Backup protected directories
-cp -r .flight .flight.bak
-cp -r tasks tasks.bak
+1. **Protected Directories Exist** - Protected directories (.flight/, tasks/, .git/, docs/, scripts/) should exist after any scaffold operation.
 
-# Run scaffold
-npx create-vite . --template react-ts
 
-# Restore protected directories
-rm -rf .flight && mv .flight.bak .flight
-rm -rf tasks && mv tasks.bak tasks
-```
+2. **Git Clean Before Scaffold** - Git working directory should be clean (committed or stashed) before running scaffold commands.
 
-### SCF-005: Verify After Scaffold
-After any scaffold operation, verify protected directories exist:
+   ```
+   # Ensure clean state
+   git status --porcelain | grep -q . && echo "STOP: Uncommitted changes" && exit 1
+   # Or stash
+   git stash push -m "pre-scaffold backup"
+   ```
 
-```bash
-# Verification checklist
-[ -d ".flight" ] && echo "✓ .flight intact" || echo "✗ .flight MISSING"
-[ -d "tasks" ] && echo "✓ tasks intact" || echo "✗ tasks MISSING"
-[ -d ".git" ] && echo "✓ .git intact" || echo "✗ .git MISSING"
-```
+### GUIDANCE (not mechanically checked)
 
-### SCF-006: Package.json Merge Strategy
-Never let scaffold overwrite package.json. Merge dependencies:
+1. **Protected Directories List** - The following directories MUST be preserved during any scaffold operation.
 
-```bash
-# Save existing
-cp package.json package.json.existing
 
-# After scaffold, merge dependencies
-jq -s '.[0] * .[1] | .dependencies = (.[0].dependencies + .[1].dependencies) | .devDependencies = (.[0].devDependencies + .[1].devDependencies)' \
-  package.json.existing package.json > package.json.merged
+2. **Scaffold in Temp Directory Pattern** - When adding a scaffold to an existing project, use a temp directory and merge files manually.
 
-mv package.json.merged package.json
-rm package.json.existing
-```
 
-### SCF-007: Git Commit Before Scaffold
-Always commit or stash before scaffolding:
+3. **Backup Before Scaffold Pattern** - If scaffold MUST run in project root, backup protected directories first.
 
-```bash
-# Ensure clean state
-git status --porcelain | grep -q . && echo "STOP: Uncommitted changes" && exit 1
 
-# Or stash
-git stash push -m "pre-scaffold backup"
-```
+4. **Package.json Merge Strategy** - Never let scaffold overwrite package.json. Merge dependencies manually or with jq.
 
-### SCF-008: Document Scaffold Source
-When scaffolding, document the source in project README or CHANGELOG:
 
-```markdown
-## Project Bootstrap
-- Scaffolded with: `npx create-vite@5.4.0 --template react-ts`
-- Date: 2026-01-13
-- Modified: Added Flight methodology, custom domains
-```
+5. **Document Scaffold Source** - Document the scaffold source in project README or CHANGELOG for reproducibility and debugging.
 
-## Validation Checks
 
-| ID | Check | Severity |
-|----|-------|----------|
-| SCF-001 | No `--overwrite` or `--force` in command history | FAIL |
-| SCF-002 | Protected directories exist | FAIL |
-| SCF-005 | Post-scaffold verification performed | WARN |
-| SCF-007 | Git clean before scaffold | WARN |
+6. **React Scaffold Commands** - React scaffolding commands. Cross-reference with react.md for component patterns after scaffolding.
 
-## Domain-Specific Scaffold Commands
 
-Cross-reference these with their respective domain files for full rules.
+7. **Next.js Scaffold Commands** - Next.js scaffolding commands. Cross-reference with nextjs.md for App Router patterns.
 
-### React (see react.md)
-```bash
-# Vite (preferred)
-npx create-vite my-app --template react-ts
 
-# Create React App (legacy)
-npx create-react-app my-app --template typescript
-```
-- Must follow react.md component patterns after scaffold
-- Verify tsconfig.json strict mode per typescript.md
+8. **Python Scaffold Commands** - Python scaffolding commands. Cross-reference with python.md for project structure.
 
-### Next.js (see nextjs.md)
-```bash
-npx create-next-app my-app --typescript --tailwind --app --eslint
-```
-- App router vs pages router - decide before scaffolding
-- Follow nextjs.md for API routes, server components
 
-### Python (see python.md)
-```bash
-# Poetry (preferred)
-poetry new my-project
-poetry init  # in existing directory
+9. **TypeScript/JavaScript Scaffold Commands** - TypeScript/JavaScript scaffolding commands. Cross-reference with typescript.md and javascript.md.
 
-# Cookiecutter
-cookiecutter gh:audreyfeldroy/cookiecutter-pypackage
 
-# Basic
-python -m venv venv && pip init
-```
-- Follow python.md for project structure
-- Preserve `pyproject.toml` if exists
+10. **API Service Scaffold Commands** - API service scaffolding commands. Cross-reference with api.md and webhooks.md.
 
-### JavaScript/TypeScript (see javascript.md, typescript.md)
-```bash
-# Node project
-npm init -y
-npx tsc --init
 
-# Bun
-bun init
-```
-- Merge tsconfig.json, don't overwrite
-- Follow typescript.md strict settings
+11. **Testing Scaffold Commands** - Testing framework scaffolding commands. Cross-reference with testing.md.
 
-### API Services (see api.md)
-```bash
-# Express
-npx express-generator my-api
 
-# Fastify
-npx fastify-cli generate my-api
+12. **Embedded Scaffold Commands** - Embedded systems scaffolding commands. Cross-reference with rp2040-pico.md and embedded-c-p10.md.
 
-# Hono
-npm create hono@latest my-api
-```
-- Follow api.md for endpoint patterns
-- Webhook scaffolds must follow webhooks.md
 
-### SMS/Twilio (see sms-twilio.md)
-```bash
-# Twilio Functions
-twilio serverless:init my-project
-```
-- Follow sms-twilio.md for consent handling
-- Never scaffold with hardcoded credentials
+13. **Recovery Procedures** - Recovery procedures if protected directories were deleted by a scaffold operation.
 
-### Embedded (see rp2040-pico.md, embedded-c-p10.md)
-```bash
-# Pico SDK project
-cp -r $PICO_SDK_PATH/external/pico_sdk_import.cmake .
-mkdir build && cd build && cmake ..
 
-# PlatformIO
-pio project init --board pico
-```
-- SDK paths must be environment variables
-- Follow embedded-c-p10.md for CMake patterns
+14. **Bash Script Standards** - All scaffold backup/restore scripts must follow bash.md standards.
 
-### Testing (see testing.md)
-```bash
-# Jest
-npx jest --init
 
-# Vitest (for Vite projects)
-npm install -D vitest
+---
 
-# Pytest
-pip install pytest && touch pytest.ini
-```
-- Test scaffolds must not overwrite existing test config
-- Follow testing.md for coverage thresholds
+## Anti-Patterns
 
-### Bash Scripts (see bash.md)
-All scaffold backup/restore scripts in this document must follow bash.md:
-- Use `set -euo pipefail`
-- Quote all variables
-- Check exit codes
-
-## Recovery
-
-If protected directories were deleted:
-
-1. Check git: `git checkout HEAD -- .flight/ tasks/`
-2. Check backups: `ls *.bak`
-3. Restore from Flight template repo
-4. Rebuild tasks from PRD if needed
+| Anti-Pattern | Description | Fix |
+|--------------|-------------|-----|
+| --overwrite flag |  | Scaffold to temp, merge manually |
+| --force flag |  | Scaffold to temp, merge manually |
+| Scaffold in project root |  | Use temp directory pattern |
+| No git commit before scaffold |  | Commit or stash first |
+| Overwrite package.json |  | Merge dependencies with jq |

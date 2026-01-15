@@ -1,167 +1,191 @@
-# Domain: JavaScript Hygiene
+# Domain: Javascript Design
 
-Code quality patterns that prevent common mistakes in JavaScript/Node.js projects.
+Code quality patterns that prevent common mistakes in JavaScript/Node.js projects. JavaScript-specific patterns while code-hygiene covers universal patterns.
+
+
+**Validation:** `javascript.validate.sh` enforces NEVER/MUST rules. SHOULD rules trigger warnings. GUIDANCE is not mechanically checked.
+
+### Suppressing Warnings
+
+
+
+```javascript
+// Legacy endpoint, scheduled for deprecation in v3
+router.get('/getUser/:id', handler)  // flight:ok
+```
 
 ---
 
 ## Invariants
 
-### NEVER
+### NEVER (validator will reject)
 
-1. **Generic Names** - Never use: `data`, `result`, `temp`, `info`, `item`, `value`, `obj`, `thing`, `stuff`, `foo`, `bar`, `baz`, `tmp`, `ret`, `val`
+1. **Generic Variable Names** - Never use generic names like data, result, temp, info, item, value, obj, thing, stuff, foo, bar, baz, tmp, ret, val. Use domain-specific names instead.
 
-2. **Redundant Conditionals** - Never write:
-   ```javascript
+   ```
+   // BAD
+   const data = fetchUser();
+   // BAD
+   const result = processOrder();
+   // BAD
+   const temp = calculateTotal();
+
+   // GOOD
+   const user = fetchUser();
+   // GOOD
+   const processedOrder = processOrder();
+   // GOOD
+   const invoiceTotal = calculateTotal();
+   ```
+
+2. **Redundant Conditional Returns** - Never write 'if (condition) return true; else return false' or equivalent. Return the condition directly.
+
+   ```
    // BAD
    if (condition) return true; else return false;
+   // BAD
    if (condition) { return true; } return false;
-   return condition ? true : false;
-   
+
    // GOOD
    return condition;
    ```
 
-3. **Equivalent Branches** - Never duplicate logic in if/else:
-   ```javascript
+3. **Ternary Returning Boolean Literals** - Never write 'condition ? true : false'. The condition is already boolean.
+
+   ```
    // BAD
-   if (x) {
-     doThing();
-     return result;
-   } else {
-     doThing();
-     return result;
-   }
-   
+   return isValid ? true : false;
+   // BAD
+   const result = hasPermission ? true : false;
+
    // GOOD
-   doThing();
-   return result;
+   return isValid;
+   // GOOD
+   const result = hasPermission;
+   // GOOD
+   const status = isActive ? 'active' : 'inactive';  // OK: non-boolean
    ```
 
-4. **Redundant Boolean Logic** - Never write:
-   ```javascript
+4. **Redundant Boolean Comparisons** - Never write '=== true', '=== false', '!== true', or '!== false'. Use the boolean directly.
+
+   ```
    // BAD
-   x === true
-   x === false
-   x !== true
-   x !== false
-   !!x === true
-   
+   if (x === true) { ... }
+   // BAD
+   if (y === false) { ... }
+   // BAD
+   if (z !== true) { ... }
+
    // GOOD
-   x
-   !x
+   if (x) { ... }
+   // GOOD
+   if (!y) { ... }
+   // GOOD
+   if (!z) { ... }
    ```
 
-5. **Magic Number Calculations** - Never compute at runtime what can be a constant:
-   ```javascript
+5. **Magic Number Calculations** - Never compute at runtime what can be a constant. Pre-calculate time values and other derived constants.
+
+   ```
    // BAD
    const timeout = 60 * 60 * 1000;
+   // BAD
    const days = 24 * 60 * 60;
-   
+   // BAD
+   const interval = 7 * 24 * 60 * 60 * 1000;
+
    // GOOD
    const MS_PER_HOUR = 3600000;
-   const SECONDS_PER_DAY = 86400;
-   ```
-
-6. **Unnecessary Abstraction** - Never wrap single-use trivial operations:
-   ```javascript
-   // BAD
-   function getValue(obj) { return obj.value; }
-   const v = getValue(thing);
-   
    // GOOD
-   const v = thing.value;
+   const SECONDS_PER_DAY = 86400;
+   // GOOD
+   const MS_PER_WEEK = 604800000;
    ```
 
-7. **Inconsistent Naming Style** - Never mix conventions in the same file:
-   ```javascript
-   // BAD
-   const user_name = 'alice';
-   const userAge = 25;
-   const UserStatus = 'active';
-   
-   // GOOD (pick one, stick with it)
-   const userName = 'alice';
-   const userAge = 25;
-   const userStatus = 'active';
-   ```
+6. **Generic Function Names** - Never use generic verbs like handle, process, do, run, execute, manage combined with generic nouns without specific context.
 
-8. **Generic Function Names** - Never use: `handle`, `process`, `do`, `run`, `execute`, `manage` without context:
-   ```javascript
+   ```
    // BAD
    function handleData(data) { ... }
+   // BAD
    function processItem(item) { ... }
-   
+   // BAD
+   function doValue(value) { ... }
+
    // GOOD
    function validateUserInput(input) { ... }
+   // GOOD
    function transformOrderToInvoice(order) { ... }
+   // GOOD
+   function calculateShippingCost(order) { ... }
    ```
 
-### MUST
+7. **Single-Letter Variables** - Never use single-letter variables except i, j, k as loop counters.
 
-1. **Domain-Specific Names** - Use vocabulary from the problem domain
-2. **Boolean Prefixes** - Use `is`, `has`, `can`, `should`, `will` for booleans
-3. **Async Suffixes** - Consider `Async` suffix or verb prefixes for async functions
-4. **Plural Collections** - Arrays and collections use plural names: `users`, `items`, `orders`
-5. **Constants Uppercase** - `MAX_RETRIES`, `DEFAULT_TIMEOUT`, `API_BASE_URL`
-6. **Descriptive Errors** - Error messages state what went wrong and what was expected
+   ```
+   // BAD
+   const x = getUser();
+   // BAD
+   const n = calculateTotal();
+   // BAD
+   let a = [];
+
+   // GOOD
+   const user = getUser();
+   // GOOD
+   const total = calculateTotal();
+   // GOOD
+   let items = [];
+   // GOOD
+   for (let i = 0; i < items.length; i++) { ... }  // OK: loop counter
+   ```
+
+8. **console.log in Source Files** - Never leave console.log statements in production source files. Test files are excluded from this rule.
+
+   ```
+   // BAD
+   // src/user.js
+   // BAD
+   console.log('user:', user);
+   // BAD
+   console.log('debug: processing order');
+
+   // GOOD
+   // Use proper logging
+   // GOOD
+   logger.debug('Processing order', { orderId });
+   ```
+
+### GUIDANCE (not mechanically checked)
+
+1. **Domain-Specific Names** - Use vocabulary from the problem domain. Names should reflect business concepts, not implementation details.
+
+
+2. **Boolean Prefixes** - Use is, has, can, should, will prefixes for boolean variables.
+
+
+3. **Async Function Naming** - Consider Async suffix or verb prefixes for async functions to make async nature clear at call sites.
+
+
+4. **Plural Collections** - Arrays and collections should use plural names.
+
+
+5. **Constants Uppercase** - Use UPPER_SNAKE_CASE for true constants (values that never change).
+
+
+6. **Descriptive Error Messages** - Error messages should state what went wrong and what was expected.
+
 
 ---
 
-## Patterns
+## Anti-Patterns
 
-### Good Naming
-```javascript
-// Domain-specific
-const customerOrder = fetchOrder(orderId);
-const invoiceTotal = calculateInvoiceTotal(lineItems);
-const isPaymentComplete = payment.status === 'complete';
-
-// Boolean prefixes
-const hasPermission = user.roles.includes('admin');
-const canEdit = hasPermission && !document.isLocked;
-const shouldRetry = attempts < MAX_RETRIES;
-
-// Collections are plural
-const users = await fetchUsers();
-const validOrders = orders.filter(isValidOrder);
-```
-
-### Constants
-```javascript
-// Time constants (pre-calculated)
-const MS_PER_SECOND = 1000;
-const MS_PER_MINUTE = 60000;
-const MS_PER_HOUR = 3600000;
-const MS_PER_DAY = 86400000;
-
-// Configuration
-const MAX_RETRIES = 3;
-const DEFAULT_TIMEOUT_MS = 5000;
-const API_BASE_URL = 'https://api.example.com';
-```
-
-### Simple Conditionals
-```javascript
-// Direct returns
-return isValid;
-return !hasError;
-return items.length > 0;
-
-// Ternary for values, not booleans
-const status = isActive ? 'active' : 'inactive';
-const message = count === 1 ? 'item' : 'items';
-```
-
----
-
-## Anti-Patterns to Avoid
-
-| Pattern | Problem | Fix |
-|---------|---------|-----|
-| `const data = ...` | Generic | Use domain term |
-| `function handleX()` | Vague verb | Describe action |
-| `if (x) return true` | Redundant | `return x` |
-| `60 * 60 * 1000` | Magic calc | Pre-computed constant |
-| `x === true` | Redundant | `x` |
-| `items.map(i => ...)` | Generic `i` | `items.map(item => ...)` |
-| `const temp = ...` | Temporary smell | Name by purpose |
+| Anti-Pattern | Description | Fix |
+|--------------|-------------|-----|
+| const data = ... |  | Use domain term |
+| function handleX() |  | Describe action |
+| if (x) return true |  | return x |
+| 60 * 60 * 1000 |  | Pre-computed constant |
+| x === true |  | x |
+| items.map(i => ...) |  | items.map(item => ...) |
+| const temp = ... |  | Name by purpose |

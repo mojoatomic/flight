@@ -1,338 +1,312 @@
-# Domain: React
+# Domain: React Design
 
-Production React patterns for functional components, hooks, and state management.
+Production React patterns for functional components, hooks, and state management. Prevents common performance issues, broken reconciliation, and Rules of Hooks violations.
+
+
+**Validation:** `react.validate.sh` enforces NEVER/MUST rules. SHOULD rules trigger warnings. GUIDANCE is not mechanically checked.
+
+### Suppressing Warnings
+
+
+
+```javascript
+// Legacy endpoint, scheduled for deprecation in v3
+router.get('/getUser/:id', handler)  // flight:ok
+```
 
 ---
 
 ## Invariants
 
-### NEVER
+### NEVER (validator will reject)
 
-1. **Inline Objects in JSX Props** - Creates new reference every render
-   ```jsx
+1. **Inline Objects in JSX Props** - Creates new object reference every render, causing unnecessary re-renders of child components even when values haven't changed.
+
+   ```
    // BAD
    <Component style={{ margin: 10 }} />
+   // BAD
    <Component config={{ enabled: true }} />
-   
+
    // GOOD
    const containerStyle = { margin: 10 };
    <Component style={containerStyle} />
+   
+   // GOOD
+   const config = useMemo(() => ({ enabled: true }), []);
+   <Component config={config} />
+   
    ```
 
-2. **Inline Functions in JSX Props** - Creates new function every render
-   ```jsx
+2. **Inline Functions in JSX Props** - Creates new function reference every render, causing unnecessary re-renders and breaking React.memo optimization.
+
+   ```
    // BAD
    <Button onClick={() => handleClick(id)} />
+   // BAD
    <Input onChange={(e) => setName(e.target.value)} />
-   
+
    // GOOD
    const handleButtonClick = useCallback(() => handleClick(id), [id]);
    <Button onClick={handleButtonClick} />
+   
    ```
 
-3. **Index as Key** - Breaks reconciliation on reorder/delete
-   ```jsx
+3. **Index as Key** - Using array index as key breaks React reconciliation on reorder/delete. Items get wrong state and animations break.
+
+   ```
    // BAD
    items.map((item, index) => <Item key={index} />)
-   
+   // BAD
+   items.map((item, i) => <Item key={i} />)
+
    // GOOD
    items.map((item) => <Item key={item.id} />)
+   // GOOD
+   items.map((item) => <Item key={`${item.type}-${item.id}`} />)
    ```
 
-4. **Direct State Mutation** - Never mutate state directly
-   ```jsx
+4. **Direct State Mutation** - Never mutate state directly with push/pop/splice. React won't detect the change and won't re-render.
+
+   ```
+   // BAD
+   items.push(newItem);
+   setItems(items);  // Same reference, no re-render
+   
    // BAD
    user.name = 'new';
    setUser(user);
-   items.push(newItem);
-   setItems(items);
    
+
+   // GOOD
+   setItems([...items, newItem]);
    // GOOD
    setUser({ ...user, name: 'new' });
-   setItems([...items, newItem]);
+   // GOOD
+   setItems(items.filter(i => i.id !== removeId));
    ```
 
-5. **Missing Dependency Arrays** - Causes stale closures or infinite loops
-   ```jsx
+5. **Missing Dependency Arrays** - useEffect/useMemo/useCallback with empty deps but referencing outer variables causes stale closures.
+
+   ```
    // BAD
-   useEffect(() => { fetchData(userId); });
-   useEffect(() => { fetchData(userId); }, []);
-   
+   useEffect(() => { fetchData(userId); }, []);  // userId stale
+   // BAD
+   useEffect(() => { fetchData(userId); });  // runs every render
+
    // GOOD
    useEffect(() => { fetchData(userId); }, [userId]);
    ```
 
-6. **Conditional Hooks** - Breaks Rules of Hooks
-   ```jsx
+6. **Conditional Hooks** - Calling hooks inside conditions/loops breaks Rules of Hooks. React tracks hooks by call order which must be stable.
+
+   ```
    // BAD
    if (isLoggedIn) {
-     const [user] = useState(null);
+     const [user] = useState(null);  // Hook inside condition!
    }
    
+
    // GOOD
-   const [user] = useState(null);
-   if (!isLoggedIn) return null;
+   const [user] = useState(null);  // Always called
+   if (!isLoggedIn) return null;   // Conditional render is fine
+   
    ```
 
-7. **Generic Component Names** - Use descriptive, domain-specific names
-   ```jsx
+7. **Generic Component Names** - Component functions named Item, Card, Component, etc. are too generic. Use domain-specific names that describe what the component represents.
+
+   ```
    // BAD
    function Item({ data }) { ... }
+   // BAD
    function Card({ info }) { ... }
+   // BAD
    function Component({ value }) { ... }
-   
+
    // GOOD
    function ProductCard({ product }) { ... }
+   // GOOD
    function UserAvatar({ user }) { ... }
+   // GOOD
    function OrderSummary({ order }) { ... }
    ```
 
-8. **Prop Drilling Beyond 2 Levels** - Use context or composition
-   ```jsx
+8. **Export Default (except Next.js special files)** - Use named exports for better refactoring support and explicit imports. Exception: Next.js App Router special files require export default.
+
+   ```
    // BAD
-   <App user={user}>
-     <Layout user={user}>
-       <Header user={user}>
-         <Avatar user={user} />
+   export default function UserCard() { ... }
 
    // GOOD
-   <UserContext.Provider value={user}>
-     <App><Layout><Header><Avatar /></Header></Layout></App>
-   </UserContext.Provider>
+   export function UserCard() { ... }
+   // GOOD
+   // page.tsx - Next.js exception
+   export default function HomePage() { ... }
+   
    ```
 
-9. **Business Logic in Components** - Extract to hooks or utils
-   ```jsx
+9. **Props Named data/info/item/value** - Generic prop names like data, info, item hide intent. Use domain-specific names that describe the prop's purpose.
+
+   ```
    // BAD
-   function OrderPage() {
-     const total = items.reduce((sum, i) => sum + i.price * i.qty, 0);
-     const tax = total * 0.08;
-     const shipping = total > 100 ? 0 : 10;
-     // ... 50 more lines of calculation
+   function List({ data, onItemClick }) { ... }
+   // BAD
+   const { data } = props;
+
+   // GOOD
+   function ProductList({ products, onProductSelect }) { ... }
+   // GOOD
+   const { products } = props;
+   ```
+
+10. **Console.log in Components** - Console statements in components indicate incomplete development or forgotten debugging code. Remove before committing.
+
+   ```
+   // BAD
+   console.log('rendered', props);
+   // BAD
+   console.log('state:', user);
+
+   // GOOD
+   // Use React DevTools for debugging
+   // GOOD
+   // Use proper logging service for production
+   ```
+
+11. **Ternary Returning Boolean Literals** - condition ? true : false is always redundant. The condition is already boolean (or truthy/falsy).
+
+   ```
+   // BAD
+   const isActive = status === 'active' ? true : false;
+   // BAD
+   disabled={isLoading ? true : false}
+
+   // GOOD
+   const isActive = status === 'active';
+   // GOOD
+   disabled={isLoading}
+   ```
+
+12. **Redundant Boolean Comparisons** - Comparing to true/false explicitly is redundant. Booleans are already truthy/falsy.
+
+   ```
+   // BAD
+   if (isLoading === true) { ... }
+   // BAD
+   if (isValid === false) { ... }
+
+   // GOOD
+   if (isLoading) { ... }
+   // GOOD
+   if (!isValid) { ... }
+   ```
+
+### SHOULD (validator warns)
+
+1. **Handle Loading State** - Components with async operations (fetch, useQuery, useSWR) should handle loading state to prevent flash of empty content.
+
+   ```
+   // BAD
+   function UserProfile({ userId }) {
+     const { data } = useFetch(`/users/${userId}`);
+     return <div>{data.name}</div>;  // Crashes while loading!
    }
    
+
    // GOOD
-   function OrderPage() {
-     const { total, tax, shipping } = useOrderCalculations(items);
+   function UserProfile({ userId }) {
+     const { data, isLoading, error } = useFetch(`/users/${userId}`);
+     if (isLoading) return <LoadingSpinner />;
+     if (error) return <ErrorMessage error={error} />;
+     return <div>{data.name}</div>;
    }
+   
    ```
 
-10. **Unhandled Loading/Error States** - Always handle async states
-    ```jsx
-    // BAD
-    function UserProfile({ userId }) {
-      const { data } = useFetch(`/users/${userId}`);
-      return <div>{data.name}</div>;
-    }
-    
-    // GOOD
-    function UserProfile({ userId }) {
-      const { data, isLoading, error } = useFetch(`/users/${userId}`);
-      if (isLoading) return <LoadingSpinner />;
-      if (error) return <ErrorMessage error={error} />;
-      return <div>{data.name}</div>;
-    }
-    ```
+2. **Handle Error State** - Components with async operations should handle error state to show meaningful feedback instead of crashing.
 
-11. **Default Export** - Use named exports for better refactoring
-    ```jsx
-    // BAD
-    export default function UserCard() { ... }
-
-    // GOOD
-    export function UserCard() { ... }
-    ```
-
-    **Exception:** Next.js App Router special files (`page.tsx`, `layout.tsx`, `loading.tsx`, `error.tsx`, `not-found.tsx`, `template.tsx`, `default.tsx`) MUST use `export default` per framework requirement.
-
-12. **Props Named `data`, `info`, `item`, `value`** - Use domain terms
-    ```jsx
-    // BAD
-    function List({ data, onItemClick }) { ... }
-    
-    // GOOD
-    function ProductList({ products, onProductSelect }) { ... }
-    ```
-
-### MUST
-
-1. **Handle Loading State First**
-   ```jsx
-   if (isLoading) return <LoadingSpinner />;
+   ```
    if (error) return <ErrorMessage error={error} />;
-   // Then render content
    ```
 
-2. **Memoize Expensive Computations**
-   ```jsx
-   const sortedProducts = useMemo(
-     () => products.sort((a, b) => a.price - b.price),
-     [products]
-   );
-   ```
+3. **Boolean Props Use Prefix** - Boolean props should use is/has/can/should prefix for clarity. Exception: HTML attributes like disabled, checked, selected.
 
-3. **Memoize Callbacks Passed to Children**
-   ```jsx
-   const handleProductSelect = useCallback((productId) => {
-     setSelectedProductId(productId);
-   }, []);
    ```
-
-4. **Use Descriptive Handler Names**
-   ```jsx
-   // Pattern: handle + Noun + Verb
-   const handleFormSubmit = ...
-   const handleUserDelete = ...
-   const handleImageUpload = ...
-   ```
-
-5. **Colocate Related State**
-   ```jsx
-   // BAD
-   const [firstName, setFirstName] = useState('');
-   const [lastName, setLastName] = useState('');
-   const [email, setEmail] = useState('');
-   
-   // GOOD
-   const [formData, setFormData] = useState({
-     firstName: '',
-     lastName: '',
-     email: ''
-   });
-   // OR useReducer for complex forms
-   ```
-
-6. **Boolean Props Use is/has/can/should Prefix**
-   ```jsx
    // BAD
    <Modal open={true} loading={true} disabled={true} />
-   
+
    // GOOD
-   <Modal isOpen={true} isLoading={true} isDisabled={true} />
+   <Modal isOpen={true} isLoading={true} disabled={true} />
    ```
 
-7. **Extract Custom Hooks for Reusable Logic**
-   ```jsx
-   // Reusable auth hook
-   function useAuth() {
-     const { isLoaded, isSignedIn, user } = useUser();
-     const isAuthenticated = isLoaded && isSignedIn;
-     return { isLoaded, isAuthenticated, user };
-   }
+4. **useCallback for Handlers** - Event handlers defined with const should use useCallback when passed to child components to prevent unnecessary re-renders.
+
+   ```
+   // BAD
+   const handleClick = () => { ... };  // New function every render
+   <Button onClick={handleClick} />
+   
+
+   // GOOD
+   const handleClick = useCallback(() => { ... }, [deps]);
+   <Button onClick={handleClick} />
+   
    ```
 
-8. **Use Early Returns for Guard Clauses**
-   ```jsx
-   function UserProfile({ userId }) {
-     const { user, isLoading, error } = useUser(userId);
-     
-     if (!userId) return null;
-     if (isLoading) return <Spinner />;
-     if (error) return <Error message={error.message} />;
-     if (!user) return <NotFound />;
-     
-     return <Profile user={user} />;
-   }
-   ```
+### GUIDANCE (not mechanically checked)
 
----
+1. **Component Structure** - Recommended structure for React components to improve consistency and readability across the codebase.
 
-## Patterns
 
-### Component Structure
-```jsx
-// 1. Imports (external, then internal)
-import { useState, useCallback, useMemo } from 'react';
-import { useAuth } from '@clerk/clerk-react';
+   > 1. Imports (external, then internal)
+2. Constants
+3. Component function
+   3a. Hooks (always at top, same order)
+   3b. Derived state / memoized values
+   3c. Callbacks (useCallback)
+   3d. Effects (useEffect)
+   3e. Early returns / guards
+   3f. Render
 
-import { formatCurrency } from '../utils/format';
-import { ProductCard } from './ProductCard';
 
-// 2. Constants
-const MAX_ITEMS_PER_PAGE = 20;
+2. **Custom Hook Structure** - Pattern for custom hooks that handle async operations with proper cleanup and loading/error states.
 
-// 3. Component
-export function ProductList({ products, onProductSelect }) {
-  // 3a. Hooks (always at top, same order)
-  const { isSignedIn } = useAuth();
-  const [selectedProductId, setSelectedProductId] = useState(null);
-  
-  // 3b. Derived state / memoized values
-  const sortedProducts = useMemo(
-    () => [...products].sort((a, b) => a.name.localeCompare(b.name)),
-    [products]
-  );
-  
-  // 3c. Callbacks
-  const handleProductClick = useCallback((productId) => {
-    setSelectedProductId(productId);
-    onProductSelect(productId);
-  }, [onProductSelect]);
-  
-  // 3d. Effects (after callbacks)
-  useEffect(() => {
-    // side effects
-  }, [dependency]);
-  
-  // 3e. Early returns / guards
-  if (!products.length) {
-    return <EmptyState message="No products found" />;
-  }
-  
-  // 3f. Render
-  return (
-    <ul className="product-list">
-      {sortedProducts.map((product) => (
-        <ProductCard
-          key={product.id}
-          product={product}
-          isSelected={product.id === selectedProductId}
-          onSelect={handleProductClick}
-        />
-      ))}
-    </ul>
-  );
-}
-```
 
-### Custom Hook Structure
-```jsx
-export function useProducts(categoryId) {
+   > export function useProducts(categoryId) {
   const [products, setProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    let isMounted = true;
+    let isMounted = true;  // Cleanup flag
     setIsLoading(true);
     setError(null);
 
     fetchProducts(categoryId)
-      .then((fetchedProducts) => {
+      .then((data) => {
         if (isMounted) {
-          setProducts(fetchedProducts);
+          setProducts(data);
           setIsLoading(false);
         }
       })
-      .catch((fetchError) => {
+      .catch((err) => {
         if (isMounted) {
-          setError(fetchError);
+          setError(err);
           setIsLoading(false);
         }
       });
 
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };  // Cleanup
   }, [categoryId]);
 
   return { products, isLoading, error };
 }
-```
 
-### Form with useReducer
-```jsx
-const initialFormState = {
+
+3. **Form with useReducer** - For complex forms, useReducer provides better state management than multiple useState calls.
+
+
+   > const initialFormState = {
   values: { email: '', password: '' },
   errors: {},
   isSubmitting: false
@@ -347,10 +321,7 @@ function formReducer(state, action) {
         errors: { ...state.errors, [action.field]: null }
       };
     case 'SET_ERROR':
-      return {
-        ...state,
-        errors: { ...state.errors, [action.field]: action.error }
-      };
+      return { ...state, errors: { ...state.errors, [action.field]: action.error } };
     case 'SUBMIT_START':
       return { ...state, isSubmitting: true };
     case 'SUBMIT_END':
@@ -360,27 +331,19 @@ function formReducer(state, action) {
   }
 }
 
-export function LoginForm({ onSuccess }) {
-  const [formState, dispatch] = useReducer(formReducer, initialFormState);
-  const { values, errors, isSubmitting } = formState;
-  
-  // ... handlers and render
-}
-```
 
 ---
 
 ## Anti-Patterns
 
-| Pattern | Problem | Fix |
-|---------|---------|-----|
-| `<Comp style={{...}}/>` | New ref every render | Extract to const/useMemo |
-| `<Comp onClick={() => ...}/>` | New fn every render | useCallback |
-| `key={index}` | Breaks on reorder | Use stable ID |
-| `arr.push(); setArr(arr)` | Mutation | `setArr([...arr, new])` |
-| `useEffect(() => {}, [])` | Missing deps | Add all deps |
-| `if (x) useState()` | Hook rules | Hooks at top level |
-| `export default` | Refactor issues | Named exports (except Next.js page/layout files) |
-| `function Item({data})` | Generic naming | Domain-specific names |
-| `{loading && <Spin/>}` | Flash of content | Early return pattern |
-| Props > 2 levels deep | Prop drilling | Context or composition |
+| Anti-Pattern | Description | Fix |
+|--------------|-------------|-----|
+| <Comp style={{...}}/> |  | Extract to const/useMemo |
+| <Comp onClick={() => ...}/> |  | useCallback |
+| key={index} |  | Use stable ID |
+| arr.push(); setArr(arr) |  | setArr([...arr, new]) |
+| useEffect(() => {}, []) |  | Add all deps |
+| if (x) useState() |  | Hooks at top level |
+| export default |  | Named exports (except Next.js) |
+| function Item({data}) |  | Domain-specific names |
+| {loading && <Spin/>} |  | Early return pattern |
