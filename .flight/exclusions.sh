@@ -171,8 +171,7 @@ flight_get_files() {
 # -----------------------------------------------------------------------------
 # flight_get_files_for_patterns - Convert glob patterns to file list
 # -----------------------------------------------------------------------------
-# This is an alternative that uses bash globstar when you need exact pattern
-# matching (e.g., "src/**/*.ts" vs just "*.ts")
+# Uses find for pattern matching (works on bash 3.2+, no globstar needed)
 #
 # Arguments:
 #   $@ - Full glob patterns including path (e.g., "src/**/*.ts")
@@ -181,22 +180,41 @@ flight_get_files() {
 # -----------------------------------------------------------------------------
 flight_get_files_for_patterns() {
     local patterns=("$@")
+    local search_dir="${FLIGHT_SEARCH_DIR:-.}"
 
-    # Enable globstar for ** pattern matching
-    shopt -s nullglob globstar
-
-    local file
     for pattern in "${patterns[@]}"; do
-        for file in $pattern; do
-            # Skip if excluded
-            if ! flight_is_excluded "$file"; then
-                echo "$file"
-            fi
-        done
-    done | sort -u
+        # Extract directory prefix and filename pattern from glob
+        # e.g., "src/**/*.ts" -> search in "src", match "*.ts"
+        local dir_part=""
+        local name_part=""
 
-    # Restore shell options
-    shopt -u nullglob globstar
+        if [[ "$pattern" == *"/"* ]]; then
+            # Has path component - extract it
+            # Remove **/ and everything after to get base dir
+            dir_part="${pattern%%\*\**}"
+            dir_part="${dir_part%/}"
+            # Get the filename pattern (last component)
+            name_part="${pattern##*/}"
+        else
+            dir_part="$search_dir"
+            name_part="$pattern"
+        fi
+
+        # Default to current dir if empty
+        [[ -z "$dir_part" ]] && dir_part="$search_dir"
+
+        # Skip if directory doesn't exist
+        [[ ! -d "$dir_part" ]] && continue
+
+        # Build find exclusions
+        local find_excludes=""
+        for excl_dir in "${FLIGHT_EXCLUDE_DIRS[@]}"; do
+            find_excludes="$find_excludes -not -path \"*/$excl_dir/*\""
+        done
+
+        # Run find
+        eval "find \"$dir_part\" -type f -name \"$name_part\" $find_excludes 2>/dev/null"
+    done | sort -u
 }
 
 # -----------------------------------------------------------------------------

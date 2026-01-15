@@ -66,10 +66,8 @@ elif [[ "$FLIGHT_HAS_EXCLUSIONS" == true ]]; then
     # Use exclusions-aware file discovery
     mapfile -t FILES < <(flight_get_files "webhook*.js" "webhook*.ts" "*.js" "*.ts" "*Webhook*.java" "webhooks.py" "webhook_handler*.py")
 else
-    # Fallback: glob expansion without exclusions
-    shopt -s nullglob globstar
-    FILES=($DEFAULT_PATTERNS)
-    shopt -u nullglob globstar
+    # Fallback: use find (works on bash 3.2+, no globstar needed)
+    mapfile -t FILES < <(find . -type f \( -name "webhook*.js" -o -name "webhook*.ts" -o -name "*.js" -o -name "*.ts" -o -name "*Webhook*.java" -o -name "webhooks.py" -o -name "webhook_handler*.py" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" 2>/dev/null | sort)
 fi
 
 if [[ ${#FILES[@]} -eq 0 ]]; then

@@ -66,10 +66,8 @@ elif [[ "$FLIGHT_HAS_EXCLUSIONS" == true ]]; then
     # Use exclusions-aware file discovery
     mapfile -t FILES < <(flight_get_files "sms*.js" "sms*.ts" "*twilio*.js" "*twilio*.ts" "consent*.js" "consent*.ts" "sms*.py" "twilio*.py")
 else
-    # Fallback: glob expansion without exclusions
-    shopt -s nullglob globstar
-    FILES=($DEFAULT_PATTERNS)
-    shopt -u nullglob globstar
+    # Fallback: use find (works on bash 3.2+, no globstar needed)
+    mapfile -t FILES < <(find . -type f \( -name "sms*.js" -o -name "sms*.ts" -o -name "*twilio*.js" -o -name "*twilio*.ts" -o -name "consent*.js" -o -name "consent*.ts" -o -name "sms*.py" -o -name "twilio*.py" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" 2>/dev/null | sort)
 fi
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
