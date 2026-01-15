@@ -58,9 +58,9 @@ FLIGHT_EXCLUDE_DIRS=(
     ".terraform"
     ".serverless"
 
-    # Flight internal
-    ".flight/examples"
-    ".flight/domains"
+    # Framework directories (never scan framework config/tooling)
+    ".flight"
+    ".claude"
 )
 
 # -----------------------------------------------------------------------------
