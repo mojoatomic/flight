@@ -1,0 +1,641 @@
+# testing.flight - Testing Domain
+# Source: Migrated from testing.md and testing.validate.sh
+
+domain: testing
+version: 1.0.0
+description: >
+  Universal unit test patterns. Language-agnostic, framework-agnostic.
+  Prevents weak tests across JavaScript, Python, Go, and Java.
+
+file_patterns:
+  - "**/*test*.js"
+  - "**/*spec*.js"
+  - "**/*_test.py"
+  - "**/test_*.py"
+  - "**/*_test.go"
+  - "**/Test*.java"
+
+exclude_patterns:
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/.venv/**"
+  - "**/venv/**"
+  - "**/.git/**"
+
+suppression:
+  comment: "flight:ok"
+  guidance: |
+    Add `// flight:ok` (JS) or `# flight:ok` (Python) on the same line.
+    Use sparingly. Document why the suppression is acceptable.
+
+# ===========================================================================
+# RULES
+# ===========================================================================
+# ID format: {severity_prefix}{number}
+#   N = NEVER (check - fails build)
+#   S = SHOULD (warn - advisory)
+#   G = GUIDANCE (not checked)
+# ===========================================================================
+
+rules:
+
+  # =========================================================================
+  # NEVER - Hard failures (validator will reject)
+  # =========================================================================
+
+  N1:
+    title: Enumerated Test Names
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use enumerated test names (test1, test2, testA). They provide
+      no information about what the test verifies. Use descriptive names
+      that describe the behavior being tested.
+    check:
+      type: grep
+      pattern: "test\\(['\"]test[0-9]|it\\(['\"][0-9]|def test[0-9]+|func Test[0-9]+\\("
+      flags: -En
+    examples:
+      bad:
+        - "test('test1', () => { ... })"
+        - "def test1(self): ..."
+        - "func Test1(t *testing.T) { ... }"
+      good:
+        - "test('should return user when valid ID provided', () => { ... })"
+        - "def test_returns_empty_list_when_no_matches(self): ..."
+        - "func TestUserService_ReturnsError_WhenNotFound(t *testing.T) { ... }"
+
+  N2:
+    title: Empty Test Bodies
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never write tests without assertions. Empty tests pass but prove
+      nothing. Every test must have at least one assertion.
+    check:
+      type: grep
+      pattern: "it\\([^)]+,\\s*\\(\\)\\s*=>\\s*\\{\\s*\\}\\)|it\\(['\"]['\"],|def test[^:]+:\\s*pass$|func Test[^{]+\\{\\s*\\}|@Test[^{]+\\{\\s*\\}"
+      flags: -En
+    examples:
+      bad:
+        - "it('works', () => {})"
+        - "it('handles edge case', () => { doSomething() })  // no assertion!"
+        - "def test_something(self): pass"
+      good:
+        - "it('works', () => { expect(result).toBe(true) })"
+        - "def test_something(self): self.assertEqual(result, expected)"
+
+  N3:
+    title: Hardcoded Sleep/Delays
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use hardcoded sleep/delays in tests. They make tests slow and
+      flaky. Use waitFor, mock timers, or event-based waiting instead.
+    check:
+      type: grep
+      pattern: "sleep\\s*\\(|time\\.sleep|Thread\\.sleep|\\.sleep\\(|usleep|nanosleep|await\\s+new\\s+Promise.*setTimeout"
+      flags: -En
+    examples:
+      bad:
+        - "await sleep(1000)"
+        - "time.sleep(2)"
+        - "Thread.sleep(500)"
+        - "await new Promise(r => setTimeout(r, 100))"
+      good:
+        - "await waitFor(() => expect(element).toBeVisible())"
+        - "mock_time.advance(seconds=2)"
+        - "eventually { assert condition }"
+
+  N4:
+    title: Testing Private Methods Directly
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never test private methods directly. It breaks encapsulation and
+      couples tests to implementation. Test through the public interface.
+    check:
+      type: grep
+      pattern: "expect\\([^)]*\\._[a-z]|assert.*\\._[a-z]|expect\\([^)]*\\.__"
+      flags: -En
+    examples:
+      bad:
+        - "expect(obj._privateMethod()).toBe(...)"
+        - "expect(obj.__private_attr).toBe(...)"
+        - "assert obj._internal_value == expected"
+      good:
+        - "expect(obj.publicMethod()).toBe(...)"
+        - "// Private behavior is tested implicitly through public API"
+
+  N5:
+    title: Unawaited Async Assertions
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never leave async assertions unawaited. The promise is never awaited
+      and the test passes even if the assertion fails. Always await or
+      return the promise.
+    check:
+      type: grep
+      pattern: "\\.then\\s*\\(\\s*[^)]*expect|\\.then\\s*\\(\\s*[^)]*assert"
+      flags: -En
+    examples:
+      bad:
+        - |
+          test('fetches data', () => {
+            fetchData().then(data => expect(data).toBeDefined())
+          })
+      good:
+        - |
+          test('fetches data', async () => {
+            const data = await fetchData()
+            expect(data).toBeDefined()
+          })
+        - |
+          test('fetches data', () => {
+            return fetchData().then(data => expect(data).toBeDefined())
+          })
+
+  # =========================================================================
+  # SHOULD - Warnings (validator warns but doesn't fail)
+  # =========================================================================
+
+  S1:
+    title: Shared Mutable State Between Tests
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Avoid shared mutable state between tests. Tests that modify shared
+      state can cause order-dependent failures. Each test should own its
+      state.
+    check:
+      type: script
+      code: |
+        grep -l "beforeAll" "$@" 2>/dev/null | xargs -I{} sh -c 'grep -l "^let\s" "{}" 2>/dev/null && echo "{}: has beforeAll with top-level let"'
+    note: Detects beforeAll with top-level let variables - a common pattern for shared mutable state.
+    examples:
+      bad:
+        - |
+          let sharedUser;
+          beforeAll(() => { sharedUser = createUser() })
+          test('modifies user', () => { sharedUser.name = 'changed' })
+          test('reads user', () => { expect(sharedUser.name).toBe('original') }) // FAILS!
+      good:
+        - |
+          test('test1', () => {
+            const user = createUser()
+            user.name = 'changed'
+            expect(user.name).toBe('changed')
+          })
+
+  S2:
+    title: Try-Catch Swallowing Failures
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Avoid try-catch blocks that can swallow test failures. If no error
+      is thrown, the catch never runs and the test passes incorrectly.
+      Use expect().toThrow() or expect().rejects instead.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -q "catch\s*(" "$f" 2>/dev/null; then
+            match=$(grep -A5 "catch\s*(" "$f" | grep -E "expect|assert" | grep -v "toThrow\|rejects")
+            if [[ -n "$match" ]]; then
+              echo "$f: catch block contains assertions - verify not swallowing"
+            fi
+          fi
+        done
+    examples:
+      bad:
+        - |
+          test('throws error', () => {
+            try {
+              doThing()
+            } catch (e) {
+              expect(e).toBeDefined()  // never reached if no error!
+            }
+          })
+      good:
+        - |
+          test('throws error', () => {
+            expect(() => doThing()).toThrow()
+          })
+        - |
+          test('rejects with error', async () => {
+            await expect(asyncDoThing()).rejects.toThrow(Error)
+          })
+
+  S3:
+    title: Non-Descriptive Test Names
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Test names should describe the behavior being tested. Names like
+      'test', 'works', or 'it' provide no useful information.
+    check:
+      type: grep
+      pattern: "test\\(['\"]test['\"]|test\\(['\"]works['\"]|it\\(['\"]it['\"]|it\\(['\"]test['\"]"
+      flags: -En
+    examples:
+      bad:
+        - "test('test', () => { ... })"
+        - "test('works', () => { ... })"
+        - "it('it', () => { ... })"
+      good:
+        - "test('should return user when valid ID provided', () => { ... })"
+        - "test('calculateTotal returns zero for empty cart', () => { ... })"
+
+  S4:
+    title: Logic in Tests
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Avoid if/for/while logic in test bodies. Logic obscures what's being
+      tested and can hide bugs. Use explicit test cases or parameterized
+      tests instead.
+    check:
+      type: script
+      code: |
+        grep -En "^\s+(if|for|while)\s*\(" "$@" | grep -v "forEach\|test\.each\|pytest\.mark"
+    note: Excludes forEach, test.each, and pytest.mark which are acceptable patterns.
+    examples:
+      bad:
+        - |
+          test('validates all items', () => {
+            for (const item of items) {
+              if (item.type === 'special') {
+                expect(validate(item)).toBe(true)
+              }
+            }
+          })
+      good:
+        - |
+          test('validates special item', () => {
+            expect(validate(specialItem)).toBe(true)
+          })
+        - |
+          test.each([
+            ['valid@email.com', true],
+            ['invalid', false],
+          ])('validateEmail(%s) returns %s', (input, expected) => {
+            expect(validateEmail(input)).toBe(expected)
+          })
+
+  # =========================================================================
+  # GUIDANCE - Best practices (not mechanically checked)
+  # =========================================================================
+
+  G1:
+    title: Follow AAA Pattern
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Follow the Arrange, Act, Assert pattern for clear test structure.
+    guidance: |
+      test('should calculate total with tax', () => {
+        // Arrange
+        const cart = new Cart()
+        cart.addItem({ price: 100 })
+        const taxRate = 0.1
+
+        // Act
+        const total = cart.calculateTotal(taxRate)
+
+        // Assert
+        expect(total).toBe(110)
+      })
+
+  G2:
+    title: One Behavior Per Test
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Test a single logical behavior per test case. Multiple unrelated
+      assertions make it hard to identify what failed and why.
+    guidance: |
+      // BAD - testing multiple unrelated behaviors
+      test('user service', () => {
+        expect(service.create(user)).toBeTruthy()
+        expect(service.findById(1)).toEqual(user)
+        expect(service.delete(1)).toBeTruthy()
+      })
+
+      // GOOD - one behavior per test
+      test('create returns created user', () => {
+        const result = service.create(user)
+        expect(result).toEqual(user)
+      })
+
+      test('findById returns user when exists', () => {
+        service.create(user)
+        expect(service.findById(1)).toEqual(user)
+      })
+
+  G3:
+    title: Test Independence
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Tests must not depend on execution order. Use beforeEach/afterEach
+      to ensure clean state for each test.
+    guidance: |
+      // GOOD - clean state for each test
+      beforeEach(() => {
+        database.clear()
+        cache.reset()
+      })
+
+      afterEach(() => {
+        cleanup()
+      })
+
+  G4:
+    title: Mock Only External Dependencies
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Mock external, slow, or non-deterministic dependencies. Don't mock
+      the system under test or simple internal collaborators.
+    guidance: |
+      MOCK these (external/slow/non-deterministic):
+      - Database connections
+      - HTTP clients / API calls
+      - File system operations
+      - System clock / timers
+      - Random number generators
+      - Email/SMS services
+
+      DON'T MOCK these (internal/fast/deterministic):
+      - The class you're testing (SUT)
+      - Pure functions
+      - Value objects
+      - Simple data transformations
+
+  G5:
+    title: Test Edge Cases
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Always test edge cases: null, empty, boundary values, error conditions.
+    guidance: |
+      Edge case checklist:
+      - null / undefined / None / nil
+      - Empty: "", [], {}, 0
+      - Whitespace: "   ", "\t\n"
+      - Boundaries: MAX_INT, MIN_INT, 0, -1
+      - Single vs many: [x] vs [x, y, z, ...]
+      - Unicode / special characters
+
+  G6:
+    title: Test Error Paths
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Don't just test the happy path. Test error conditions, invalid inputs,
+      and failure scenarios.
+    guidance: |
+      // BAD - only tests success
+      test('login works', () => {
+        expect(login('user', 'pass')).toBeTruthy()
+      })
+
+      // GOOD - tests failures too
+      test('login succeeds with valid credentials', () => { ... })
+      test('login throws AuthError for wrong password', () => {
+        expect(() => login('user', 'wrong')).toThrow(AuthError)
+      })
+      test('login throws AuthError for unknown user', () => { ... })
+      test('login throws RateLimitError after 5 attempts', () => { ... })
+
+  G7:
+    title: Test File Location Mirrors Source
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Place test files alongside or mirroring source files for easy discovery.
+    guidance: |
+      Pattern: source path → test path
+
+      src/user/service.ts      → src/user/service.test.ts
+      src/utils/format.js      → src/utils/format.test.js
+      lib/auth/token.py        → lib/auth/token_test.py
+      pkg/user/service.go      → pkg/user/service_test.go
+
+  G8:
+    title: Test Behavior Not Implementation
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Test observable behavior, not internal implementation details. Tests
+      should survive refactoring.
+    guidance: |
+      BAD: Tests break when you refactor internals
+      - Testing private method order
+      - Asserting on internal state
+      - Checking mock call counts excessively
+
+      GOOD: Tests survive refactoring
+      - Testing inputs → outputs
+      - Testing observable side effects
+      - Testing public API contracts
+
+  G9:
+    title: Treat Test Code as Production Code
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Apply the same quality standards to test code: meaningful names,
+      no copy-paste, clear structure, no magic numbers.
+    guidance: |
+      Apply same standards:
+      - Meaningful names (no data, result, temp)
+      - No copy-paste (extract helpers)
+      - Clear structure (AAA pattern)
+      - No magic numbers
+
+  G10:
+    title: If Testing is Hard, Design Needs Work
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Difficulty testing is a design smell. The test is your first "user"
+      of the code.
+    guidance: |
+      Hard to test usually means:
+      - Too many dependencies (high coupling)
+      - Mixed concerns (needs splitting)
+      - Hidden dependencies (global state)
+      - Complex setup (missing abstraction)
+
+      The test is your first "user" of the code.
+      If it's painful, real usage will be too.
+
+  G11:
+    title: Tests are Documentation
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Good tests serve as executable documentation. Someone should understand
+      the system by reading only the tests.
+    guidance: |
+      Good tests answer:
+      - What does this code do?
+      - What are the edge cases?
+      - What errors can occur?
+      - How is it supposed to be used?
+
+  G12:
+    title: Test Structure Template
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Standard template for organizing test files with describe blocks,
+      setup/teardown, and clear test cases.
+    guidance: |
+      describe('ComponentOrModule', () => {
+        let dependency;
+
+        beforeEach(() => {
+          dependency = createMockDependency()
+        })
+
+        afterEach(() => {
+          cleanup()
+        })
+
+        describe('methodName', () => {
+          test('should [expected behavior] when [condition]', () => {
+            // Arrange
+            const input = createInput()
+
+            // Act
+            const result = methodName(input)
+
+            // Assert
+            expect(result).toEqual(expected)
+          })
+        })
+      })
+
+  G13:
+    title: Test Naming Convention
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Follow consistent test naming conventions that describe the unit,
+      scenario, and expected result.
+    guidance: |
+      Pattern: [unit]_[scenario]_[expected]
+
+      Examples:
+      - UserService_GetById_ReturnsUser_WhenExists
+      - UserService_GetById_ReturnsNull_WhenNotFound
+      - UserService_Create_ThrowsValidationError_WhenEmailInvalid
+
+      Or BDD style:
+      - should return user when ID exists
+      - should return null when ID not found
+      - should throw ValidationError when email invalid
+
+  G14:
+    title: Mocking Decision Tree
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Decision framework for when to mock dependencies.
+    guidance: |
+      Should I mock this dependency?
+
+      Is it external? (DB, HTTP, filesystem, time)
+        → YES: Mock it
+
+      Is it slow? (> 10ms)
+        → Probably: Mock it
+
+      Is it non-deterministic? (random, time-based)
+        → YES: Mock it
+
+      Is it the thing I'm testing?
+        → NO: Never mock the SUT
+
+      Is it a simple value object or pure function?
+        → NO: Use the real thing
+
+      Everything else?
+        → Probably use real implementation
+
+  G15:
+    title: Async Tests Must Await or Return Promise
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Async tests must await operations or return the promise. Otherwise
+      assertions are ignored and tests pass incorrectly.
+    guidance: |
+      // BAD - async test without await (assertions never run)
+      test('fetches user', async () => {
+        fetchUser(1).then(u => expect(u).toBeDefined())  // not awaited!
+      })
+
+      // GOOD - await async operations
+      test('fetches user', async () => {
+        const user = await fetchUser(1)
+        expect(user).toBeDefined()
+      })
+
+      // GOOD - return promise (older style)
+      test('fetches user', () => {
+        return fetchUser(1).then(user => {
+          expect(user).toBeDefined()
+        })
+      })
+
+anti_patterns:
+  - pattern: "Enumerated Names"
+    problem: "test1, test2 provides no information"
+    fix: "Descriptive names"
+  - pattern: "Empty Test"
+    problem: "No assertions, passes but proves nothing"
+    fix: "Add expect/assert"
+  - pattern: "Hardcoded Sleep"
+    problem: "sleep(1000) is slow and flaky"
+    fix: "Wait for condition"
+  - pattern: "Testing Privates"
+    problem: "obj._method() breaks encapsulation"
+    fix: "Test public API"
+  - pattern: "Shared State"
+    problem: "Mutable beforeAll state causes order-dependent failures"
+    fix: "Fresh state per test"
+  - pattern: "Mocking SUT"
+    problem: "Mock the thing you're testing proves nothing"
+    fix: "Mock dependencies only"
+  - pattern: "Unawaited Async"
+    problem: ".then(expect(...)) not awaited, test always passes"
+    fix: "await or return promise"
+  - pattern: "Try-Catch Swallow"
+    problem: "catch hides assertion failure"
+    fix: "Use expect().toThrow()"
+  - pattern: "Giant Test"
+    problem: "100+ lines, many assertions"
+    fix: "Split by behavior"
+  - pattern: "Free Ride"
+    problem: "Unrelated assertions together"
+    fix: "One behavior per test"
+  - pattern: "Inspector"
+    problem: "Tests internal implementation"
+    fix: "Test behavior"
+  - pattern: "Mockery"
+    problem: "More mocks than real code"
+    fix: "Reduce dependencies"
+  - pattern: "Local Hero"
+    problem: "Works on your machine only"
+    fix: "Mock externals"
+  - pattern: "Generous Leftovers"
+    problem: "Tests depend on order"
+    fix: "Independent tests"
+  - pattern: "Logic in Tests"
+    problem: "if/for in test body obscures what's tested"
+    fix: "Explicit test cases"
