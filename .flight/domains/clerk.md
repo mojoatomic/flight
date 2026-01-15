@@ -118,10 +118,14 @@ router.get('/getUser/:id', handler)  // flight:ok
    // BAD
    prisma.posts.findMany({ where: { userId } })
    // BAD
-   db.query.posts.where(eq(posts.userId, userId))
+   db.query.posts.findMany({ where: eq(posts.userId, userId) })
+   // BAD
+   db.select().from(posts).where(eq(posts.userId, userId))
 
    // GOOD
    prisma.posts.findMany({ where: { orgId } })
+   // GOOD
+   db.query.posts.findMany({ where: eq(posts.orgId, orgId) })
    // GOOD
    prisma.posts.findMany({ where: { orgId, userId } })
    ```
@@ -227,11 +231,19 @@ router.get('/getUser/:id', handler)  // flight:ok
    prisma.posts.findMany()
    // BAD
    prisma.posts.findMany({ where: { published: true } })
+   // BAD
+   db.query.posts.findMany()
+   // BAD
+   db.select().from(posts).where(eq(posts.published, true))
 
    // GOOD
    prisma.posts.findMany({ where: { orgId } })
    // GOOD
    prisma.posts.findMany({ where: { orgId, published: true } })
+   // GOOD
+   db.query.posts.findMany({ where: eq(posts.orgId, orgId) })
+   // GOOD
+   db.select().from(posts).where(eq(posts.orgId, orgId))
    ```
 
 6. **Handle Organization Switching** - When a user switches organizations, the app must handle the context change - clearing cached data and updating UI.

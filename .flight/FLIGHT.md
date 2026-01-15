@@ -271,6 +271,7 @@ If MCP tools aren't available, fall back to web search.
 |--------|--------------|
 | `code-hygiene` | **ALWAYS** - applies to all code |
 | `clerk` | Clerk auth, organizations, multi-tenant SaaS (TypeScript/Next.js) |
+| `prisma` | Prisma ORM, multi-tenant queries, error handling, connection management |
 | `api` | REST/HTTP API routes, controllers |
 | `bash` | Shell scripts (.sh) |
 | `docker` | Dockerfiles, container configuration |
