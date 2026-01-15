@@ -1,0 +1,860 @@
+# rp2040-pico.flight - RP2040 Pico Embedded Systems Domain
+# Source: Migrated from rp2040-pico.md and rp2040-pico.validate.sh
+
+domain: rp2040-pico
+version: 1.0.0
+description: >
+  Raspberry Pi Pico (RP2040) dual-core embedded development with Pico SDK.
+  Extends embedded-c-p10 with RP2040-specific patterns for dual-core safety,
+  inter-core communication, and hardware abstraction.
+
+file_patterns:
+  - "src/**/*.c"
+  - "src/**/*.h"
+  - "src/*.c"
+  - "src/*.h"
+
+exclude_patterns:
+  - "**/node_modules/**"
+  - "**/build/**"
+  - "**/.git/**"
+
+suppression:
+  comment: "flight:ok"
+  guidance: |
+    Add `/* flight:ok */` on the same line to suppress.
+    Use sparingly. Safety-critical embedded code rules should rarely be suppressed.
+    Document why the suppression is acceptable.
+
+# ===========================================================================
+# RULES
+# ===========================================================================
+# ID format: {severity_prefix}{number}
+#   N = NEVER (check - fails build)
+#   S = SHOULD (warn - advisory)
+#   G = GUIDANCE (not checked)
+#
+# This domain extends embedded-c-p10 for RP2040-specific patterns.
+# For full safety-critical validation, also run embedded-c-p10.validate.sh
+# ===========================================================================
+
+rules:
+
+  # =========================================================================
+  # NEVER - Memory and Safety (validator will reject)
+  # =========================================================================
+
+  N1:
+    title: No malloc/free
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use malloc, free, calloc, or realloc. Static allocation only.
+      Dynamic memory is unpredictable in embedded systems.
+    check:
+      type: grep
+      pattern: '\bmalloc\s*\(|\bfree\s*\(|\bcalloc\s*\(|\brealloc\s*\('
+      flags: -En
+    examples:
+      bad:
+        - "char *buf = malloc(size);"
+        - "free(ptr);"
+      good:
+        - "static char buffer[MAX_SIZE];"
+        - "uint8_t data[RING_BUFFER_SIZE];"
+
+  N2:
+    title: No printf in Interrupt Handlers
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use printf, puts, or print functions inside interrupt handlers
+      (_callback, _isr, _handler, _irq functions). These are not interrupt-safe
+      and can cause undefined behavior.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          awk '/void.*(_callback|_isr|_handler|_irq)\s*\(/,/^\}/ { if (/printf|puts|print/) print FILENAME":"NR": "$0 }' "$f"
+        done
+    examples:
+      bad:
+        - |
+          void gpio_callback(uint gpio, uint32_t events) {
+            printf("GPIO %d triggered\n", gpio);  // WRONG
+          }
+      good:
+        - |
+          void gpio_callback(uint gpio, uint32_t events) {
+            g_gpio_triggered = true;  // Set flag, handle in main loop
+          }
+
+  N3:
+    title: No Recursive Functions
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use recursive functions. Recursion makes stack usage unpredictable
+      and can cause stack overflow on embedded systems with limited RAM.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          awk '/^[a-zA-Z_][a-zA-Z0-9_]*\s+[a-zA-Z_][a-zA-Z0-9_]*\s*\(/ {
+            match($0, /([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/, arr)
+            if (arr[1] != "") fname = arr[1]
+          }
+          fname && $0 ~ fname"\\s*\\(" && !/^[a-zA-Z_]/ {
+            print FILENAME":"NR": possible recursion in "fname
+          }' "$f" 2>/dev/null
+        done | head -5
+    examples:
+      bad:
+        - |
+          uint32_t factorial(uint32_t n) {
+            if (n <= 1) return 1;
+            return n * factorial(n - 1);  // WRONG - recursive
+          }
+      good:
+        - |
+          uint32_t factorial(uint32_t n) {
+            uint32_t result = 1U;
+            for (uint32_t i = 2U; i <= n; i++) result *= i;
+            return result;
+          }
+
+  N4:
+    title: No Direct Register Access
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never access hardware registers directly via volatile pointers or
+      raw addresses. Use Pico SDK hardware_* APIs for portability and safety.
+    check:
+      type: script
+      code: |
+        grep -En '\*\s*\(volatile\s+uint32_t\s*\*\)|0x[0-9a-fA-F]+\s*=' "$@" | grep -v '#define'
+    examples:
+      bad:
+        - "*(volatile uint32_t *)0x40014000 = 0x01;"
+        - "uint32_t reg = *(volatile uint32_t *)GPIO_BASE;"
+      good:
+        - "gpio_put(PIN, 1);"
+        - "uint32_t value = gpio_get(PIN);"
+
+  N5:
+    title: I2C/SPI Must Use Timeout Versions
+    severity: NEVER
+    mechanical: true
+    description: >
+      Always use timeout versions of I2C/SPI functions. Non-timeout blocking
+      calls can hang forever if hardware fails or bus is stuck.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          grep -En 'i2c_write_blocking\(|i2c_read_blocking\(|spi_write_blocking\(|spi_read_blocking\(' "$f" 2>/dev/null | \
+          grep -v 'timeout' | head -5
+        done
+    examples:
+      bad:
+        - "i2c_write_blocking(i2c0, addr, data, len, false);"
+        - "spi_read_blocking(spi0, 0, data, len);"
+      good:
+        - "i2c_write_timeout_us(i2c0, addr, data, len, false, I2C_TIMEOUT_US);"
+        - "spi_write_read_blocking(spi0, tx, rx, len);  // flight:ok - bounded by len"
+
+  N6:
+    title: Arrays Must Have Named Size Constants
+    severity: NEVER
+    mechanical: true
+    description: >
+      Array sizes must use #define constants, not magic numbers.
+      This ensures buffer sizes are documented and can be changed in one place.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          grep -En '\[[0-9]+\]' "$f" 2>/dev/null | grep -v '#define\|//\|/\*' | head -5
+        done
+    examples:
+      bad:
+        - "uint8_t buffer[64];"
+        - "char name[32];"
+      good:
+        - "#define BUFFER_SIZE 64U"
+        - "uint8_t buffer[BUFFER_SIZE];"
+
+  N7:
+    title: Core 0 Must Use Watchdog
+    severity: NEVER
+    mechanical: true
+    description: >
+      Core 0 (main.c) must enable and update the hardware watchdog.
+      The watchdog provides system recovery if Core 0 hangs.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if echo "$f" | grep -q 'main\.c'; then
+            if ! grep -q 'watchdog_enable\|watchdog_update' "$f"; then
+              echo "$f: missing watchdog"
+            fi
+          fi
+        done
+    examples:
+      bad:
+        - |
+          // main.c without watchdog
+          int main(void) {
+            while (true) { safety_tick(); }
+          }
+      good:
+        - |
+          int main(void) {
+            watchdog_enable(WATCHDOG_TIMEOUT_MS, true);
+            while (true) { watchdog_update(); safety_tick(); }
+          }
+
+  # =========================================================================
+  # SHOULD - Advisory Checks (validator warns)
+  # =========================================================================
+
+  S1:
+    title: Review Blocking Calls in Safety/Core0 Files
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Blocking calls in safety-critical code (main.c, safety/, core0) should
+      be reviewed. Core 0 owns safety and should not block indefinitely.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if echo "$f" | grep -qiE 'main\.c|safety|core0'; then
+            grep -En 'sleep_ms|_blocking\(|while\s*\(\s*true|for\s*\(\s*;\s*;\s*\)' "$f" 2>/dev/null | head -5
+          fi
+        done
+    examples:
+      bad:
+        - "// In safety_monitor.c"
+        - "sleep_ms(1000);  // Long blocking delay"
+      good:
+        - "sleep_ms(SAFETY_LOOP_PERIOD_MS);  // Short, documented delay"
+
+  S2:
+    title: Review Float/Double in Safety Files
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Floating point operations in safety-critical paths should be reviewed.
+      Consider using fixed-point math for deterministic timing.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if echo "$f" | grep -qiE 'safety|emergency|watchdog|core0'; then
+            grep -En '\bfloat\b|\bdouble\b' "$f" 2>/dev/null
+          fi
+        done
+    examples:
+      bad:
+        - "// In emergency.c"
+        - "float depth = pressure * 0.01f;"
+      good:
+        - "// Use fixed-point"
+        - "int32_t depth_cm = (pressure * 100) / 10000;"
+
+  S3:
+    title: Review Unbounded Loops
+    severity: SHOULD
+    mechanical: true
+    description: >
+      while(true), while(1), and for(;;) loops should be reviewed to ensure
+      they have proper exit conditions or are intentional main loops.
+    check:
+      type: grep
+      pattern: 'while\s*\(\s*1\s*\)|while\s*\(\s*true\s*\)|for\s*\(\s*;\s*;\s*\)'
+      flags: -En
+    examples:
+      bad:
+        - "while (1) { process(); }  // Where does this end?"
+      good:
+        - |
+          // Main loop - intentionally infinite
+          while (true) {
+            watchdog_update();
+            safety_tick();
+          }
+
+  S4:
+    title: Multicore Launch Should Have Handshake
+    severity: SHOULD
+    mechanical: true
+    description: >
+      When using multicore_launch_core1, implement a FIFO handshake to
+      ensure Core 1 has initialized before Core 0 continues.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -q 'multicore_launch_core1' "$f"; then
+            if ! grep -q 'multicore_fifo_pop\|multicore_fifo_push' "$f"; then
+              echo "$f: multicore launch without FIFO handshake"
+            fi
+          fi
+        done
+    examples:
+      bad:
+        - |
+          multicore_launch_core1(core1_entry);
+          // Continue immediately without waiting
+      good:
+        - |
+          multicore_launch_core1(core1_entry);
+          uint32_t handshake = multicore_fifo_pop_blocking();
+          ASSERT(handshake == CORE1_READY_SIGNAL);
+
+  S5:
+    title: Shared Volatile State Should Use Spinlocks
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Files with volatile globals (g_*) or static volatile should use
+      spinlocks for thread-safe access between cores.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -q 'volatile.*g_\|static.*volatile' "$f"; then
+            if ! grep -q 'spin_lock\|spinlock' "$f"; then
+              echo "$f: has volatile globals but no spinlock"
+            fi
+          fi
+        done
+    examples:
+      bad:
+        - |
+          static volatile uint32_t g_counter = 0;
+          // No spinlock protection
+      good:
+        - |
+          static volatile uint32_t g_counter = 0;
+          static spin_lock_t *g_counter_lock;
+
+  S6:
+    title: Functions With Pointer Params Should ASSERT Non-null
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Functions that take pointer parameters should ASSERT they are not NULL
+      at the start of the function.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          awk '
+          /^[a-zA-Z_].*\*[a-zA-Z_]+\)/ {
+            func_line = NR; has_ptr = 1
+          }
+          has_ptr && NR <= func_line + 5 && /ASSERT.*!=.*NULL|assert.*!=.*NULL/ {
+            has_ptr = 0
+          }
+          has_ptr && NR > func_line + 5 && /^\{/ {
+            print FILENAME":"func_line": function with pointer param missing ASSERT"
+            has_ptr = 0
+          }
+          ' "$f" 2>/dev/null
+        done | head -5
+    examples:
+      bad:
+        - |
+          status_t read_sensor(sensor_t *sensor) {
+            return sensor->read();  // No NULL check
+          }
+      good:
+        - |
+          status_t read_sensor(sensor_t *sensor) {
+            ASSERT(sensor != NULL);
+            return sensor->read();
+          }
+
+  S7:
+    title: Status Return Values Should Be Checked
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Function calls that return status_t should have their return value
+      checked or explicitly cast to (void).
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          grep -En '^\s+[a-z_]+\s*\([^;]*\)\s*;' "$f" 2>/dev/null | \
+          grep -v 'if\s*(\|=\s*\|void\|return' | head -5
+        done
+    examples:
+      bad:
+        - "read_sensor(sensor);  // Return value ignored"
+      good:
+        - "status_t result = read_sensor(sensor);"
+        - "(void)read_sensor(sensor);  // Explicitly ignored"
+
+  S8:
+    title: Should Have Dual-Core Structure
+    severity: SHOULD
+    mechanical: true
+    description: >
+      RP2040 projects should have main.c for Core 0 entry and
+      core1.c (or core_1.c) for Core 1 entry.
+    check:
+      type: script
+      code: |
+        missing=""
+        if ! ls "$@" 2>/dev/null | grep -q 'main\.c'; then
+          missing="Missing main.c (Core 0 entry)"
+        fi
+        if ! ls "$@" 2>/dev/null | grep -qE 'core1\.c|core_1\.c'; then
+          if [ -n "$missing" ]; then
+            echo "$missing"
+          fi
+          echo "Missing core1.c (Core 1 entry)"
+        elif [ -n "$missing" ]; then
+          echo "$missing"
+        fi
+    examples:
+      bad:
+        - "// Only single main.c, no Core 1 separation"
+      good:
+        - "src/main.c      # Core 0 entry"
+        - "src/core1.c     # Core 1 entry"
+
+  S9:
+    title: Should Have Emergency Handling
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Safety-critical RP2040 projects should have emergency handling
+      code for failure scenarios.
+    check:
+      type: script
+      code: |
+        if ! grep -rl 'emergency\|EMERGENCY' "$@" 2>/dev/null | head -1 | grep -q '.'; then
+          echo "No emergency handling found"
+        fi
+    examples:
+      bad:
+        - "// No emergency handling"
+      good:
+        - "void emergency_surface(emergency_reason_t reason);"
+        - "#define EMERGENCY_DEPTH_EXCEEDED 4"
+
+  S10:
+    title: Should Have Inter-Core Heartbeat
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Dual-core projects should implement a heartbeat mechanism
+      between cores to detect if one core has stalled.
+    check:
+      type: script
+      code: |
+        if ! grep -rl 'heartbeat\|HEARTBEAT' "$@" 2>/dev/null | head -1 | grep -q '.'; then
+          echo "No heartbeat mechanism found"
+        fi
+    examples:
+      bad:
+        - "// No inter-core monitoring"
+      good:
+        - "void core1_heartbeat_send(void);"
+        - "bool core0_heartbeat_check(void);"
+
+  # =========================================================================
+  # GUIDANCE - Best practices (not mechanically checked)
+  # =========================================================================
+
+  G1:
+    title: Dual-Core Startup Pattern
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Follow the standard dual-core startup pattern with proper
+      initialization sequence and handshake.
+    guidance: |
+      /* Core 0: Safety monitor - launches Core 1 */
+      int main(void)
+      {
+        /* Hardware init */
+        stdio_init_all();
+        watchdog_enable(WATCHDOG_TIMEOUT_MS, true);
+
+        /* Launch Core 1 */
+        multicore_launch_core1(core1_entry);
+
+        /* Wait for handshake */
+        uint32_t handshake = multicore_fifo_pop_blocking();
+        ASSERT(handshake == CORE1_READY_SIGNAL);
+
+        /* Core 0 safety loop */
+        while (true)
+        {
+          watchdog_update();
+          safety_monitor_tick();
+          sleep_ms(SAFETY_LOOP_PERIOD_MS);
+        }
+      }
+
+      /* Core 1: Control systems */
+      void core1_entry(void)
+      {
+        sensors_init();
+        control_init();
+
+        /* Signal ready to Core 0 */
+        multicore_fifo_push_blocking(CORE1_READY_SIGNAL);
+
+        /* Core 1 control loop */
+        while (true)
+        {
+          sensors_read();
+          control_update();
+          sleep_ms(CONTROL_LOOP_PERIOD_MS);
+        }
+      }
+
+  G2:
+    title: Inter-Core Heartbeat Pattern
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Implement heartbeat mechanism between cores using spinlock-protected
+      timestamp for stall detection.
+    guidance: |
+      #define HEARTBEAT_TIMEOUT_MS 100U
+      static volatile uint32_t g_core1_heartbeat = 0U;
+      static spin_lock_t *g_heartbeat_lock;
+
+      /* Core 1: Send heartbeat */
+      void core1_heartbeat_send(void)
+      {
+        uint32_t save = spin_lock_blocking(g_heartbeat_lock);
+        g_core1_heartbeat = time_us_32();
+        spin_unlock(g_heartbeat_lock, save);
+      }
+
+      /* Core 0: Check heartbeat */
+      bool core0_heartbeat_check(void)
+      {
+        uint32_t save = spin_lock_blocking(g_heartbeat_lock);
+        uint32_t last = g_core1_heartbeat;
+        spin_unlock(g_heartbeat_lock, save);
+
+        uint32_t elapsed_us = time_us_32() - last;
+        return (elapsed_us < (HEARTBEAT_TIMEOUT_MS * 1000U));
+      }
+
+  G3:
+    title: Hardware Watchdog Pattern
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Hardware watchdog setup with proper timeout and integration
+      into the safety monitoring loop.
+    guidance: |
+      #define WATCHDOG_TIMEOUT_MS 1000U
+
+      void watchdog_init_safe(void)
+      {
+        /* Enable watchdog with pause on debug */
+        watchdog_enable(WATCHDOG_TIMEOUT_MS, true);
+      }
+
+      void watchdog_feed(void)
+      {
+        watchdog_update();
+      }
+
+      /* Call from Core 0 safety loop only */
+      void safety_tick(void)
+      {
+        watchdog_feed();
+
+        if (!core0_heartbeat_check())
+        {
+          /* Core 1 stalled - emergency action */
+          emergency_surface(EMERGENCY_CORE_STALL);
+        }
+      }
+
+  G4:
+    title: Fixed-Size Ring Buffer Pattern
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Spinlock-protected ring buffer with static allocation for
+      inter-core or interrupt-safe queues.
+    guidance: |
+      #define RING_BUFFER_SIZE 64U
+
+      typedef struct {
+        uint8_t data[RING_BUFFER_SIZE];
+        uint32_t head;
+        uint32_t tail;
+        spin_lock_t *lock;
+      } ring_buffer_t;
+
+      status_t ring_buffer_write(ring_buffer_t *rb, uint8_t value)
+      {
+        ASSERT(rb != NULL);
+
+        uint32_t save = spin_lock_blocking(rb->lock);
+
+        uint32_t next_head = (rb->head + 1U) % RING_BUFFER_SIZE;
+        if (next_head == rb->tail)
+        {
+          spin_unlock(rb->lock, save);
+          return STATUS_BUFFER_FULL;
+        }
+
+        rb->data[rb->head] = value;
+        rb->head = next_head;
+
+        spin_unlock(rb->lock, save);
+        return STATUS_OK;
+      }
+
+  G5:
+    title: GPIO with Interrupt Pattern
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      GPIO interrupt setup that sets flags only - processing happens
+      in the main loop, not the ISR.
+    guidance: |
+      #define LEAK_SENSOR_PIN 15U
+
+      static volatile bool g_leak_detected = false;
+
+      void leak_sensor_callback(uint gpio, uint32_t events)
+      {
+        if (gpio == LEAK_SENSOR_PIN)
+        {
+          g_leak_detected = true;
+          /* Set flag only - handle in main loop */
+        }
+      }
+
+      void leak_sensor_init(void)
+      {
+        gpio_init(LEAK_SENSOR_PIN);
+        gpio_set_dir(LEAK_SENSOR_PIN, GPIO_IN);
+        gpio_pull_up(LEAK_SENSOR_PIN);
+        gpio_set_irq_enabled_with_callback(
+          LEAK_SENSOR_PIN,
+          GPIO_IRQ_EDGE_FALL,
+          true,
+          &leak_sensor_callback
+        );
+      }
+
+  G6:
+    title: I2C Sensor Read Pattern
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      I2C sensor read with timeout, assertions, and proper error handling.
+    guidance: |
+      #define MS5837_ADDR 0x76U
+      #define I2C_TIMEOUT_US 10000U
+
+      status_t ms5837_read_pressure(i2c_inst_t *i2c, uint32_t *pressure_mbar)
+      {
+        ASSERT(i2c != NULL);
+        ASSERT(pressure_mbar != NULL);
+
+        uint8_t cmd = MS5837_CMD_READ_PRESSURE;
+        uint8_t data[3];
+
+        int result = i2c_write_timeout_us(i2c, MS5837_ADDR, &cmd, 1, false, I2C_TIMEOUT_US);
+        if (result != 1)
+        {
+          return STATUS_TIMEOUT;
+        }
+
+        result = i2c_read_timeout_us(i2c, MS5837_ADDR, data, 3, false, I2C_TIMEOUT_US);
+        if (result != 3)
+        {
+          return STATUS_TIMEOUT;
+        }
+
+        *pressure_mbar = ((uint32_t)data[0] << 16) | ((uint32_t)data[1] << 8) | data[2];
+
+        ASSERT(*pressure_mbar <= MAX_PRESSURE_MBAR);
+        return STATUS_OK;
+      }
+
+  G7:
+    title: PWM RC Input Pattern
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      RC PWM input handling with timeout detection for signal loss.
+    guidance: |
+      #define RC_CHANNEL_COUNT 6U
+      #define RC_MIN_US 1000U
+      #define RC_MAX_US 2000U
+      #define RC_TIMEOUT_MS 3000U
+
+      typedef struct {
+        uint32_t pulse_us[RC_CHANNEL_COUNT];
+        uint32_t last_update_ms;
+        bool signal_valid;
+      } rc_input_t;
+
+      static rc_input_t g_rc_input;
+
+      void rc_input_update(uint32_t channel, uint32_t pulse_us)
+      {
+        ASSERT(channel < RC_CHANNEL_COUNT);
+
+        if (pulse_us >= RC_MIN_US && pulse_us <= RC_MAX_US)
+        {
+          g_rc_input.pulse_us[channel] = pulse_us;
+          g_rc_input.last_update_ms = to_ms_since_boot(get_absolute_time());
+          g_rc_input.signal_valid = true;
+        }
+      }
+
+      bool rc_input_valid(void)
+      {
+        uint32_t elapsed = to_ms_since_boot(get_absolute_time()) - g_rc_input.last_update_ms;
+        return g_rc_input.signal_valid && (elapsed < RC_TIMEOUT_MS);
+      }
+
+  G8:
+    title: Status Codes Pattern
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Standard status code enumeration for RP2040 embedded systems.
+    guidance: |
+      typedef enum {
+        STATUS_OK = 0,
+        STATUS_ERROR = -1,
+        STATUS_INVALID_PARAM = -2,
+        STATUS_TIMEOUT = -3,
+        STATUS_BUFFER_FULL = -4,
+        STATUS_HARDWARE_FAULT = -5,
+        STATUS_SIGNAL_LOST = -6,
+        STATUS_EMERGENCY = -7
+      } status_t;
+
+  G9:
+    title: Emergency Surface Pattern
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Emergency handling for submarine/underwater vehicles. This state
+      cannot be cancelled and requires power cycle.
+    guidance: |
+      typedef enum {
+        EMERGENCY_NONE = 0,
+        EMERGENCY_SIGNAL_LOST,
+        EMERGENCY_LOW_BATTERY,
+        EMERGENCY_LEAK_DETECTED,
+        EMERGENCY_DEPTH_EXCEEDED,
+        EMERGENCY_PITCH_EXCEEDED,
+        EMERGENCY_CORE_STALL
+      } emergency_reason_t;
+
+      void emergency_surface(emergency_reason_t reason)
+      {
+        /* Disable normal control */
+        control_disable();
+
+        /* Open vent valve */
+        gpio_put(VENT_VALVE_PIN, 1);
+
+        /* Run pump to expel ballast */
+        gpio_put(PUMP_DIRECTION_PIN, PUMP_EXPEL);
+        gpio_put(PUMP_ENABLE_PIN, 1);
+
+        /* Log reason */
+        log_emergency(reason);
+
+        /* This state cannot be cancelled - requires power cycle */
+        while (true)
+        {
+          watchdog_update();
+          sleep_ms(100U);
+        }
+      }
+
+  G10:
+    title: Project Structure
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Recommended project structure for RP2040 dual-core embedded systems.
+    guidance: |
+      project/
+      ├── src/
+      │   ├── main.c              # Core 0 entry, safety monitor
+      │   ├── core1.c             # Core 1 entry, control systems
+      │   ├── safety/
+      │   │   ├── safety_monitor.c
+      │   │   ├── emergency.c
+      │   │   └── watchdog.c
+      │   ├── sensors/
+      │   │   ├── pressure.c      # MS5837
+      │   │   ├── imu.c           # MPU-6050
+      │   │   └── rc_input.c
+      │   ├── control/
+      │   │   ├── pid.c
+      │   │   ├── depth_control.c
+      │   │   └── pitch_control.c
+      │   └── actuators/
+      │       ├── ballast.c
+      │       ├── servo.c
+      │       └── valve.c
+      ├── include/
+      │   ├── config.h            # Pin definitions, constants
+      │   ├── status.h            # Error codes
+      │   └── types.h             # Project types
+      ├── test/
+      │   └── unit/               # Host-side unit tests
+      ├── ci/
+      │   └── p10_check.py        # Power of 10 validator
+      └── CMakeLists.txt
+
+anti_patterns:
+  - pattern: "malloc/free"
+    problem: "Dynamic memory unpredictable in embedded"
+    fix: "Static allocation only"
+  - pattern: "printf in ISR"
+    problem: "Not interrupt-safe"
+    fix: "Set flag, handle in main loop"
+  - pattern: "Recursive functions"
+    problem: "Unpredictable stack usage"
+    fix: "Use iteration"
+  - pattern: "Direct register access"
+    problem: "Not portable, error-prone"
+    fix: "Use Pico SDK hardware_* APIs"
+  - pattern: "_blocking without timeout"
+    problem: "Can hang forever"
+    fix: "Use _timeout_us versions"
+  - pattern: "Magic number array sizes"
+    problem: "Undocumented, hard to maintain"
+    fix: "Use #define constants"
+  - pattern: "Volatile without spinlock"
+    problem: "Race conditions between cores"
+    fix: "Protect with spinlocks"
+  - pattern: "No watchdog"
+    problem: "No recovery from hangs"
+    fix: "Enable hardware watchdog"
+  - pattern: "No heartbeat"
+    problem: "Can't detect core stall"
+    fix: "Implement inter-core heartbeat"
+  - pattern: "Float in safety code"
+    problem: "Non-deterministic timing"
+    fix: "Use fixed-point math"
