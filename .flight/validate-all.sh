@@ -30,13 +30,38 @@ else
     CONFIG_MODE=false
 fi
 
-# Source exclusions helper
+# Source exclusions helper (required - ships with validate-all.sh)
 if [[ -f "$SCRIPT_DIR/exclusions.sh" ]]; then
     source "$SCRIPT_DIR/exclusions.sh"
-    HAS_EXCLUSIONS=true
 else
-    HAS_EXCLUSIONS=false
+    # Define minimal exclusions inline if file missing (shouldn't happen)
+    FLIGHT_EXCLUDE_DIRS=(
+        "node_modules" "vendor" ".venv" "venv"
+        "dist" "build" "target" "obj" "out" ".output"
+        ".next" ".turbo" ".nuxt" ".svelte-kit"
+        ".git" ".idea" ".vscode"
+        "coverage" ".nyc_output" "__pycache__" ".pytest_cache" ".tox" ".nox"
+        ".cache" ".parcel-cache" ".webpack" ".rollup.cache"
+        ".terraform" ".serverless" ".flight/examples"
+    )
+    flight_build_find_not_paths() {
+        local dir
+        for dir in "${FLIGHT_EXCLUDE_DIRS[@]}"; do
+            printf ' -not -path "*/%s/*"' "$dir"
+        done
+    }
+    flight_get_files() {
+        local patterns=("$@")
+        local search_dir="${FLIGHT_SEARCH_DIR:-.}"
+        local exclude_args
+        exclude_args=$(flight_build_find_not_paths)
+        for pattern in "${patterns[@]}"; do
+            pattern="${pattern#\*\*/}"
+            eval "find \"$search_dir\" -type f -name \"$pattern\" $exclude_args 2>/dev/null"
+        done | sort -u
+    }
 fi
+HAS_EXCLUSIONS=true  # Always true now - either sourced or defined inline
 
 # Colors for output
 RED='\033[0;31m'
@@ -93,17 +118,10 @@ collect_files() {
 
     for search_path in "${SEARCH_PATHS[@]}"; do
         if [[ -d "$search_path" ]]; then
-            if [[ "$HAS_EXCLUSIONS" == true ]]; then
-                # Use exclusions-aware discovery
-                local found
-                found=$(FLIGHT_SEARCH_DIR="$search_path" flight_get_files "$pattern")
-                if [[ -n "$found" ]]; then
-                    files="$files $found"
-                fi
-            else
-                # Fallback: basic find
-                local found
-                found=$(find "$search_path" -name "$pattern" -type f 2>/dev/null | tr '\n' ' ')
+            # Use exclusions-aware discovery (always available)
+            local found
+            found=$(FLIGHT_SEARCH_DIR="$search_path" flight_get_files "$pattern")
+            if [[ -n "$found" ]]; then
                 files="$files $found"
             fi
         elif [[ -f "$search_path" ]]; then

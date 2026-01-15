@@ -86,6 +86,7 @@ Flight inverts this. **The rules come first. The code comes second.**
 | PRD.md or tasks/*.md file | `/flight-prime` |
 | Have domain.md, need validator | `/flight-create-validator` |
 | Have code, need to check it | `/flight-validate` |
+| New project, need domain detection | `/flight-scan` |
 
 ---
 
@@ -225,6 +226,26 @@ Runs relevant `.validate.sh` scripts. Returns pass/fail with specific violations
   RESULT: PASS
 ═══════════════════════════════════════════
 ```
+
+### `/flight-scan`
+
+**Purpose:** Auto-detect project domains and generate validation config.
+
+Scans your project for file types and frameworks, then creates `.flight/flight.json` with enabled domains.
+
+**Example:**
+```bash
+/flight-scan
+
+# Creates .flight/flight.json:
+{
+  "enabled_domains": ["code-hygiene", "typescript", "react", "nextjs"]
+}
+```
+
+After scanning, `.flight/validate-all.sh` uses this config to run only relevant validators.
+
+> **See Also:** [Validation Runner Documentation](docs/validation-runner.md) for complete usage, exclusions system, and CI/CD integration.
 
 ### `/flight-tighten`
 

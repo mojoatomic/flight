@@ -54,9 +54,12 @@ FLIGHT_EXCLUDE_DIRS=(
     ".webpack"
     ".rollup.cache"
 
-    # Other
+    # Infrastructure
     ".terraform"
     ".serverless"
+
+    # Flight internal
+    ".flight/examples"
 )
 
 # -----------------------------------------------------------------------------
@@ -215,6 +218,19 @@ flight_get_files_for_patterns() {
         # Run find
         eval "find \"$dir_part\" -type f -name \"$name_part\" $find_excludes 2>/dev/null"
     done | sort -u
+}
+
+# -----------------------------------------------------------------------------
+# flight_build_find_not_paths - Build find -not -path arguments dynamically
+# -----------------------------------------------------------------------------
+# Returns exclusion arguments for find command via stdout
+# Usage: eval "find . -type f -name '*.ts' $(flight_build_find_not_paths)"
+# -----------------------------------------------------------------------------
+flight_build_find_not_paths() {
+    local dir
+    for dir in "${FLIGHT_EXCLUDE_DIRS[@]}"; do
+        printf ' -not -path "*/%s/*"' "$dir"
+    done
 }
 
 # -----------------------------------------------------------------------------
