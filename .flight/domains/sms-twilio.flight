@@ -1,0 +1,828 @@
+# sms-twilio.flight - SMS Twilio Domain
+# Source: Migrated from sms-twilio.md and sms-twilio.validate.sh
+
+domain: sms-twilio
+version: 1.0.0
+description: >
+  SMS consent management, opt-in/opt-out handling, and Twilio error code
+  interpretation. Compliance-focused domain for TCPA, CTIA, and A2P 10DLC
+  requirements.
+
+file_patterns:
+  - "**/sms*.js"
+  - "**/sms*.ts"
+  - "**/*twilio*.js"
+  - "**/*twilio*.ts"
+  - "**/consent*.js"
+  - "**/consent*.ts"
+  - "**/sms*.py"
+  - "**/twilio*.py"
+
+exclude_patterns:
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/.venv/**"
+  - "**/venv/**"
+  - "**/.git/**"
+
+suppression:
+  comment: "flight:ok"
+  guidance: |
+    Add `// flight:ok` (JS/TS) or `# flight:ok` (Python) on the same line.
+    Use sparingly. Document why the suppression is acceptable.
+    SMS compliance rules should rarely be suppressed.
+
+# ===========================================================================
+# RULES
+# ===========================================================================
+# ID format: {severity_prefix}{number}
+#   N = NEVER (check - fails build)
+#   S = SHOULD (warn - advisory)
+#   G = GUIDANCE (not checked)
+# ===========================================================================
+
+rules:
+
+  # =========================================================================
+  # NEVER - Consent State Machine (validator will reject)
+  # =========================================================================
+
+  N1:
+    title: Consent States Defined
+    severity: NEVER
+    mechanical: true
+    description: >
+      SMS consent states (OPTED_IN, OPTED_OUT, PENDING, UNKNOWN) must be
+      defined in code. These states drive the consent state machine.
+    check:
+      type: script
+      code: |
+        strip_comments() {
+          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
+        }
+        found=0
+        for f in "$@"; do
+          if strip_comments "$f" | grep -qEi "OPTED_IN|OPTED_OUT"; then
+            found=1
+            break
+          fi
+        done
+        [[ $found -eq 0 ]] && echo "No consent states found"
+    examples:
+      bad:
+        - "// No consent states defined"
+      good:
+        - "type ConsentState = 'UNKNOWN' | 'PENDING' | 'OPTED_IN' | 'OPTED_OUT';"
+
+  N2:
+    title: Never Send to OPTED_OUT or UNKNOWN
+    severity: NEVER
+    mechanical: true
+    description: >
+      INVARIANT: Never send messages to users in OPTED_OUT or UNKNOWN state.
+      Only OPTED_IN users can receive messages. Violating this is a legal
+      compliance issue (TCPA).
+    check:
+      type: grep
+      pattern: 'OPTED_OUT.*send|UNKNOWN.*send|send.*OPTED_OUT|send.*UNKNOWN'
+      flags: -Ein
+    examples:
+      bad:
+        - "if (state === 'OPTED_OUT') sendSMS(phone, msg);"
+        - "sendSMS(phone, msg); // user is UNKNOWN"
+      good:
+        - |
+          if (consent.state !== 'OPTED_IN') {
+            throw new Error('Cannot send to non-opted-in user');
+          }
+          await sendSMS(phone, msg);
+
+  N3:
+    title: Consent Check Before Sending
+    severity: NEVER
+    mechanical: true
+    description: >
+      Always check consent state before sending any SMS. Sending without
+      checking consent violates TCPA and carrier policies.
+    check:
+      type: script
+      code: |
+        strip_comments() {
+          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
+        }
+        for f in "$@"; do
+          if strip_comments "$f" | grep -qEi "sendSMS|send.*message|twilio.*messages.*create"; then
+            if ! strip_comments "$f" | grep -qEi "consent|opted.?in|OPTED_IN|getConsent"; then
+              printf "%s: sends without consent check\n" "$f"
+            fi
+          fi
+        done
+    examples:
+      bad:
+        - "await sendSMS(phoneNumber, message); // WRONG - no consent check"
+      good:
+        - |
+          const consent = await getConsentState(phoneNumber);
+          if (consent.state !== 'OPTED_IN') {
+            throw new Error('Cannot send to non-opted-in user');
+          }
+          await sendSMS(phoneNumber, message);
+
+  N4:
+    title: STOP Keyword Triggers State Change
+    severity: NEVER
+    mechanical: true
+    description: >
+      STOP keyword must trigger a state change to OPTED_OUT. Ignoring STOP
+      is a legal violation. Twilio handles this automatically but your
+      database must also be updated.
+    check:
+      type: script
+      code: |
+        strip_comments() {
+          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
+        }
+        for f in "$@"; do
+          if strip_comments "$f" | grep -qEi "STOP"; then
+            if ! strip_comments "$f" | grep -qEi "OPTED_OUT|updateConsent|setState|optOut"; then
+              printf "%s: STOP found but no state change\n" "$f"
+            fi
+          fi
+        done
+    examples:
+      bad:
+        - |
+          if (body === 'STOP') {
+            // do nothing // WRONG - legal violation!
+          }
+      good:
+        - |
+          if (body === 'STOP') {
+            await updateConsentState(from, 'OPTED_OUT');
+            await sendOptOutConfirmation(from);
+          }
+
+  N5:
+    title: Error 21610 Marks OPTED_OUT
+    severity: NEVER
+    mechanical: true
+    description: >
+      INVARIANT: Twilio error 21610 (unsubscribed recipient) must mark the
+      user as OPTED_OUT. This is a carrier-level block. Do NOT retry.
+    check:
+      type: script
+      code: |
+        strip_comments() {
+          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
+        }
+        for f in "$@"; do
+          if strip_comments "$f" | grep -qEi "twilio|sendSMS|messages.*create"; then
+            if ! strip_comments "$f" | grep -qEi "21610"; then
+              printf "%s: no 21610 handling\n" "$f"
+            fi
+          fi
+        done
+    examples:
+      bad:
+        - "// No handling for error 21610"
+      good:
+        - |
+          if (errorCode === 21610) {
+            await updateConsentState(phoneNumber, 'OPTED_OUT');
+            // No retry
+          }
+
+  N6:
+    title: Error 30004 Marks OPTED_OUT
+    severity: NEVER
+    mechanical: true
+    description: >
+      INVARIANT: Twilio error 30004 (message blocked by carrier) must mark
+      the user as OPTED_OUT. This indicates carrier-level blocking.
+      Do NOT retry.
+    check:
+      type: script
+      code: |
+        strip_comments() {
+          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
+        }
+        for f in "$@"; do
+          if strip_comments "$f" | grep -qEi "twilio|sendSMS|messages.*create"; then
+            if ! strip_comments "$f" | grep -qEi "30004"; then
+              printf "%s: no 30004 handling\n" "$f"
+            fi
+          fi
+        done
+    examples:
+      bad:
+        - "// No handling for error 30004"
+      good:
+        - |
+          if (errorCode === 30004) {
+            await updateConsentState(phoneNumber, 'OPTED_OUT');
+            // No retry
+          }
+
+  N7:
+    title: No Retry on Opt-Out Errors
+    severity: NEVER
+    mechanical: true
+    description: >
+      INVARIANT: Never retry on opt-out errors (21610, 30004). The user
+      has opted out - retrying violates their consent and carrier policies.
+    check:
+      type: script
+      code: |
+        strip_comments() {
+          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
+        }
+        for f in "$@"; do
+          result=$(strip_comments "$f" | grep -Ein "21610.*retry|30004.*retry|retry.*21610|retry.*30004" 2>/dev/null) || true
+          if [[ -n "$result" ]]; then
+            printf "%s:%s\n" "$f" "$result"
+          fi
+        done
+    examples:
+      bad:
+        - |
+          if (errorCode === 21610) {
+            await retry(message); // WRONG - they opted out!
+          }
+      good:
+        - |
+          if (errorCode === 21610 || errorCode === 30004) {
+            await updateConsentState(phoneNumber, 'OPTED_OUT');
+            // No retry
+          }
+
+  N8:
+    title: Error 30005/30006 Marks Number INVALID
+    severity: NEVER
+    mechanical: true
+    description: >
+      INVARIANT: Twilio errors 30005 (unknown destination) and 30006
+      (landline/unreachable) must mark the number as INVALID. Do NOT retry.
+    check:
+      type: script
+      code: |
+        strip_comments() {
+          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
+        }
+        for f in "$@"; do
+          if strip_comments "$f" | grep -qEi "twilio|sendSMS|messages.*create"; then
+            if ! strip_comments "$f" | grep -qEi "30005|30006|invalid.*number|landline|INVALID"; then
+              printf "%s: no 30005/30006 handling\n" "$f"
+            fi
+          fi
+        done
+    examples:
+      bad:
+        - "// No handling for invalid number errors"
+      good:
+        - |
+          if (errorCode === 30005 || errorCode === 30006) {
+            await markNumberInvalid(phoneNumber);
+            // No retry
+          }
+
+  N9:
+    title: First Message Includes Opt-Out Instructions
+    severity: NEVER
+    mechanical: true
+    description: >
+      The first message to a newly opted-in user MUST include opt-out
+      instructions (STOP keyword). This is required by CTIA guidelines.
+    check:
+      type: script
+      code: |
+        strip_comments() {
+          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
+        }
+        for f in "$@"; do
+          if strip_comments "$f" | grep -qEi "first.?message|welcome|initial|confirm.*message"; then
+            if ! strip_comments "$f" | grep -qEi "STOP|opt.?out|unsubscribe"; then
+              printf "%s: first message may lack opt-out\n" "$f"
+            fi
+          fi
+        done
+    examples:
+      bad:
+        - "await sendSMS(phone, 'Sale! 50% off!'); // WRONG - missing opt-out"
+      good:
+        - "await sendSMS(phone, 'Acme Co: Sale! 50% off today! Reply STOP to unsubscribe.');"
+
+  N10:
+    title: No Hardcoded Phone Numbers
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never hardcode phone numbers in source code. Use environment
+      variables or configuration for phone numbers.
+    check:
+      type: grep
+      pattern: '"\+1[0-9]{10}"|\x27\+1[0-9]{10}\x27'
+      flags: -Ein
+    examples:
+      bad:
+        - 'const phone = "+15551234567";'
+      good:
+        - "const phone = process.env.SUPPORT_PHONE;"
+
+  N11:
+    title: No Hardcoded Twilio Credentials
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never hardcode Twilio credentials (Account SID, Auth Token) in
+      source code. Use environment variables.
+    check:
+      type: grep
+      pattern: 'ACCOUNT_SID\s*=\s*[''"]AC|AUTH_TOKEN\s*=\s*[''"][a-f0-9]{32}'
+      flags: -Ein
+    examples:
+      bad:
+        - 'const ACCOUNT_SID = "AC1234567890abcdef";'
+        - 'const AUTH_TOKEN = "abcdef1234567890abcdef1234567890";'
+      good:
+        - "const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;"
+        - "const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;"
+
+  # =========================================================================
+  # SHOULD - Warnings (validator warns but doesn't fail)
+  # =========================================================================
+
+  S1:
+    title: START/UNSTOP Keywords Handled
+    severity: SHOULD
+    mechanical: true
+    description: >
+      START and UNSTOP keywords should be handled to allow users to
+      re-subscribe after opting out. UNSTOP is required for Toll-Free.
+    check:
+      type: script
+      code: |
+        strip_comments() {
+          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
+        }
+        found=0
+        for f in "$@"; do
+          if strip_comments "$f" | grep -qEi "START|UNSTOP"; then
+            found=1
+            break
+          fi
+        done
+        [[ $found -eq 0 ]] && echo "No START/UNSTOP handling"
+    examples:
+      good:
+        - |
+          if (body === 'START' || body === 'UNSTOP') {
+            await updateConsentState(from, 'OPTED_IN');
+          }
+
+  S2:
+    title: HELP Keyword Response
+    severity: SHOULD
+    mechanical: true
+    description: >
+      HELP keyword should trigger a response with support contact
+      information and opt-out reminder.
+    check:
+      type: script
+      code: |
+        strip_comments() {
+          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
+        }
+        found=0
+        for f in "$@"; do
+          if strip_comments "$f" | grep -qEi "HELP.*response|help.?message|HELP.*reply"; then
+            found=1
+            break
+          fi
+        done
+        [[ $found -eq 0 ]] && echo "No HELP response"
+    examples:
+      good:
+        - |
+          const HELP_RESPONSE =
+            '{businessName}: For support, visit {supportUrl} or call {supportPhone}. ' +
+            'Reply STOP to unsubscribe.';
+
+  S3:
+    title: Temporary Errors Retry with Backoff
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Temporary errors (30003 unreachable, 30017 congestion) should
+      trigger retry with exponential backoff.
+    check:
+      type: script
+      code: |
+        strip_comments() {
+          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
+        }
+        found=0
+        for f in "$@"; do
+          if strip_comments "$f" | grep -qEi "30003|30017|backoff|exponential|retry.*delay"; then
+            found=1
+            break
+          fi
+        done
+        [[ $found -eq 0 ]] && echo "No retry backoff"
+    examples:
+      good:
+        - |
+          const RETRY_CONFIG = {
+            maxAttempts: 3,
+            backoffMs: [60000, 300000, 900000], // 1min, 5min, 15min
+            retryableCodes: [30003, 30017],
+          };
+
+  S4:
+    title: Rate Limit Errors Handled
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Rate limit errors (30022, 30023, 30027) should be handled by
+      slowing down or waiting until the next day.
+    check:
+      type: script
+      code: |
+        strip_comments() {
+          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
+        }
+        found=0
+        for f in "$@"; do
+          if strip_comments "$f" | grep -qEi "30022|30023|30027|rate.?limit|daily.?cap"; then
+            found=1
+            break
+          fi
+        done
+        [[ $found -eq 0 ]] && echo "No rate limit handling"
+    examples:
+      good:
+        - |
+          if ([30022, 30023, 30027].includes(errorCode)) {
+            return 'rate_limit'; // Slow down or wait
+          }
+
+  S5:
+    title: Business Name in Messages
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Messages should include business/brand name for identification
+      as required by CTIA guidelines.
+    check:
+      type: script
+      code: |
+        strip_comments() {
+          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
+        }
+        found=0
+        for f in "$@"; do
+          if strip_comments "$f" | grep -qEi "business.?name|brand|company.*:"; then
+            found=1
+            break
+          fi
+        done
+        [[ $found -eq 0 ]] && echo "No business name in messages"
+    examples:
+      good:
+        - "'{businessName}: {message}. Reply STOP to unsubscribe.'"
+
+  S6:
+    title: Opt-Out Confirmation Message
+    severity: SHOULD
+    mechanical: true
+    description: >
+      When a user opts out, send one final confirmation message. This is
+      the only message allowed after opt-out.
+    check:
+      type: script
+      code: |
+        strip_comments() {
+          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
+        }
+        found=0
+        for f in "$@"; do
+          if strip_comments "$f" | grep -qEi "unsubscribed|opt.?out.*confirm|OPT_OUT_CONFIRMED"; then
+            found=1
+            break
+          fi
+        done
+        [[ $found -eq 0 ]] && echo "No opt-out confirmation"
+    examples:
+      good:
+        - |
+          const OPT_OUT_CONFIRMED =
+            'You have been unsubscribed and will not receive further messages. ' +
+            'Reply START to resubscribe.';
+
+  S7:
+    title: Double Opt-In Flow
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Implement double opt-in flow for marketing messages. User provides
+      number, receives confirmation request, replies YES to confirm.
+    check:
+      type: script
+      code: |
+        strip_comments() {
+          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
+        }
+        found=0
+        for f in "$@"; do
+          if strip_comments "$f" | grep -qEi "double.?opt|PENDING.*OPTED_IN|confirm.*yes|reply.*yes"; then
+            found=1
+            break
+          fi
+        done
+        [[ $found -eq 0 ]] && echo "No double opt-in"
+    examples:
+      good:
+        - |
+          // State: PENDING -> user replies YES -> State: OPTED_IN
+          const CONSENT_REQUEST =
+            '{businessName}: Reply YES to receive messages. Reply STOP to cancel.';
+
+  S8:
+    title: Message Logging for Audit
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Log all messages for compliance audit. Store message SID, direction,
+      status, and timestamp. Don't store message body (PII).
+    check:
+      type: script
+      code: |
+        strip_comments() {
+          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
+        }
+        found=0
+        for f in "$@"; do
+          if strip_comments "$f" | grep -qEi "log.*message|audit|sms_log|message.*log"; then
+            found=1
+            break
+          fi
+        done
+        [[ $found -eq 0 ]] && echo "No message logging"
+    examples:
+      good:
+        - |
+          CREATE TABLE sms_log (
+            id SERIAL PRIMARY KEY,
+            message_sid VARCHAR(50) UNIQUE,
+            phone_number VARCHAR(20) NOT NULL,
+            direction VARCHAR(10) NOT NULL,
+            status VARCHAR(20),
+            created_at TIMESTAMP DEFAULT NOW()
+          );
+
+  S9:
+    title: Consent Timestamps Tracked
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Track timestamps for consent changes (opted_in_at, opted_out_at)
+      for compliance audit and legal requirements.
+    check:
+      type: script
+      code: |
+        strip_comments() {
+          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
+        }
+        found=0
+        for f in "$@"; do
+          if strip_comments "$f" | grep -qEi "opted_in_at|opted_out_at|consent.*time|timestamp"; then
+            found=1
+            break
+          fi
+        done
+        [[ $found -eq 0 ]] && echo "No consent timestamps"
+    examples:
+      good:
+        - |
+          CREATE TABLE sms_consent (
+            phone_number VARCHAR(20) PRIMARY KEY,
+            consent_state VARCHAR(20) NOT NULL,
+            opted_in_at TIMESTAMP,
+            opted_out_at TIMESTAMP
+          );
+
+  # =========================================================================
+  # GUIDANCE - Best practices (not mechanically checked)
+  # =========================================================================
+
+  G1:
+    title: Consent State Machine
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Implement the consent state machine with proper state transitions.
+    guidance: |
+      States: UNKNOWN -> PENDING -> OPTED_IN <-> OPTED_OUT
+
+      Transitions:
+      - UNKNOWN -> PENDING: User provides phone number
+      - PENDING -> OPTED_IN: User confirms consent (YES)
+      - PENDING -> UNKNOWN: Timeout (24-72 hours)
+      - OPTED_IN -> OPTED_OUT: User sends STOP or error 21610/30004
+      - OPTED_OUT -> OPTED_IN: User sends START/UNSTOP
+
+      Critical: NEVER send to OPTED_OUT or UNKNOWN. Only OPTED_IN.
+
+  G2:
+    title: Opt-Out Keywords Reference
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Twilio automatically processes these keywords. Your webhook receives
+      them with OptOutType parameter.
+    guidance: |
+      Required (cannot remove):
+      - STOP - Primary opt-out
+      - START - Primary opt-in (re-subscribe)
+      - UNSTOP - Re-subscribe (Toll-Free specific)
+      - HELP - Help request
+
+      Standard (active by default):
+      - STOPALL, UNSUBSCRIBE, CANCEL, END, QUIT
+
+      FCC-Mandated (April 2025):
+      - REVOKE, OPTOUT
+
+      Case insensitive: "stop" = "STOP" = "Stop"
+
+  G3:
+    title: Webhook Handling Pattern
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Handle Twilio inbound webhooks to process opt-in/out keywords and
+      status callbacks to handle delivery errors.
+    guidance: |
+      Inbound webhook fields:
+      - From: User's phone number
+      - To: Your Twilio number
+      - Body: Message text
+      - OptOutType: 'STOP' | 'HELP' | 'START' (with Advanced Opt-Out)
+
+      Status callback fields:
+      - MessageSid: Message identifier
+      - MessageStatus: 'queued' | 'sent' | 'delivered' | 'failed'
+      - ErrorCode: Twilio error code if failed
+
+  G4:
+    title: Error Code Action Reference
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Reference for Twilio error codes and required actions.
+    guidance: |
+      Opt-Out Errors (mark OPTED_OUT, no retry):
+      - 21610: Unsubscribed recipient
+      - 30004: Message blocked by carrier
+
+      Invalid Number (mark INVALID, no retry):
+      - 30005: Unknown destination
+      - 30006: Landline or unreachable carrier
+
+      Temporary (retry with backoff):
+      - 30003: Unreachable handset
+      - 30017: Carrier network congestion
+
+      Rate Limits (slow down):
+      - 30022: 10DLC rate limit exceeded
+      - 30023: 10DLC daily cap reached
+      - 30027: T-Mobile daily limit reached
+
+      Account Issues (alert admin):
+      - 30002: Account suspended
+      - 30007: Message filtered (spam)
+      - 30032/33/34: A2P 10DLC registration issues
+
+  G5:
+    title: Database Schema Example
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Example database schema for consent tracking and message logging.
+    guidance: |
+      -- Consent tracking
+      CREATE TABLE sms_consent (
+        phone_number VARCHAR(20) PRIMARY KEY,  -- E.164: +1XXXXXXXXXX
+        consent_state VARCHAR(20) NOT NULL DEFAULT 'UNKNOWN',
+        number_status VARCHAR(20) NOT NULL DEFAULT 'VALID',
+        opted_in_at TIMESTAMP,
+        opted_out_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      -- Message log (for compliance audit)
+      CREATE TABLE sms_log (
+        id SERIAL PRIMARY KEY,
+        message_sid VARCHAR(50) UNIQUE,
+        phone_number VARCHAR(20) NOT NULL,
+        direction VARCHAR(10) NOT NULL,  -- 'inbound' or 'outbound'
+        body_hash VARCHAR(64),  -- SHA256, don't store PII
+        status VARCHAR(20),
+        error_code INTEGER,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+  G6:
+    title: Required Message Templates
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Standard message templates for consent flow.
+    guidance: |
+      Consent Request (double opt-in):
+      "{businessName}: Reply YES to receive {messageType} via SMS.
+       Msg & data rates may apply. Reply STOP to cancel."
+
+      Consent Confirmed:
+      "You're confirmed! You'll receive {messageType} from {businessName}.
+       Reply STOP anytime to unsubscribe."
+
+      Opt-Out Confirmed:
+      "You have been unsubscribed and will not receive further messages.
+       Reply START to resubscribe."
+
+      Help Response:
+      "{businessName}: For support, visit {supportUrl} or call {supportPhone}.
+       Reply STOP to unsubscribe."
+
+  G7:
+    title: A2P 10DLC Rate Limits
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Rate limits for A2P 10DLC messaging.
+    guidance: |
+      Brand Type     | Messages/Second | T-Mobile Daily
+      Low Volume     | 0.2 (1/5 sec)   | 500-2,000
+      Standard       | 3-15            | 2,000-200,000
+      High Trust     | 15-60+          | Higher
+
+      Start conservative, monitor 30022/30023/30027 errors, adjust.
+
+  G8:
+    title: Compliance Checklist
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Checklist for SMS compliance before going live.
+    guidance: |
+      Before Sending:
+      - [ ] User consent state is OPTED_IN
+      - [ ] Number status is VALID (not INVALID/LANDLINE)
+      - [ ] First message includes business name and opt-out
+      - [ ] Content complies with A2P 10DLC campaign type
+
+      For Double Opt-In:
+      - [ ] Consent request sent with YES/STOP options
+      - [ ] Timeout configured (24-72 hours)
+      - [ ] Confirmation sent after YES
+      - [ ] PENDING records cleaned up after timeout
+
+      For Opt-Out:
+      - [ ] STOP processed immediately
+      - [ ] State updated to OPTED_OUT
+      - [ ] One confirmation message sent
+      - [ ] No further messages attempted
+      - [ ] 21610/30004 errors trigger opt-out
+
+      For A2P 10DLC:
+      - [ ] Brand registered with The Campaign Registry
+      - [ ] Campaign registered with use case
+      - [ ] Phone numbers associated with campaign
+      - [ ] Sending within rate limits
+
+anti_patterns:
+  - pattern: "Send without consent check"
+    problem: "TCPA violation, carrier blocking"
+    fix: "Always check OPTED_IN before sending"
+  - pattern: "Retry on 21610/30004"
+    problem: "User opted out - retrying violates consent"
+    fix: "Mark OPTED_OUT, no retry"
+  - pattern: "Ignore STOP keyword"
+    problem: "Legal violation (TCPA)"
+    fix: "Process immediately, update state"
+  - pattern: "No opt-out in first message"
+    problem: "CTIA violation"
+    fix: "Include 'Reply STOP to unsubscribe'"
+  - pattern: "Hardcoded credentials"
+    problem: "Security vulnerability"
+    fix: "Use environment variables"
+  - pattern: "No error code handling"
+    problem: "Silent failures, compliance issues"
+    fix: "Handle all Twilio error codes"
+  - pattern: "No consent timestamps"
+    problem: "Cannot prove compliance in audit"
+    fix: "Track opted_in_at, opted_out_at"
+  - pattern: "Retry temporary errors forever"
+    problem: "Wasted resources, poor UX"
+    fix: "Max 3 retries with backoff"
