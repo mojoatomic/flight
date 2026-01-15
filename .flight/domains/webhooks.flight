@@ -1,0 +1,743 @@
+# webhooks.flight - Webhook Design Domain
+# Source: Migrated from webhooks.md and webhooks.validate.sh
+
+domain: webhooks
+version: 1.0.0
+description: >
+  Outbound event notification design. Covers both webhook providers (sending)
+  and consumers (receiving). Prevents integration failures, data loss, and
+  security breaches.
+
+file_patterns:
+  - "**/webhook*.js"
+  - "**/webhook*.ts"
+  - "**/hooks/**/*.js"
+  - "**/hooks/**/*.ts"
+  - "**/*Webhook*.java"
+  - "**/webhooks.py"
+  - "**/webhook_handler*.py"
+
+exclude_patterns:
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/.next/**"
+  - "**/.git/**"
+
+suppression:
+  comment: "flight:ok"
+  guidance: |
+    Add `// flight:ok` comment on the same line to suppress.
+    Use sparingly. Document why the suppression is acceptable.
+
+# ===========================================================================
+# RULES
+# ===========================================================================
+# Webhook-specific rules for providers and consumers.
+#
+# ID format: {severity_prefix}{number}
+#   N = NEVER (check - fails build)
+#   S = SHOULD (warn - advisory)
+#   G = GUIDANCE (not checked)
+# ===========================================================================
+
+rules:
+
+  # =========================================================================
+  # NEVER - Security rules (validator will reject)
+  # =========================================================================
+
+  N1:
+    title: Plain HTTP Webhook URLs
+    severity: NEVER
+    mechanical: true
+    description: >
+      All webhook traffic must be encrypted. Plain HTTP exposes payloads
+      to attackers via MITM attacks.
+    check:
+      type: script
+      code: |
+        grep -Ein "webhook.*http://[^l]|http://.*webhook" "$@" | grep -v "localhost\|127\.0\.0\.1"
+    note: |
+      Webhook payloads may contain sensitive business data. Always use HTTPS
+      to ensure encryption in transit.
+    examples:
+      bad:
+        - "http://api.customer.com/webhooks"
+        - 'const url = "http://example.com/hook";'
+      good:
+        - "https://api.customer.com/webhooks"
+        - 'const url = "https://example.com/hook";'
+
+  N2:
+    title: Secrets in Webhook Payloads
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never include secrets, passwords, API keys, SSNs, or credit card numbers
+      in webhook payloads. Payloads may be logged or intercepted.
+    check:
+      type: grep
+      pattern: 'webhook.*password|webhook.*secret|webhook.*api_key|payload.*password|payload.*ssn|payload.*credit.?card'
+      flags: -Ein
+    note: |
+      Send IDs only, then let consumer fetch sensitive data via authenticated API.
+    examples:
+      bad:
+        - '{ "event": "user.created", "data": { "api_key": "sk_live_abc123" } }'
+        - '{ "payload": { "password": "hunter2" } }'
+      good:
+        - '{ "event": "user.created", "data": { "user_id": "usr_abc123" } }'
+
+  N3:
+    title: Unsafe Signature Comparison
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use === or == for signature comparison. String comparison is
+      vulnerable to timing attacks that reveal the signature byte-by-byte.
+    check:
+      type: grep
+      pattern: 'signature\s*(===?|!==?)\s*(expected|computed|hash)|signature\.equals\('
+      flags: -Ein
+    note: |
+      Use crypto.timingSafeEqual() in Node.js, MessageDigest.isEqual() in Java,
+      or hmac.compare_digest() in Python for constant-time comparison.
+    examples:
+      bad:
+        - "if (signature === expected) { ... }"
+        - "if (signature == computedSignature) { ... }"
+        - "signature.equals(expected)"
+      good:
+        - "crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))"
+
+  N4:
+    title: Infinite Retry Without Backoff
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never retry webhook delivery in an infinite loop without backoff.
+      This hammers failing endpoints and wastes resources.
+    check:
+      type: grep
+      pattern: 'while.*true.*send|while.*retry.*webhook|for\s*\(;;\).*webhook'
+      flags: -Ein
+    note: |
+      Use exponential backoff with jitter and a maximum retry count.
+      Route to dead letter queue after exhausting retries.
+    examples:
+      bad:
+        - "while (true) { await sendWebhook(url, payload); }"
+        - "while (retry) { webhook.send(); }"
+      good:
+        - "// Retry at: 5s, 25s, 125s... with max 10 attempts"
+        - "const delay = Math.min(BASE * Math.pow(MULT, attempt) + jitter(), MAX);"
+
+  N5:
+    title: Non-HTTPS URL Schemes
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never allow file://, ftp://, gopher://, or other non-HTTPS schemes
+      in webhook URLs. These enable SSRF attacks.
+    check:
+      type: grep
+      pattern: 'webhook.*file://|webhook.*ftp://|webhook.*gopher://|url.*file://|endpoint.*http://[^l]'
+      flags: -Ein
+    note: |
+      Only HTTPS URLs should be accepted for webhook endpoints.
+      Block internal schemes that could access local files or services.
+    examples:
+      bad:
+        - "webhook.url = 'file:///etc/passwd'"
+        - "endpoint = 'ftp://internal/data'"
+      good:
+        - "webhook.url = 'https://api.customer.com/hooks'"
+
+  # =========================================================================
+  # SHOULD - Best practices (validator warns)
+  # =========================================================================
+
+  S1:
+    title: Signature Verification Present
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Webhook handlers should verify HMAC signatures before processing.
+      Without verification, any request claiming to be a webhook will be accepted.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qEi "webhook|hook" "$f" 2>/dev/null; then
+            if ! grep -qEi "signature|hmac|verify|x-.*-signature|createHmac|hash_hmac" "$f" 2>/dev/null; then
+              echo "$f: webhook handler without signature verification"
+            fi
+          fi
+        done
+    examples:
+      bad:
+        - |
+          app.post('/webhook', (req, res) => {
+            processEvent(req.body);  // No verification!
+            res.sendStatus(200);
+          });
+      good:
+        - |
+          app.post('/webhook', (req, res) => {
+            const signature = req.headers['x-webhook-signature'];
+            const expected = hmac('sha256', SECRET, JSON.stringify(req.body));
+            if (!timingSafeEqual(signature, expected)) {
+              return res.sendStatus(401);
+            }
+            processEvent(req.body);
+          });
+
+  S2:
+    title: Async Processing
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Webhook handlers should enqueue work for async processing rather than
+      blocking. Synchronous processing causes provider timeouts and retries.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qEi "await.*process|await.*handle|await.*save.*res\.(send|status|json)" "$f" 2>/dev/null; then
+            if ! grep -qEi "queue|enqueue|publish|dispatch|bull|sqs|rabbitmq|kafka" "$f" 2>/dev/null; then
+              echo "$f: possible sync processing before response"
+            fi
+          fi
+        done
+    examples:
+      bad:
+        - |
+          app.post('/webhook', async (req, res) => {
+            await processPayment(req.body);  // Takes 30 seconds
+            res.sendStatus(200);  // Too late, provider already retried
+          });
+      good:
+        - |
+          app.post('/webhook', async (req, res) => {
+            await queue.add('process-webhook', req.body);
+            res.sendStatus(200);  // ACK within seconds
+          });
+
+  S3:
+    title: Idempotency Handling
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Webhook handlers should use delivery IDs to deduplicate.
+      Webhooks are delivered at-least-once, so duplicates will occur.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qEi "webhook|hook" "$f" 2>/dev/null; then
+            if ! grep -qEi "idempoten|delivery.?id|webhook.?id|x-.*-id|dedup|already.?processed" "$f" 2>/dev/null; then
+              echo "$f: no idempotency handling detected"
+            fi
+          fi
+        done
+    examples:
+      bad:
+        - |
+          app.post('/webhook', (req, res) => {
+            chargeCustomer(req.body.amount);  // Called twice = charged twice
+            res.sendStatus(200);
+          });
+      good:
+        - |
+          app.post('/webhook', async (req, res) => {
+            const deliveryId = req.headers['x-webhook-id'];
+            if (await cache.exists(deliveryId)) {
+              return res.sendStatus(200);  // Already processed
+            }
+            await processPayment(req.body);
+            await cache.set(deliveryId, true, { ttl: '48h' });
+            res.sendStatus(200);
+          });
+
+  S4:
+    title: URL/IP Validation for SSRF Prevention
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Webhook URL registration should validate URLs and block private IPs
+      to prevent SSRF attacks targeting internal services.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qEi "webhook.*url|url.*webhook|register.*hook|endpoint" "$f" 2>/dev/null; then
+            if ! grep -qEi "isPrivate|privateIP|private.*range|internal.*ip|isValidUrl|validateUrl|blockList|allowList|dns\.resolve|dns\.lookup" "$f" 2>/dev/null; then
+              echo "$f: webhook URL handling without IP validation"
+            fi
+          fi
+        done
+    note: |
+      Block: 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16,
+      169.254.0.0/16, ::1/128, fc00::/7
+    examples:
+      bad:
+        - |
+          app.post('/webhooks', (req, res) => {
+            await db.saveWebhook({ url: req.body.url });  // Could be internal!
+          });
+      good:
+        - |
+          const validation = await isValidWebhookUrl(req.body.url);
+          if (!validation.valid) {
+            return res.status(400).json({ error: validation.reason });
+          }
+
+  S5:
+    title: Event Type Handling
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Webhook handlers should check and route by event type.
+      Event types enable proper handling of different webhook events.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qEi "webhook|hook" "$f" 2>/dev/null; then
+            if ! grep -qEi "event.?type|event_type|eventType|\.type|\.event|x-.*-event" "$f" 2>/dev/null; then
+              echo "$f: no event type handling detected"
+            fi
+          fi
+        done
+    examples:
+      good:
+        - |
+          switch (event.type) {
+            case 'order.completed': handleOrderCompleted(event.data); break;
+            case 'payment.failed': handlePaymentFailed(event.data); break;
+          }
+
+  S6:
+    title: Timestamp Handling
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Webhook handlers should check timestamps for replay attack prevention
+      and out-of-order detection.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qEi "webhook|hook" "$f" 2>/dev/null; then
+            if ! grep -qEi "timestamp|created.?at|x-.*-timestamp|time" "$f" 2>/dev/null; then
+              echo "$f: no timestamp handling detected"
+            fi
+          fi
+        done
+    examples:
+      good:
+        - |
+          const age = (Date.now() / 1000) - parseInt(timestamp);
+          if (age > MAX_AGE_SECONDS) {
+            return res.status(400).json({ error: 'Timestamp too old' });
+          }
+
+  S7:
+    title: HMAC Signature Implementation
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Webhook providers should sign payloads with HMAC to enable
+      consumer verification.
+    check:
+      type: script
+      code: |
+        grep -qEi "createHmac|hash_hmac|hmac\.new|HMACSHA|HmacUtils" "$@" || echo "No HMAC implementation detected"
+
+  S8:
+    title: Proper Response Codes
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Webhook handlers should return 2xx within the timeout window.
+      Providers interpret response codes to determine retry behavior.
+    check:
+      type: script
+      code: |
+        grep -qEi "status\(200\)|status\(202\)|sendStatus\(200\)|\.ok\(|res\.send\(" "$@" || echo "No 2xx response handling detected"
+
+  S9:
+    title: Retry with Backoff Logic
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Webhook providers should implement exponential backoff with
+      maximum retry limits.
+    check:
+      type: script
+      code: |
+        grep -qEi "backoff|retry|exponential|attempt|max.?retries" "$@" || echo "No retry/backoff logic detected"
+
+  S10:
+    title: Dead Letter Queue Handling
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Failed webhooks should be routed to a dead letter queue after
+      exhausting retries for manual inspection and replay.
+    check:
+      type: script
+      code: |
+        grep -qEi "dead.?letter|dlq|failed.?queue|poison.?queue" "$@" || echo "No dead letter queue handling detected"
+
+  S11:
+    title: Webhook URL Validation on Registration
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Webhook providers should validate URLs before accepting registration.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qEi "register.*webhook|webhook.*register|save.*webhook.*url|add.*endpoint" "$f" 2>/dev/null; then
+            if ! grep -qEi "validateUrl|isValidUrl|url.*valid|dns\.resolve|lookup|parseUrl" "$f" 2>/dev/null; then
+              echo "$f: webhook registration without URL validation"
+            fi
+          fi
+        done
+
+  S12:
+    title: Payload Size Limits
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Webhooks should keep payloads small (<20KB). Large payloads are
+      slow and timeout-prone. Send references instead.
+    check:
+      type: script
+      code: |
+        grep -qEi "payload.?size|max.?size|body.?limit|20.?kb|size.?limit" "$@" || echo "No payload size limits detected"
+
+  S13:
+    title: Webhook Logging
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Webhook handlers should log activity for debugging and audit trails.
+    check:
+      type: script
+      code: |
+        grep -qEi "log.*webhook|webhook.*log|logger|console\.(log|info|error).*webhook" "$@" || echo "No webhook-specific logging detected"
+
+  S14:
+    title: Secret Rotation Support
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Webhook systems should support signing with multiple keys during
+      secret rotation.
+    check:
+      type: script
+      code: |
+        grep -qEi "rotate|multiple.?secret|old.?secret|new.?secret|secret.?version" "$@" || echo "No secret rotation support detected"
+
+  S15:
+    title: Timing-Safe Comparison Used
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Use constant-time comparison functions for signature verification.
+    check:
+      type: script
+      code: |
+        grep -qEi "timingSafeEqual|constant.?time|secure.?compare|MessageDigest\.isEqual|hmac\.compare" "$@" || echo "No timing-safe comparison detected"
+
+  S16:
+    title: Queue Integration
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Webhook handlers should integrate with a queue for async processing.
+    check:
+      type: script
+      code: |
+        grep -qEi "queue|bull|sqs|rabbitmq|kafka|redis.*publish|pub.?sub|enqueue" "$@" || echo "No queue integration detected"
+
+  S17:
+    title: Schema Validation
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Validate incoming webhook payloads against a schema before processing.
+    check:
+      type: script
+      code: |
+        grep -qEi "joi|zod|yup|ajv|schema.*valid|validate.*schema|json.?schema" "$@" || echo "No schema validation detected"
+
+  S18:
+    title: Registration Verification Challenge
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Webhook providers should verify URL ownership via challenge/response
+      during registration.
+    check:
+      type: script
+      code: |
+        grep -qEi "challenge|verification.*webhook|webhook.*verification|verify.*endpoint|test.*webhook" "$@" || echo "No registration verification detected"
+
+  S19:
+    title: Egress Proxy for Webhook Delivery
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Webhook providers should route delivery through an egress proxy
+      for centralized security enforcement.
+    check:
+      type: script
+      code: |
+        grep -qEi "smokescreen|egress.*proxy|webhook.*proxy|proxy.*webhook|sentry" "$@" || echo "No egress proxy detected (optional but recommended)"
+
+  # =========================================================================
+  # GUIDANCE - Best practices (not mechanically checked)
+  # =========================================================================
+
+  G1:
+    title: Event Type Naming Convention
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Use resource.action (noun.verb) format for event types with
+      dot-delimited hierarchy.
+    guidance: |
+      GOOD:
+      - user.created
+      - order.completed
+      - payment.failed
+      - subscription.renewed
+
+      BAD:
+      - createUser (verb first)
+      - PAYMENT_FAILED (screaming case)
+      - UserWasCreated (past tense, PascalCase)
+      - user-created (hyphens)
+
+  G2:
+    title: Payload Structure
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Standard webhook payload envelope with event ID, type, version,
+      timestamp, and data object.
+    guidance: |
+      {
+        "id": "evt_abc123",              // Event ID
+        "type": "order.completed",       // Event type
+        "api_version": "2024-01-15",     // Schema version
+        "created": "2024-01-15T10:30:00Z", // When event occurred
+        "data": {
+          "object": {
+            "id": "ord_xyz789",
+            "status": "completed"
+          }
+        }
+      }
+
+      Headers:
+      X-Webhook-ID: whk_abc123          // Unique delivery ID
+      X-Webhook-Timestamp: 1705315800   // Unix timestamp
+      X-Webhook-Signature: v1=abc123... // HMAC signature
+
+  G3:
+    title: Consumer Architecture
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Recommended architecture for webhook consumers with queue-based
+      async processing.
+    guidance: |
+      Webhook Request
+           │
+           ▼
+      ┌─────────────┐
+      │  Receiver   │  ← Verify signature, reject invalid
+      │  (HTTP)     │  ← Check timestamp freshness
+      │             │  ← Check idempotency key
+      └─────┬───────┘  ← Return 200 immediately
+            │
+            ▼
+      ┌─────────────┐
+      │   Queue     │  ← Persist before ACK
+      └─────┬───────┘
+            │
+            ▼
+      ┌─────────────┐
+      │   Worker    │  ← Process asynchronously
+      │             │  ← Retry on failure
+      │             │  ← Dead letter on exhaust
+      └─────────────┘
+
+  G4:
+    title: Provider Architecture
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Recommended architecture for webhook providers with retry and DLQ.
+    guidance: |
+      Event Occurs
+           │
+           ▼
+      ┌─────────────┐
+      │  Event Bus  │  ← Dispatch to webhook system
+      └─────┬───────┘
+            │
+            ▼
+      ┌─────────────┐
+      │  Delivery   │  ← Look up registered endpoints
+      │   Queue     │  ← Per-customer isolation
+      └─────┬───────┘
+            │
+            ▼
+      ┌─────────────┐
+      │   Sender    │  ← Sign payload, POST to endpoint
+      └─────┬───────┘
+            │
+       ┌────┴────┐
+       │         │
+      2xx      4xx/5xx/timeout
+       │         │
+      Done    ┌──┴───┐
+              │Retry │ ← Exponential backoff
+              │Queue │ ← Max attempts
+              └──┬───┘
+                 │
+            Exhausted
+                 │
+                 ▼
+            ┌────────┐
+            │  DLQ   │
+            └────────┘
+
+  G5:
+    title: Signature Verification Pattern
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Standard Webhooks Spec signature verification pattern.
+    guidance: |
+      // Header format: t=timestamp,v1=signature
+      const header = req.headers['x-webhook-signature'];
+      const [tPart, vPart] = header.split(',');
+      const timestamp = tPart.split('=')[1];
+      const signature = vPart.split('=')[1];
+
+      // Verify timestamp freshness
+      const age = Math.floor(Date.now() / 1000) - parseInt(timestamp);
+      if (age > 300) throw new Error('Timestamp too old');
+
+      // Verify signature
+      const signedPayload = `${timestamp}.${JSON.stringify(req.body)}`;
+      const expected = crypto
+        .createHmac('sha256', secret)
+        .update(signedPayload)
+        .digest('hex');
+
+      if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+        throw new Error('Invalid signature');
+      }
+
+  G6:
+    title: Response Code Handling
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      How providers should interpret consumer response codes.
+    guidance: |
+      2xx Success:
+        200 OK         → Delivered, stop retrying
+        202 Accepted   → Delivered, stop retrying
+
+      4xx Client Error:
+        400 Bad Request → May retry (could be transient)
+        401 Unauthorized → Stop retrying, alert (bad secret)
+        404 Not Found   → Stop retrying, alert (endpoint removed)
+        410 Gone        → Stop retrying, disable webhook
+
+      5xx Server Error:
+        500-504        → Retry with backoff
+
+      Timeout:
+        No response    → Retry with backoff
+
+  G7:
+    title: Retry Schedule
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Recommended retry schedule with exponential backoff.
+    guidance: |
+      Standard approach:
+        Attempt 1: immediate
+        Attempt 2: 5 seconds
+        Attempt 3: 25 seconds
+        Attempt 4: 125 seconds
+        Attempt 5: 625 seconds (~10 min)
+        ...
+        Cap at 10 attempts over ~61 hours
+
+      const delay = Math.min(
+        BASE_DELAY * Math.pow(MULTIPLIER, attempt) + jitter(),
+        MAX_DELAY
+      );
+
+      // Add jitter to prevent thundering herd
+      function jitter() {
+        return Math.random() * 1000;
+      }
+
+info_metrics:
+  - name: "Webhook handler patterns"
+    pattern: "webhook|\\.on\\(['\"]hook"
+  - name: "Files with signature handling"
+    pattern: "signature|hmac|createHmac"
+  - name: "Files with queue integration"
+    pattern: "queue|bull|sqs|rabbitmq|kafka"
+  - name: "Files with retry logic"
+    pattern: "retry|backoff|attempt"
+  - name: "Distinct event type patterns"
+    pattern: "['\"][a-z]+\\.(created|updated|deleted|completed|failed|pending)['\"]"
+  - name: "Files with URL/IP validation"
+    pattern: "validateUrl|isPrivate|privateIP|dns\\.resolve"
+  - name: "Files with schema validation"
+    pattern: "joi|zod|yup|ajv|schema"
+
+anti_patterns:
+  - pattern: "No signature verification"
+    problem: "Accept any POST as valid webhook"
+    fix: "HMAC verification"
+  - pattern: "Sync processing"
+    problem: "Block until processing complete"
+    fix: "Queue + async worker"
+  - pattern: "No idempotency"
+    problem: "Duplicate webhooks = duplicate effects"
+    fix: "Delivery ID dedup"
+  - pattern: "== for signatures"
+    problem: "Timing attack vulnerability"
+    fix: "timingSafeEqual"
+  - pattern: "Secrets in payload"
+    problem: "Sensitive data exposed"
+    fix: "IDs only, fetch via API"
+  - pattern: "No retry"
+    problem: "Single attempt, silent failure"
+    fix: "Exponential backoff"
+  - pattern: "Infinite retry"
+    problem: "Hammer failing endpoints"
+    fix: "Max attempts + DLQ"
+  - pattern: "Plain HTTP"
+    problem: "Payload visible to attackers"
+    fix: "HTTPS only"
+  - pattern: "No URL validation"
+    problem: "SSRF attacks"
+    fix: "Validate + block private IPs"
