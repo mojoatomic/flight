@@ -233,13 +233,21 @@ A well-tightened rule:
 
 ## Next Step
 
-After tightening:
+After tightening domain rules, re-run the compile/validate cycle:
 
 ```
 /flight-compile
-# Execute generated prompt
+[implement]
 /flight-validate
 ```
+
+**Workflow**: `/flight-tighten` → `/flight-compile` → [implement] → `/flight-validate`
+
+| Response | Action |
+|----------|--------|
+| `compile` or `c` | Proceed to `/flight-compile` with updated rules |
+| `validate` | Re-run `/flight-validate` to test rule changes |
+| `review` | Show the domain file changes made |
 
 ---
 

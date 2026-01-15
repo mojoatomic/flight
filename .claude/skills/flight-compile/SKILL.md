@@ -191,8 +191,17 @@ Before finalizing, verify:
 
 ## Next Step
 
-After generating PROMPT.md:
+After generating PROMPT.md, implement the task then validate:
 
 ```
-Execute the prompt or use /flight-validate after implementation
+[implement the task following PROMPT.md]
+/flight-validate
 ```
+
+**Workflow**: `/flight-compile` → [implement] → `/flight-validate` → next task
+
+| Response | Action |
+|----------|--------|
+| `proceed` or `p` | Implement the task following PROMPT.md |
+| `review` | Display PROMPT.md contents |
+| `edit` | Modify PROMPT.md before implementation |

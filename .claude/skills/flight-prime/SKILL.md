@@ -191,8 +191,16 @@ Generate this structure:
 
 ## Next Step
 
-After generating PRIME.md:
+After generating PRIME.md, compile it into an executable prompt:
 
 ```
 /flight-compile
 ```
+
+**Workflow**: `/flight-prime` → `/flight-compile` → [implement] → `/flight-validate`
+
+| Response | Action |
+|----------|--------|
+| `continue` or `c` | Proceed to `/flight-compile` |
+| `review` | Display PRIME.md contents for review |
+| `edit` | Modify PRIME.md before compiling |

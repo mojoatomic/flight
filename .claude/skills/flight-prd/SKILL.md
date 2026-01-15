@@ -208,7 +208,7 @@ Create 8-15 task files, each following this structure:
 - [ ] [Testable criterion 1]
 - [ ] [Testable criterion 2]
 - [ ] [Testable criterion 3]
-- [ ] `.flight/validate-all.sh` passes (local CI)
+- [ ] Flight validation passes for files created/modified in this task
 
 ## Domain Constraints
 Load these before starting:
@@ -227,7 +227,11 @@ Reference prior tasks if building on them.]
 ## Validation
 Run after implementing:
 ```bash
-.flight/validate-all.sh    # Must pass before moving to next task
+# Validate specific files created in this task
+.flight/domains/[domain].validate.sh path/to/created/files
+
+# Or validate all (may show pre-existing issues in other files)
+.flight/validate-all.sh
 ```
 ```
 
@@ -581,8 +585,16 @@ npm run preflight                           # Local CI (validate + lint)
 
 ## Next Step
 
-After generating outputs:
+After generating outputs, the Flight loop begins:
 
 ```
 /flight-prime tasks/001-project-setup.md
 ```
+
+**Workflow**: `/flight-prd` → `/flight-prime` → `/flight-compile` → [implement] → `/flight-validate` → repeat
+
+| Response | Action |
+|----------|--------|
+| `continue` or `c` | Proceed to `/flight-prime tasks/001-*.md` |
+| `review` | Display the generated task files for review |
+| Task filename | Prime that specific task (e.g., `tasks/002-*.md`) |

@@ -136,12 +136,25 @@ Show the failures. Do not fix automatically. User decides:
 
 ## Next Step
 
-If PASS:
+**If PASS** - Task complete, continue to next task:
+
 ```
-Commit or continue to next task
+/flight-prime tasks/[next-task].md
 ```
 
-If FAIL:
+**If FAIL** - Fix issues or tighten rules:
+
 ```
-Fix issues and re-run /flight-validate
+[fix code] → /flight-validate
+    OR
+/flight-tighten  (if rule needs adjustment)
 ```
+
+**Workflow**: `/flight-validate` → PASS → next task | FAIL → fix → retry
+
+| Response | Action |
+|----------|--------|
+| `next` or `n` | Proceed to `/flight-prime` for next task |
+| `fix` | Attempt to fix the validation failures |
+| `tighten` | Run `/flight-tighten` to adjust rules |
+| `commit` | Commit the changes (if PASS) |
