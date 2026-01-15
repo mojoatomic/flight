@@ -1,0 +1,219 @@
+#!/bin/bash
+# =============================================================================
+# Flight Exclusions - Centralized file exclusion system
+# =============================================================================
+#
+# Source this file in validators to exclude build artifacts from file scans.
+#
+# Usage:
+#   source .flight/exclusions.sh
+#   FILES=($(flight_get_files "**/*.ts" "**/*.tsx"))
+#
+# =============================================================================
+
+# Standard directories to exclude from validation
+# Projects can extend this array before calling flight_get_files()
+FLIGHT_EXCLUDE_DIRS=(
+    # Package managers
+    "node_modules"
+    "vendor"
+    ".venv"
+    "venv"
+
+    # Build outputs
+    "dist"
+    "build"
+    "target"
+    "obj"
+    ".next"
+    ".turbo"
+    "out"
+    ".output"
+    ".nuxt"
+    ".svelte-kit"
+
+    # VCS
+    ".git"
+
+    # IDE
+    ".idea"
+    ".vscode"
+
+    # Test/Coverage
+    "coverage"
+    ".pytest_cache"
+    ".nyc_output"
+    ".coverage"
+    "__pycache__"
+    ".tox"
+    ".nox"
+
+    # Cache directories
+    ".cache"
+    ".parcel-cache"
+    ".webpack"
+    ".rollup.cache"
+
+    # Other
+    ".terraform"
+    ".serverless"
+)
+
+# -----------------------------------------------------------------------------
+# flight_is_excluded - Check if a path should be excluded
+# -----------------------------------------------------------------------------
+# Arguments:
+#   $1 - File path to check
+# Returns:
+#   0 (true) if path should be excluded
+#   1 (false) if path should be included
+# -----------------------------------------------------------------------------
+flight_is_excluded() {
+    local filepath="$1"
+    local dir
+
+    for dir in "${FLIGHT_EXCLUDE_DIRS[@]}"; do
+        # Check if path contains the excluded directory as a component
+        # Matches: node_modules/foo, ./node_modules/bar, src/node_modules/baz
+        if [[ "$filepath" == *"/$dir/"* ]] || [[ "$filepath" == "$dir/"* ]] || [[ "$filepath" == *"/$dir" ]]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+# -----------------------------------------------------------------------------
+# flight_build_find_excludes - Build find command exclusion arguments
+# -----------------------------------------------------------------------------
+# Returns exclusion arguments for find command via stdout
+# -----------------------------------------------------------------------------
+flight_build_find_excludes() {
+    local dir
+    local first=true
+
+    echo -n "("
+    for dir in "${FLIGHT_EXCLUDE_DIRS[@]}"; do
+        if [[ "$first" == true ]]; then
+            first=false
+        else
+            echo -n " -o"
+        fi
+        echo -n " -name \"$dir\""
+    done
+    echo -n " ) -prune -o"
+}
+
+# -----------------------------------------------------------------------------
+# flight_get_files - Get files matching patterns, excluding standard dirs
+# -----------------------------------------------------------------------------
+# Arguments:
+#   $@ - Glob patterns (e.g., "*.ts" "*.tsx")
+#        Patterns should NOT include **/ prefix - it's added automatically
+# Output:
+#   Files matching patterns, one per line (suitable for mapfile or while read)
+# Example:
+#   FILES=($(flight_get_files "*.ts" "*.tsx"))
+#   mapfile -t FILES < <(flight_get_files "*.ts" "*.tsx")
+# -----------------------------------------------------------------------------
+flight_get_files() {
+    local patterns=("$@")
+    local search_dir="${FLIGHT_SEARCH_DIR:-.}"
+
+    # Build the find command dynamically
+    # We use find instead of globstar because:
+    # 1. find handles exclusions more reliably
+    # 2. globstar can be slow on large trees
+    # 3. find works consistently across bash versions
+
+    local find_cmd="find \"$search_dir\" "
+
+    # Add exclusions - prune directories we don't want to descend into
+    find_cmd+="\\( "
+    local first=true
+    for dir in "${FLIGHT_EXCLUDE_DIRS[@]}"; do
+        if [[ "$first" == true ]]; then
+            first=false
+        else
+            find_cmd+="-o "
+        fi
+        find_cmd+="-type d -name \"$dir\" "
+    done
+    find_cmd+="\\) -prune -o "
+
+    # Add file type filter
+    find_cmd+="-type f "
+
+    # Add pattern matching
+    if [[ ${#patterns[@]} -gt 0 ]]; then
+        find_cmd+="\\( "
+        first=true
+        for pattern in "${patterns[@]}"; do
+            # Strip **/ prefix if present - find searches recursively by default
+            pattern="${pattern#\*\*/}"
+            if [[ "$first" == true ]]; then
+                first=false
+            else
+                find_cmd+="-o "
+            fi
+            find_cmd+="-name \"$pattern\" "
+        done
+        find_cmd+="\\) "
+    fi
+
+    find_cmd+="-print"
+
+    # Execute and output results
+    # Use subshell to isolate potential errors from set -e
+    (eval "$find_cmd" 2>/dev/null || true) | sort
+}
+
+# -----------------------------------------------------------------------------
+# flight_get_files_for_patterns - Convert glob patterns to file list
+# -----------------------------------------------------------------------------
+# This is an alternative that uses bash globstar when you need exact pattern
+# matching (e.g., "src/**/*.ts" vs just "*.ts")
+#
+# Arguments:
+#   $@ - Full glob patterns including path (e.g., "src/**/*.ts")
+# Output:
+#   Files matching patterns, one per line, with exclusions applied
+# -----------------------------------------------------------------------------
+flight_get_files_for_patterns() {
+    local patterns=("$@")
+
+    # Enable globstar for ** pattern matching
+    shopt -s nullglob globstar
+
+    local file
+    for pattern in "${patterns[@]}"; do
+        for file in $pattern; do
+            # Skip if excluded
+            if ! flight_is_excluded "$file"; then
+                echo "$file"
+            fi
+        done
+    done | sort -u
+
+    # Restore shell options
+    shopt -u nullglob globstar
+}
+
+# -----------------------------------------------------------------------------
+# flight_filter_excluded - Filter a list of files, removing excluded paths
+# -----------------------------------------------------------------------------
+# Input:
+#   Files via stdin, one per line
+# Output:
+#   Files not in excluded directories, one per line
+# Example:
+#   find . -name "*.ts" | flight_filter_excluded
+# -----------------------------------------------------------------------------
+flight_filter_excluded() {
+    local file
+    while IFS= read -r file; do
+        if ! flight_is_excluded "$file"; then
+            echo "$file"
+        fi
+    done
+}
