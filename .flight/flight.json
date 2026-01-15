@@ -1,0 +1,12 @@
+{
+  "generated": "2026-01-15T19:00:00Z",
+  "scan_root": ".",
+  "enabled_domains": [
+    "code-hygiene",
+    "bash"
+  ],
+  "detection_log": {
+    "code-hygiene": "always enabled",
+    "bash": "found *.sh files"
+  }
+}
