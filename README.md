@@ -302,6 +302,7 @@ This domain runs automatically on every validation. You don't need to explicitly
 | `javascript` | JS files | No `var`, no `==`, no `console.log` |
 | `kubernetes` | K8s manifests | Resource limits, probes, security contexts |
 | `nextjs` | Next.js App Router | Server/client boundaries, loading states |
+| `prisma` | Prisma ORM (TS/Next.js) | Multi-tenant queries, N+1 prevention, error handling, singleton |
 | `python` | Python files | No bare except, type hints, logging |
 | `react` | React components | No inline objects in JSX, proper hooks |
 | `rp2040-pico` | RP2040 embedded | Spinlocks, watchdog, static allocation |

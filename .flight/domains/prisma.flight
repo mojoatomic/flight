@@ -1,0 +1,933 @@
+# prisma.flight - Prisma ORM patterns for TypeScript/Next.js
+# Source: Official Prisma docs, multi-tenant best practices, error handling patterns
+
+domain: prisma
+version: 1.0.0
+description: >
+  Prisma ORM patterns for TypeScript/Next.js applications with multi-tenant SaaS focus.
+  Covers schema design, query patterns, N+1 prevention, error handling, connection management,
+  and orgId-scoped data access for tenant isolation.
+
+file_patterns:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/schema.prisma"
+
+exclude_patterns:
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/.git/**"
+  - "**/*.d.ts"
+  - "**/prisma/migrations/**"
+
+suppression:
+  comment: "flight:ok"
+  guidance: |
+    Add `// flight:ok` comment on the same line to suppress.
+    Use sparingly. Document why the suppression is acceptable.
+
+# ===========================================================================
+# RULES
+# ===========================================================================
+# Prisma-SPECIFIC rules for multi-tenant Next.js/TypeScript applications.
+# These catch common AI mistakes with Prisma queries, error handling, and
+# connection management.
+#
+# ID format: {severity_prefix}{number}
+#   N = NEVER (check - fails build)
+#   M = MUST (check - currently implemented as warn)
+#   S = SHOULD (warn - advisory)
+#   G = GUIDANCE (not checked)
+# ===========================================================================
+
+rules:
+
+  # =========================================================================
+  # NEVER - Security and correctness violations (validator will reject)
+  # =========================================================================
+
+  N1:
+    title: Queries Without orgId (Multi-tenant)
+    severity: NEVER
+    mechanical: true
+    description: >
+      All data queries must include orgId for tenant isolation. Queries without
+      orgId can leak data between tenants in multi-tenant applications.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Skip test files and schema files
+          if [[ "$f" == *".test."* ]] || [[ "$f" == *".spec."* ]] || [[ "$f" == *"schema.prisma"* ]]; then
+            continue
+          fi
+          # Check server files that query data
+          if [[ "$f" == *"/api/"* ]] || [[ "$f" == *"/actions/"* ]] || [[ "$f" == *".server."* ]]; then
+            # If file has prisma queries (findMany, findFirst, findUnique, etc)
+            if grep -qE "prisma\.[a-z]+\.(findMany|findFirst|findUnique|create|update|delete|upsert)" "$f" 2>/dev/null; then
+              # Should have orgId in the file
+              if ! grep -qE "orgId|organization_id|organizationId" "$f" 2>/dev/null; then
+                if ! grep -q "flight:ok" "$f" 2>/dev/null; then
+                  echo "$f: Prisma query without orgId filter"
+                fi
+              fi
+            fi
+          fi
+        done
+    note: |
+      In multi-tenant SaaS, the organization is the tenant boundary:
+      - Data belongs to organizations, not individual users
+      - Users can access data in orgs they belong to
+      - Always filter by orgId
+
+      BAD:  prisma.post.findMany()
+      BAD:  prisma.post.findMany({ where: { published: true } })
+      GOOD: prisma.post.findMany({ where: { orgId } })
+      GOOD: prisma.post.findMany({ where: { orgId, published: true } })
+    examples:
+      bad:
+        - "prisma.post.findMany()"
+        - "prisma.post.findMany({ where: { published: true } })"
+      good:
+        - "prisma.post.findMany({ where: { orgId } })"
+        - "prisma.post.findMany({ where: { orgId, published: true } })"
+
+  N2:
+    title: $queryRawUnsafe with User Input
+    severity: NEVER
+    mechanical: true
+    description: >
+      $queryRawUnsafe bypasses parameterization. Using it with user input
+      creates SQL injection vulnerabilities. Use $queryRaw with tagged
+      templates instead.
+    check:
+      type: grep
+      pattern: '\$queryRawUnsafe|\$executeRawUnsafe'
+      flags: -En
+    note: |
+      $queryRawUnsafe and $executeRawUnsafe are vulnerable to SQL injection
+      when used with user input. Use the safe versions with tagged templates:
+
+      BAD:  prisma.$queryRawUnsafe(`SELECT * FROM users WHERE id = '${userId}'`)
+      GOOD: prisma.$queryRaw`SELECT * FROM users WHERE id = ${userId}`
+
+      The tagged template version creates prepared statements that are safe
+      from SQL injection. Only use *Unsafe methods for trusted, hardcoded queries.
+    examples:
+      bad:
+        - "prisma.$queryRawUnsafe(`SELECT * FROM users WHERE id = '${userId}'`)"
+        - "prisma.$executeRawUnsafe(`DELETE FROM posts WHERE id = ${id}`)"
+      good:
+        - "prisma.$queryRaw`SELECT * FROM users WHERE id = ${userId}`"
+        - "prisma.$executeRaw`DELETE FROM posts WHERE id = ${id}`"
+
+  N3:
+    title: N+1 Query Pattern
+    severity: NEVER
+    mechanical: true
+    description: >
+      Fetching related data in loops instead of using include creates N+1 queries.
+      This causes severe performance issues as the number of records grows.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Skip test files
+          if [[ "$f" == *".test."* ]] || [[ "$f" == *".spec."* ]]; then
+            continue
+          fi
+          # Look for patterns like: for/forEach with prisma query inside
+          # This is a heuristic check - looks for loops followed by prisma calls
+          awk '
+          /for\s*\(|forEach\s*\(|\.map\s*\(/ {
+            in_loop = 1
+            loop_line = NR
+          }
+          in_loop && /prisma\.[a-z]+\.(findMany|findFirst|findUnique)/ {
+            if (NR - loop_line < 10) {
+              print FILENAME":"NR": Potential N+1 query - prisma call inside loop"
+            }
+          }
+          /^\s*\}/ && in_loop {
+            in_loop = 0
+          }
+          ' "$f" 2>/dev/null | grep -v 'flight:ok'
+        done
+    note: |
+      The N+1 problem occurs when you query in a loop:
+
+      BAD:
+        const users = await prisma.user.findMany()
+        for (const user of users) {
+          const posts = await prisma.post.findMany({ where: { userId: user.id } })
+        }
+
+      GOOD:
+        const users = await prisma.user.findMany({
+          include: { posts: true }
+        })
+
+      Use include or select with nested relations to fetch related data
+      in a single query.
+    examples:
+      bad:
+        - |
+          const users = await prisma.user.findMany()
+          for (const user of users) {
+            const posts = await prisma.post.findMany({ where: { userId: user.id } })
+          }
+      good:
+        - |
+          const users = await prisma.user.findMany({
+            include: { posts: true }
+          })
+
+  N4:
+    title: Unhandled Prisma Errors
+    severity: NEVER
+    mechanical: true
+    description: >
+      Prisma throws specific error codes (P2002, P2025, etc.) that need handling.
+      Generic catch blocks hide the actual error and provide poor user experience.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Skip test files
+          if [[ "$f" == *".test."* ]] || [[ "$f" == *".spec."* ]]; then
+            continue
+          fi
+          # Check files with prisma create/update/delete
+          if grep -qE "prisma\.[a-z]+\.(create|update|delete|upsert)" "$f" 2>/dev/null; then
+            # Should have PrismaClientKnownRequestError or error code handling
+            if grep -qE "catch\s*\(" "$f" 2>/dev/null; then
+              if ! grep -qE "PrismaClientKnownRequestError|e\.code|error\.code|P2002|P2025|P2003|P2014" "$f" 2>/dev/null; then
+                if ! grep -q "flight:ok" "$f" 2>/dev/null; then
+                  echo "$f: Prisma mutation with generic error handling"
+                fi
+              fi
+            fi
+          fi
+        done
+    note: |
+      Always handle specific Prisma error codes:
+
+      import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
+
+      try {
+        await prisma.user.create({ data })
+      } catch (e) {
+        if (e instanceof PrismaClientKnownRequestError) {
+          if (e.code === 'P2002') throw new Error('Email already exists')
+          if (e.code === 'P2025') throw new Error('Record not found')
+        }
+        throw e
+      }
+
+      Common error codes:
+      - P2002: Unique constraint violation
+      - P2003: Foreign key constraint violation
+      - P2025: Record not found (update/delete)
+      - P2014: Required relation violation
+    examples:
+      bad:
+        - |
+          try {
+            await prisma.user.create({ data })
+          } catch (e) {
+            throw new Error('Database error')
+          }
+      good:
+        - |
+          import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
+
+          try {
+            await prisma.user.create({ data })
+          } catch (e) {
+            if (e instanceof PrismaClientKnownRequestError) {
+              if (e.code === 'P2002') throw new Error('Email already exists')
+              if (e.code === 'P2025') throw new Error('Record not found')
+            }
+            throw e
+          }
+
+  N5:
+    title: New PrismaClient Per Request
+    severity: NEVER
+    mechanical: true
+    description: >
+      Creating PrismaClient instances per request exhausts database connections.
+      Use a singleton pattern to reuse the client across requests.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Skip the singleton file itself (usually lib/prisma.ts or db.ts)
+          if [[ "$f" == *"lib/prisma"* ]] || [[ "$f" == *"lib/db"* ]] || [[ "$f" == *"prisma/client"* ]]; then
+            continue
+          fi
+          # Check for new PrismaClient() in request handlers
+          if [[ "$f" == *"/api/"* ]] || [[ "$f" == *"/actions/"* ]] || [[ "$f" == *"route.ts"* ]]; then
+            if grep -qE "new PrismaClient\(\)" "$f" 2>/dev/null; then
+              if ! grep -q "flight:ok" "$f" 2>/dev/null; then
+                grep -Hn "new PrismaClient()" "$f"
+              fi
+            fi
+          fi
+        done
+    note: |
+      Creating PrismaClient per request exhausts connection pool.
+      Use the singleton pattern:
+
+      // lib/prisma.ts
+      import { PrismaClient } from '@prisma/client'
+
+      const globalForPrisma = globalThis as { prisma?: PrismaClient }
+
+      export const prisma = globalForPrisma.prisma ?? new PrismaClient()
+
+      if (process.env.NODE_ENV !== 'production') {
+        globalForPrisma.prisma = prisma
+      }
+
+      Then import from lib/prisma.ts everywhere.
+    examples:
+      bad:
+        - |
+          export async function handler() {
+            const prisma = new PrismaClient()
+            // ...
+          }
+      good:
+        - |
+          import { PrismaClient } from '@prisma/client'
+
+          const globalForPrisma = globalThis as { prisma?: PrismaClient }
+          export const prisma = globalForPrisma.prisma ?? new PrismaClient()
+          if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
+
+  N6:
+    title: Fetching All Fields When Not Needed
+    severity: NEVER
+    mechanical: false
+    description: >
+      Fetching all fields when only some are needed wastes bandwidth and memory.
+      Use select to fetch only required fields, especially for large tables.
+    note: |
+      Use select to fetch specific fields:
+
+      BAD:
+        const users = await prisma.user.findMany()  // fetches everything
+
+      GOOD:
+        const users = await prisma.user.findMany({
+          select: { id: true, name: true, email: true }
+        })
+
+      This is especially important for:
+      - Large text/JSON fields
+      - Tables with many columns
+      - High-traffic endpoints
+
+  N7:
+    title: Missing Unique Constraint Handling
+    severity: NEVER
+    mechanical: true
+    description: >
+      create() without handling unique violations crashes on duplicate data.
+      Either use upsert or catch P2002 errors.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          # Skip test files
+          if [[ "$f" == *".test."* ]] || [[ "$f" == *".spec."* ]]; then
+            continue
+          fi
+          # Check files with prisma.*.create
+          if grep -qE "prisma\.[a-z]+\.create\s*\(" "$f" 2>/dev/null; then
+            # Should have upsert, P2002 handling, or try-catch
+            if ! grep -qE "upsert|P2002|catch|try" "$f" 2>/dev/null; then
+              if ! grep -q "flight:ok" "$f" 2>/dev/null; then
+                grep -Hn "\.create\s*(" "$f" | head -3
+              fi
+            fi
+          fi
+        done
+    note: |
+      create() throws P2002 on unique constraint violations.
+      Handle this with upsert or catch:
+
+      // Using upsert (preferred for idempotent operations)
+      await prisma.user.upsert({
+        where: { email },
+        update: {},  // or update with new data
+        create: { email, name }
+      })
+
+      // Or catch P2002
+      try {
+        await prisma.user.create({ data: { email, name } })
+      } catch (e) {
+        if (e instanceof PrismaClientKnownRequestError && e.code === 'P2002') {
+          throw new Error('User with this email already exists')
+        }
+        throw e
+      }
+    examples:
+      bad:
+        - "await prisma.user.create({ data: { email } })"
+      good:
+        - |
+          await prisma.user.upsert({
+            where: { email },
+            update: {},
+            create: { email, name }
+          })
+
+  # =========================================================================
+  # MUST - Important patterns (validator warns)
+  # =========================================================================
+
+  M1:
+    title: Use include for Relations
+    severity: MUST
+    mechanical: false
+    description: >
+      Fetch related data in a single query using include instead of
+      separate queries. This prevents N+1 problems and improves performance.
+    note: |
+      Use include to fetch related data:
+
+      const userWithPosts = await prisma.user.findUnique({
+        where: { id },
+        include: {
+          posts: true,
+          profile: true
+        }
+      })
+
+      Or use select for fine-grained control:
+
+      const userWithPosts = await prisma.user.findUnique({
+        where: { id },
+        include: {
+          posts: {
+            select: { id: true, title: true }
+          }
+        }
+      })
+
+  M2:
+    title: Handle P2002 (Unique Constraint)
+    severity: MUST
+    mechanical: false
+    description: >
+      Unique constraint violations must have user-friendly error messages.
+      Don't expose raw database errors to users.
+    note: |
+      P2002 means a unique constraint was violated. Handle it:
+
+      try {
+        await prisma.user.create({ data })
+      } catch (e) {
+        if (e instanceof PrismaClientKnownRequestError) {
+          if (e.code === 'P2002') {
+            // e.meta.target contains the field(s) that caused the violation
+            const field = (e.meta?.target as string[])?.[0] ?? 'field'
+            throw new Error(`A record with this ${field} already exists`)
+          }
+        }
+        throw e
+      }
+
+  M3:
+    title: Handle P2025 (Record Not Found)
+    severity: MUST
+    mechanical: false
+    description: >
+      Record not found errors from update/delete need handling.
+      Provide clear feedback when the record doesn't exist.
+    note: |
+      P2025 occurs when update/delete can't find the record:
+
+      try {
+        await prisma.post.update({
+          where: { id },
+          data: { title: 'New Title' }
+        })
+      } catch (e) {
+        if (e instanceof PrismaClientKnownRequestError) {
+          if (e.code === 'P2025') {
+            throw new Error('Post not found')
+          }
+        }
+        throw e
+      }
+
+      Or use updateMany which returns count instead of throwing:
+
+      const { count } = await prisma.post.updateMany({
+        where: { id, orgId },
+        data: { title: 'New Title' }
+      })
+      if (count === 0) throw new Error('Post not found')
+
+  M4:
+    title: Singleton Client Pattern
+    severity: MUST
+    mechanical: true
+    description: >
+      Use the global singleton pattern for PrismaClient, not per-request
+      instantiation. This is critical for connection pool management.
+    check:
+      type: script
+      code: |
+        # Check if there's a singleton pattern in the codebase
+        found_singleton=0
+        for f in "$@"; do
+          if grep -qE "globalThis.*prisma|global.*prisma.*PrismaClient" "$f" 2>/dev/null; then
+            found_singleton=1
+            break
+          fi
+        done
+        # Check if there are any prisma imports
+        has_prisma=0
+        for f in "$@"; do
+          if grep -qE "@prisma/client|PrismaClient" "$f" 2>/dev/null; then
+            has_prisma=1
+            break
+          fi
+        done
+        if [[ $has_prisma -eq 1 ]] && [[ $found_singleton -eq 0 ]]; then
+          echo "No PrismaClient singleton pattern found (expected in lib/prisma.ts or similar)"
+        fi
+    note: |
+      Create a singleton in lib/prisma.ts:
+
+      import { PrismaClient } from '@prisma/client'
+
+      const globalForPrisma = globalThis as { prisma?: PrismaClient }
+
+      export const prisma = globalForPrisma.prisma ?? new PrismaClient()
+
+      if (process.env.NODE_ENV !== 'production') {
+        globalForPrisma.prisma = prisma
+      }
+
+      The globalThis pattern prevents hot reload from creating new instances.
+
+  M5:
+    title: Type Generated Client
+    severity: MUST
+    mechanical: false
+    description: >
+      Run `prisma generate` after schema changes to regenerate the typed client.
+      Stale types cause runtime errors and type mismatches.
+    note: |
+      After any schema.prisma change:
+
+      1. npx prisma generate  # Regenerate client
+      2. npx prisma db push   # Or prisma migrate dev
+
+      Add to package.json for CI:
+      {
+        "scripts": {
+          "postinstall": "prisma generate"
+        }
+      }
+
+      This ensures the client is always in sync with the schema.
+
+  M6:
+    title: Include orgId in Schema
+    severity: MUST
+    mechanical: true
+    description: >
+      All tenant-scoped models must have an orgId field for multi-tenant
+      data isolation. This is the foundation of tenant security.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if [[ "$f" == *"schema.prisma"* ]]; then
+            # Find models that look like tenant data (not User, Organization, etc)
+            # Check if they have orgId
+            awk '
+            /^model [A-Z]/ {
+              model = $2
+              in_model = 1
+              has_orgid = 0
+              # Skip system models
+              if (model ~ /^(User|Organization|Account|Session|VerificationToken)$/) {
+                in_model = 0
+              }
+            }
+            in_model && /orgId|organizationId/ {
+              has_orgid = 1
+            }
+            in_model && /^}/ {
+              if (!has_orgid && model !~ /^(User|Organization|Account|Session|VerificationToken|Membership)$/) {
+                print FILENAME": Model "model" may need orgId field for multi-tenant isolation"
+              }
+              in_model = 0
+            }
+            ' "$f" 2>/dev/null | grep -v 'flight:ok'
+          fi
+        done
+    note: |
+      Add orgId to all tenant-scoped models:
+
+      model Post {
+        id        String   @id @default(cuid())
+        orgId     String   // REQUIRED for multi-tenant
+        title     String
+        content   String
+        org       Organization @relation(fields: [orgId], references: [id])
+
+        @@index([orgId])
+      }
+
+      The @@index([orgId]) improves query performance for tenant-filtered queries.
+    examples:
+      good:
+        - |
+          model Post {
+            id        String   @id @default(cuid())
+            orgId     String
+            title     String
+            org       Organization @relation(fields: [orgId], references: [id])
+
+            @@index([orgId])
+          }
+
+  # =========================================================================
+  # SHOULD - Best practices (advisory)
+  # =========================================================================
+
+  S1:
+    title: Use select Over include When Possible
+    severity: SHOULD
+    mechanical: false
+    description: >
+      select returns only specified fields, include returns all fields of
+      related models. Use select for better performance when you don't
+      need all fields.
+    note: |
+      include fetches all fields of the relation:
+
+      // Fetches ALL post fields
+      prisma.user.findMany({ include: { posts: true } })
+
+      select fetches only specified fields:
+
+      // Fetches only id and title
+      prisma.user.findMany({
+        include: {
+          posts: {
+            select: { id: true, title: true }
+          }
+        }
+      })
+
+  S2:
+    title: Use Transactions for Multi-Step Operations
+    severity: SHOULD
+    mechanical: false
+    description: >
+      Use transactions when multiple operations must succeed or fail together.
+      This ensures data consistency.
+    note: |
+      Use $transaction for atomic operations:
+
+      // Sequential transaction (simple)
+      await prisma.$transaction([
+        prisma.post.create({ data: post1 }),
+        prisma.post.create({ data: post2 }),
+      ])
+
+      // Interactive transaction (complex logic)
+      await prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({ data: userData })
+        await tx.post.create({ data: { ...postData, userId: user.id } })
+        return user
+      })
+
+      Transactions rollback all operations if any fails.
+
+  S3:
+    title: Enable Query Logging in Development
+    severity: SHOULD
+    mechanical: false
+    description: >
+      Enable query logging in development to identify slow queries and N+1
+      problems early.
+    note: |
+      Enable logging in PrismaClient:
+
+      const prisma = new PrismaClient({
+        log: [
+          { level: 'query', emit: 'event' },
+          { level: 'error', emit: 'stdout' },
+          { level: 'warn', emit: 'stdout' },
+        ],
+      })
+
+      // Log queries with duration
+      prisma.$on('query', (e) => {
+        console.log(`Query: ${e.query}`)
+        console.log(`Duration: ${e.duration}ms`)
+      })
+
+      This helps identify:
+      - N+1 query patterns
+      - Slow queries
+      - Missing indexes
+
+  S4:
+    title: Use Prisma Error Types
+    severity: SHOULD
+    mechanical: false
+    description: >
+      Import and check PrismaClientKnownRequestError for proper error handling.
+      This enables specific error messages for different failure modes.
+    note: |
+      Import error types from Prisma:
+
+      import {
+        PrismaClientKnownRequestError,
+        PrismaClientValidationError,
+      } from '@prisma/client/runtime/library'
+
+      try {
+        await prisma.user.create({ data })
+      } catch (e) {
+        if (e instanceof PrismaClientKnownRequestError) {
+          // Database-level errors (P2xxx codes)
+          console.log('Error code:', e.code)
+          console.log('Meta:', e.meta)
+        }
+        if (e instanceof PrismaClientValidationError) {
+          // Query validation errors (wrong types, missing fields)
+        }
+        throw e
+      }
+
+  # =========================================================================
+  # GUIDANCE - Design principles (not mechanically checked)
+  # =========================================================================
+
+  G1:
+    title: Common Error Codes
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Reference for common Prisma error codes and their meanings.
+    note: |
+      Common Prisma error codes:
+
+      P2002 - Unique constraint violation
+        "Unique constraint failed on the {constraint}"
+        Cause: Duplicate value for unique field
+
+      P2003 - Foreign key constraint violation
+        "Foreign key constraint failed on the field: {field_name}"
+        Cause: Referenced record doesn't exist
+
+      P2025 - Record not found
+        "An operation failed because it depends on one or more records
+         that were required but not found."
+        Cause: update/delete on non-existent record
+
+      P2014 - Required relation violation
+        "The change you are trying to make would violate the required
+         relation '{relation_name}'"
+        Cause: Breaking a required relation
+
+      P2024 - Connection pool timeout
+        "Timed out fetching a new connection from the connection pool"
+        Cause: Too many connections, pool exhausted
+
+  G2:
+    title: Multi-tenant Schema Pattern
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Recommended schema pattern for multi-tenant applications.
+    note: |
+      model Organization {
+        id        String   @id @default(cuid())
+        clerkOrgId String  @unique  // If using Clerk
+        name      String
+        slug      String   @unique
+        createdAt DateTime @default(now())
+        posts     Post[]
+        members   Membership[]
+      }
+
+      model User {
+        id          String   @id @default(cuid())
+        clerkUserId String   @unique  // If using Clerk
+        email       String   @unique
+        name        String?
+        memberships Membership[]
+      }
+
+      model Membership {
+        id     String       @id @default(cuid())
+        orgId  String
+        userId String
+        role   String       // admin, member, etc.
+        org    Organization @relation(fields: [orgId], references: [id])
+        user   User         @relation(fields: [userId], references: [id])
+
+        @@unique([orgId, userId])
+      }
+
+      model Post {
+        id        String       @id @default(cuid())
+        orgId     String       // REQUIRED for tenant isolation
+        userId    String?      // Optional author attribution
+        title     String
+        content   String
+        org       Organization @relation(fields: [orgId], references: [id])
+
+        @@index([orgId])
+      }
+
+  G3:
+    title: Singleton Pattern for Next.js
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Standard singleton pattern for PrismaClient in Next.js applications.
+    note: |
+      // lib/prisma.ts
+      import { PrismaClient } from '@prisma/client'
+
+      const globalForPrisma = globalThis as { prisma?: PrismaClient }
+
+      export const prisma = globalForPrisma.prisma ?? new PrismaClient({
+        log: process.env.NODE_ENV === 'development'
+          ? ['query', 'error', 'warn']
+          : ['error'],
+      })
+
+      if (process.env.NODE_ENV !== 'production') {
+        globalForPrisma.prisma = prisma
+      }
+
+      Why this works:
+      - globalThis persists across hot reloads in development
+      - Production creates one instance per serverless function
+      - Prevents connection pool exhaustion
+
+  G4:
+    title: Connection Pool Configuration
+    severity: GUIDANCE
+    mechanical: false
+    description: >
+      Connection pool settings for different environments.
+    note: |
+      Configure connection pool in DATABASE_URL:
+
+      # Development (local)
+      DATABASE_URL="postgresql://user:pass@localhost:5432/db?connection_limit=5"
+
+      # Serverless (Vercel, etc.)
+      DATABASE_URL="postgresql://user:pass@host:5432/db?connection_limit=1&pool_timeout=10"
+
+      # With Prisma Accelerate (recommended for serverless)
+      DATABASE_URL="prisma://accelerate.prisma-data.net/?api_key=xxx"
+
+      Key parameters:
+      - connection_limit: Max connections per instance (low for serverless)
+      - pool_timeout: How long to wait for connection (seconds)
+      - connect_timeout: Connection establishment timeout
+
+# ===========================================================================
+# INFO CHECKS - Statistics for reporting (not pass/fail)
+# ===========================================================================
+
+info:
+  prisma_imports:
+    pattern: 'from .@prisma/client'
+    flags: -oE
+    label: "Prisma imports"
+
+  prisma_queries:
+    pattern: 'prisma\.[a-z]+\.(findMany|findFirst|findUnique|create|update|delete)'
+    flags: -cE
+    label: "Prisma queries"
+
+  include_usage:
+    pattern: 'include:\s*\{'
+    flags: -cE
+    label: "include usage"
+
+  raw_queries:
+    pattern: '\$queryRaw|\$executeRaw'
+    flags: -cE
+    label: "Raw queries"
+
+  transactions:
+    pattern: '\$transaction'
+    flags: -cE
+    label: "Transactions"
+
+# ===========================================================================
+# ANTI-PATTERNS - Quick reference table (documentation only)
+# ===========================================================================
+
+anti_patterns:
+  - pattern: "Queries without orgId"
+    description: "Data leaks between tenants"
+    fix: "Always include orgId in where clause"
+
+  - pattern: "$queryRawUnsafe with user input"
+    description: "SQL injection vulnerability"
+    fix: "Use $queryRaw with tagged templates"
+
+  - pattern: "N+1 queries"
+    description: "Query in loop causes N+1 problem"
+    fix: "Use include or select for relations"
+
+  - pattern: "Generic error handling"
+    description: "Loses error context"
+    fix: "Handle specific Prisma error codes"
+
+  - pattern: "new PrismaClient per request"
+    description: "Connection pool exhaustion"
+    fix: "Use singleton pattern"
+
+  - pattern: "Missing orgId in schema"
+    description: "No tenant isolation possible"
+    fix: "Add orgId field to all tenant data models"
+
+  - pattern: ".create without unique handling"
+    description: "Crashes on duplicate data"
+    fix: "Use upsert or catch P2002"
+
+# ===========================================================================
+# SOURCES
+# ===========================================================================
+
+sources:
+  - title: "Prisma Client Queries"
+    url: "https://www.prisma.io/docs/orm/prisma-client/queries"
+
+  - title: "Prisma Error Reference"
+    url: "https://www.prisma.io/docs/orm/reference/error-reference"
+
+  - title: "Handling Exceptions and Errors"
+    url: "https://www.prisma.io/docs/orm/prisma-client/debugging-and-troubleshooting/handling-exceptions-and-errors"
+
+  - title: "Raw Queries and SQL Injection"
+    url: "https://www.prisma.io/docs/orm/prisma-client/using-raw-sql/raw-queries"
+
+  - title: "Query Optimization"
+    url: "https://www.prisma.io/docs/orm/prisma-client/queries/query-optimization-performance"
+
+  - title: "Database Connections"
+    url: "https://www.prisma.io/docs/orm/prisma-client/setup-and-configuration/databases-connections"

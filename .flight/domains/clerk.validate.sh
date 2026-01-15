@@ -132,7 +132,8 @@ check "N7: Using userId When orgId is Required" \
   # In server files that query data
   if [[ "$f" == *"/api/"* ]] || [[ "$f" == *"/actions/"* ]] || [[ "$f" == *".server."* ]]; then
     # Flag if using userId for data filtering without orgId
-    if grep -qE "where.*userId|userId.*=" "$f" 2>/dev/null; then
+    # Covers Prisma (where: { userId }) and Drizzle (eq(*.userId, ...))
+    if grep -qE "where.*userId|userId.*=|eq\(.*userId" "$f" 2>/dev/null; then
       if ! grep -qE "orgId|organizationId" "$f" 2>/dev/null; then
         grep -Hn "userId" "$f" 2>/dev/null | head -3 | grep -v '"'"'flight:ok'"'"'
       fi
@@ -236,8 +237,8 @@ check "M5: Include orgId in Database Queries" \
     bash -c 'for f in "$@"; do
   # Check data access files
   if [[ "$f" == *"/api/"* ]] || [[ "$f" == *"/actions/"* ]] || [[ "$f" == *".server."* ]]; then
-    # If file has database queries
-    if grep -qE "findMany|findFirst|findUnique|select.*from|query\." "$f" 2>/dev/null; then
+    # If file has database queries (Prisma or Drizzle)
+    if grep -qE "findMany|findFirst|findUnique|select.*from|query\.|\.insert\(|\.update\(|\.delete\(" "$f" 2>/dev/null; then
       # Should have orgId in where clause
       if ! grep -qE "orgId|organization_id|organizationId" "$f" 2>/dev/null; then
         if ! grep -q "flight:ok" "$f" 2>/dev/null; then

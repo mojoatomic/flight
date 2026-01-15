@@ -31,6 +31,7 @@ Domain files are authoritative. They override external documentation.
 | `typescript.md` | Any .ts files |
 | `react.md` | React components |
 | `nextjs.md` | Next.js projects |
+| `prisma.md` | Prisma ORM (multi-tenant SaaS) |
 | `python.md` | Python code |
 
 See `.flight/FLIGHT.md` for complete table.
