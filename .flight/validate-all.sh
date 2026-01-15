@@ -170,6 +170,37 @@ if [[ "$TOTAL_FILES" -eq 0 ]]; then
 fi
 
 # -----------------------------------------------------------------------------
+# Get files for a specific domain based on file type mapping
+# -----------------------------------------------------------------------------
+
+get_domain_files() {
+    local domain="$1"
+    case "$domain" in
+        typescript)     echo "$TYPESCRIPT_FILES" ;;
+        react)          echo "$REACT_FILES" ;;
+        javascript)     echo "$JAVASCRIPT_FILES" ;;
+        bash)           echo "$SH_FILES" ;;
+        python)         echo "$PY_FILES" ;;
+        go)             echo "$GO_FILES" ;;
+        rust)           echo "$RS_FILES" ;;
+        sql)            echo "$SQL_FILES" ;;
+        # Domains that check multiple/all file types
+        code-hygiene)   echo "$ALL_CODE_FILES" ;;
+        api)            echo "$TYPESCRIPT_FILES $JAVASCRIPT_FILES" ;;
+        nextjs)         echo "$TYPESCRIPT_FILES $JAVASCRIPT_FILES" ;;
+        supabase)       echo "$TYPESCRIPT_FILES $JAVASCRIPT_FILES" ;;
+        prisma)         echo "$TYPESCRIPT_FILES $JAVASCRIPT_FILES" ;;
+        clerk)          echo "$TYPESCRIPT_FILES $JAVASCRIPT_FILES" ;;
+        testing)        echo "$ALL_CODE_FILES" ;;
+        webhooks)       echo "$TYPESCRIPT_FILES $JAVASCRIPT_FILES $PY_FILES" ;;
+        docker)         echo "" ;;  # Dockerfile patterns - needs special handling
+        kubernetes)     echo "" ;;  # YAML patterns - needs special handling
+        yaml)           echo "" ;;  # YAML patterns - needs special handling
+        *)              echo "$ALL_CODE_FILES" ;;
+    esac
+}
+
+# -----------------------------------------------------------------------------
 # Run a validator if files exist
 # -----------------------------------------------------------------------------
 
@@ -232,14 +263,14 @@ run_validator() {
 if [[ "$CONFIG_MODE" == true ]]; then
     # Config-driven: loop over enabled domains from flight.json
     for domain in $ENABLED_DOMAINS; do
-        run_validator "$domain" "$ALL_CODE_FILES"
+        run_validator "$domain" "$(get_domain_files "$domain")"
     done
 else
     # Legacy mode: no flight.json found
     echo -e "${YELLOW}No flight.json found. Run /flight-scan to detect domains.${NC}"
     echo -e "${YELLOW}Falling back to code-hygiene only...${NC}"
     echo ""
-    run_validator "code-hygiene" "$ALL_CODE_FILES"
+    run_validator "code-hygiene" "$(get_domain_files "code-hygiene")"
 fi
 
 # -----------------------------------------------------------------------------
