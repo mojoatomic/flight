@@ -1,6 +1,5 @@
 ---
 description: Scan project and generate flight.json config for domain detection
-allowed-tools: Read, Glob, Bash, Write
 ---
 
 # /flight-scan
