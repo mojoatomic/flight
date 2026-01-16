@@ -10,12 +10,19 @@ Transform a rough product idea into atomic tasks that can be executed one at a t
 ## Usage
 
 ```
-/flight-prd <rough product idea>
+/flight-prd <rough product idea> [--no-research]
 ```
 
 ## Arguments
 
 - `$ARGUMENTS` - Rough product description, feature request, or problem statement
+
+## Flags
+
+| Flag | Behavior |
+|------|----------|
+| (none) | Full workflow including temporal research |
+| `--no-research` | Skip dependency research (for experts or fast iteration) |
 
 ---
 
@@ -35,13 +42,13 @@ Instead of one big PRD, output a **task queue** that feeds the Flight loop:
 ```
 /flight-prd "rough idea"
     ↓
+[Step 2B: Temporal Research - automatic]
+    ↓
 PRD.md              # Vision (human reference)
 MILESTONES.md       # Phases (human planning)
-    ↓
-/flight-research    # Temporal validation (versions, landmines)
-    ↓
+known-landmines.md  # Temporal issues discovered
 tasks/
-  001-project-setup.md
+  001-project-setup.md  # Version pins from research
   002-database-schema.md
   003-auth-system.md
   ...
@@ -126,33 +133,31 @@ NOTE: Better results with [Context7/Firecrawl]. Install from:
 Proceed with available tools, or install first?
 ```
 
-### 2B. Temporal Research Gate (RECOMMENDED)
+### 2B. Dependency Temporal Research (AUTOMATIC)
 
-**Before continuing to task decomposition, run temporal research:**
+**Skip this step only if `--no-research` flag was provided.**
+
+Run `/flight-research` with the tech stack identified in Step 2. Pass dependencies explicitly - no files exist yet for auto-detection.
 
 ```
-/flight-research
+/flight-research {dep1} {dep2} {dep3} ...
 ```
 
-This validates that your tech stack choices are current:
-- Discovers breaking changes in recent versions
-- Identifies version incompatibilities
-- Updates `.flight/known-landmines.md` with findings
-- Pins versions in task files to avoid surprises
-
-**Why this matters:**
-- Problem space research (Step 2) tells you WHAT to build
-- Temporal research tells you HOW to build it safely
-- Skipping this risks hours of debugging version issues
-
-**Output after /flight-research:**
+**Example** (for a Next.js + Prisma + Auth.js project):
 ```
-📅 Research Date: {date}
-📦 Dependencies: express@4.21.0, react@19.0.0, ...
-⚠️ Landmines: 2 new issues discovered
+/flight-research next react prisma tailwindcss auth-js
 ```
 
-Then continue with Step 3.
+Wait for research to complete. The output will include:
+- Version recommendations with reasons
+- `.flight/known-landmines.md` updates (if issues found)
+- Research summary with date anchor
+
+**Use the recommended versions when creating task files in Step 4.**
+
+See `/flight-research` skill for the full research process (date anchoring, search queries, landmine management).
+
+**Then continue with Step 3.**
 
 ### 3. Competitive Analysis
 
@@ -545,6 +550,10 @@ Run after implementing:
 - [ ] Tech stack decisions grounded in research
 - [ ] Sources cited in PRD.md
 
+### Temporal Research (unless --no-research)
+- [ ] `/flight-research` was run and completed
+- [ ] Recommended versions from research used in task files
+
 ### Decomposition
 - [ ] 8-15 tasks (not too few, not too many)
 - [ ] No task exceeds 2-hour estimate
@@ -562,6 +571,7 @@ Run after implementing:
 
 ### Workflow Ready
 - [ ] tasks/ directory created
+- [ ] .flight/known-landmines.md created/updated (if issues found)
 - [ ] User knows to run `/flight-prime tasks/001-*.md` next
 - [ ] User knows to run `.flight/validate-all.sh` after each task
 - [ ] MILESTONES.md shows the journey
@@ -577,25 +587,28 @@ After running `/flight-prd`, report:
 
 - **PRD.md** - Product vision (for reference)
 - **MILESTONES.md** - [X] milestones, [Y] tasks total
+- **.flight/known-landmines.md** - Temporal issues discovered (if any)
 - **tasks/**
-  - 001-project-setup.md
+  - 001-project-setup.md (with version pins from research)
   - 002-database-schema.md
   - ...
 
-## Next: Temporal Research
+## Temporal Research Summary
 
-Before starting tasks, run:
+📅 **Research Date:** {date}
 
-```
-/flight-research
-```
+| Package | Recommended | Reason |
+|---------|-------------|--------|
+| next | 15.1.0 | Stable |
+| prisma | 5.22.0 | v6.x has migration issues |
+| auth-js | 5.x | v5 API (not v4 tutorials) |
+| tailwindcss | 3.4.0 | v4 has PostCSS breaking changes |
 
-This validates dependencies and discovers version issues.
+⚠️ **Landmines:** {count} issues documented (see `.flight/known-landmines.md`)
 
 ## Workflow for Each Task
 
 ```
-/flight-research                            # Temporal validation (once)
 /flight-prime tasks/001-project-setup.md    # Research & compile
 /flight-compile                             # Create atomic prompt
 [implement]
@@ -607,7 +620,7 @@ npm run preflight                           # Local CI (validate + lint)
 
 ## Notes
 
-- `/flight-research` discovers breaking changes and pins versions
+- Temporal research was performed automatically (versions pinned in tasks)
 - Task 001 will configure local CI: ESLint + Flight validation
 - After Task 001: use `npm run preflight` (runs validate + lint)
 - This catches issues before they hit remote CI or code review
@@ -630,27 +643,23 @@ npm run preflight                           # Local CI (validate + lint)
 
 ## Next Step
 
-After generating PRD.md, MILESTONES.md, and task files:
+After `/flight-prd` completes (including temporal research):
 
-**Run temporal research to validate dependencies:**
-
-```
-/flight-research
-```
-
-This discovers breaking changes, pins versions, and updates landmines.
-
-**Then begin the Flight loop:**
+**Begin the Flight loop:**
 
 ```
 /flight-prime tasks/001-project-setup.md
 ```
 
-**Workflow**: `/flight-prd` → `/flight-research` → `/flight-prime` → `/flight-compile` → [implement] → `/flight-validate` → repeat
+**Workflow**: `/flight-prd` → `/flight-prime` → `/flight-compile` → [implement] → `/flight-validate` → repeat
 
 | Response | Action |
 |----------|--------|
-| `research` or `r` | Run `/flight-research` for temporal validation |
 | `continue` or `c` | Proceed to `/flight-prime tasks/001-*.md` |
 | `review` | Display the generated task files for review |
 | Task filename | Prime that specific task (e.g., `tasks/002-*.md`) |
+
+**Note:** `/flight-research` is still available standalone for:
+- Existing projects needing dependency validation
+- Adding new dependencies mid-project
+- Re-checking stale landmines (>3 months old)
