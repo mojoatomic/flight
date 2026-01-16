@@ -137,104 +137,22 @@ Proceed with available tools, or install first?
 
 **Skip this step only if `--no-research` flag was provided.**
 
-This step validates that your tech stack choices are current. It runs automatically as part of `/flight-prd`.
-
-#### 2B-1. Date Anchor (MANDATORY)
-
-**BEFORE ANY RESEARCH QUERIES**, output:
+Run `/flight-research` now. This validates that your tech stack choices are current.
 
 ```
-📅 Research Date: {CURRENT_DATE}
-🔍 Research Window: {YEAR-1}-01-01 to {CURRENT_DATE}
+/flight-research
 ```
 
-This anchors ALL subsequent searches. Without this, queries return stale results.
+Wait for research to complete. The output will include:
+- Version recommendations with reasons
+- `.flight/known-landmines.md` updates (if issues found)
+- Research summary with date anchor
 
-#### 2B-2. Identify Dependencies
+**Use the recommended versions when creating task files in Step 4.**
 
-From your tech stack decisions in Step 2, list major dependencies:
+See `/flight-research` skill for the full research process (date anchoring, search queries, landmine management).
 
-```markdown
-## Dependencies to Research
-
-| Package | Category |
-|---------|----------|
-| next | Framework |
-| react | Frontend |
-| prisma | Database |
-| tailwindcss | Styling |
-
-**Skipped (tooling):** eslint, prettier, @types/*
-```
-
-**Skip by default:** `@types/*`, `eslint*`, `prettier*`, `*-loader`, `*-plugin`
-
-#### 2B-3. Check Existing Landmines
-
-If `.flight/known-landmines.md` exists:
-1. Read the "Last Full Review" date
-2. If >3 months old, treat ALL entries as NEEDS_VERIFICATION
-3. Use entries as research STARTING POINTS, not facts
-
-If no landmines file exists, note: "No existing landmines file. Will create if issues found."
-
-#### 2B-4. Research Each Dependency
-
-For each major dependency, run date-anchored searches:
-
-**Breaking Changes (GitHub):**
-```
-"{library} breaking changes {YEAR-1}-{YEAR}" site:github.com
-```
-
-**Migration Guide:**
-```
-"{library} v{X} migration guide after:{YEAR-1}-01-01"
-```
-
-**Integration Issues (if using scaffold tools):**
-```
-"create-next-app {library} {YEAR}" OR "vite {library} {YEAR}"
-```
-
-#### 2B-5. Update Landmines File
-
-If issues discovered, create/update `.flight/known-landmines.md`:
-
-```markdown
-### {Issue Title}
-**Discovered:** {CURRENT_DATE}
-**Status:** ACTIVE
-**Re-verify After:** {CURRENT_DATE + 6 months}
-**Issue:** {description}
-**Verify By:** Search "{library} {issue} fixed {YEAR}"
-**Solution:** {workaround or version pin}
-```
-
-Update file header with: `**Last Full Review:** {CURRENT_DATE}`
-
-#### 2B-6. Output Research Summary
-
-```markdown
-## Temporal Research Complete
-
-📅 **Research Date:** {CURRENT_DATE}
-📦 **Dependencies Researched:** {count}
-
-### Version Recommendations
-
-| Package | Latest | Recommended | Reason |
-|---------|--------|-------------|--------|
-| next | 15.1.0 | 15.1.0 | Stable |
-| prisma | 6.2.0 | 5.22.0 | v6.x has migration issues |
-
-### Landmines
-- {count} new issues discovered
-- {count} existing issues verified
-- See `.flight/known-landmines.md` for details
-```
-
-**Then continue with Step 3, using recommended versions in task files.**
+**Then continue with Step 3.**
 
 ### 3. Competitive Analysis
 
@@ -628,11 +546,8 @@ Run after implementing:
 - [ ] Sources cited in PRD.md
 
 ### Temporal Research (unless --no-research)
-- [ ] Date anchor stated before any dependency research
-- [ ] Major dependencies researched with date-anchored queries
-- [ ] Version recommendations documented
-- [ ] Landmines file created/updated (if issues found)
-- [ ] Recommended versions used in task files
+- [ ] `/flight-research` was run and completed
+- [ ] Recommended versions from research used in task files
 
 ### Decomposition
 - [ ] 8-15 tasks (not too few, not too many)
