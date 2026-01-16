@@ -596,8 +596,15 @@ After running `/flight-prd`, report:
 ## Temporal Research Summary
 
 📅 **Research Date:** {date}
-📦 **Dependencies:** {count} researched
-⚠️ **Landmines:** {count} issues documented
+
+| Package | Recommended | Reason |
+|---------|-------------|--------|
+| next | 15.1.0 | Stable |
+| prisma | 5.22.0 | v6.x has migration issues |
+| auth-js | 5.x | v5 API (not v4 tutorials) |
+| tailwindcss | 3.4.0 | v4 has PostCSS breaking changes |
+
+⚠️ **Landmines:** {count} issues documented (see `.flight/known-landmines.md`)
 
 ## Workflow for Each Task
 
