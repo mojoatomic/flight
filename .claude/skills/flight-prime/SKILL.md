@@ -3,6 +3,21 @@ name: flight-prime
 description: Prime context for a task - research, scan codebase, gather domain constraints. Use when starting implementation of a task file, PRD, or clear task description.
 ---
 
+## ⚠️ EXECUTION RULES (MANDATORY)
+
+1. **EXECUTE EACH STEP** - Do not skip steps based on "prior context"
+2. **USE TOOLS** - You MUST call Read/Bash tools, not recall from memory
+3. **SHOW WORK** - Each step must produce visible tool output
+4. **NO SHORTCUTS** - "I already read this" is NOT acceptable
+
+### Anti-Patterns (DO NOT DO THESE)
+- ❌ "I already read the domain files earlier"
+- ❌ "From earlier analysis..."
+- ❌ Summarizing steps without executing them
+- ❌ Claiming knowledge from "this conversation"
+
+---
+
 # /flight-prime
 
 Prime the context for a task. Research, scan, and gather all facts needed before compiling a prompt.
