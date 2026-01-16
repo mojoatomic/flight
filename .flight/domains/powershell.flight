@@ -1,0 +1,1098 @@
+# powershell.flight - PowerShell Best Practices and Footguns
+# For scripts, modules, and automation. Covers security, cross-platform, error handling.
+# Researched: January 2026 | Re-verify: July 2026
+
+domain: powershell
+version: 1.0.0
+description: |
+  PowerShell scripting best practices for automation, DevOps, and system administration.
+  Covers security, cross-platform compatibility (Windows/Linux/macOS), error handling,
+  and common footguns. Applies to PowerShell 5.1+ and PowerShell 7+.
+  
+  Version Context (January 2026):
+  - PowerShell 7.4 LTS: supported until November 2026 (.NET 8)
+  - PowerShell 7.5.4: current stable, supported until May 2026 (.NET 9)
+  - Windows PowerShell 5.1: maintenance mode, still ships with Windows
+  - PowerShell 2.0: Removed from Windows 11 24H2 and Server 2025
+  - PSScriptAnalyzer 1.24.0: Requires PS 5.1+ or PS 7.4.6+ (won't load on 7.4.5)
+  - CVE-2025-54100: Invoke-WebRequest DOM parsing vulnerability (December 2025)
+  - CVE-2025-25004: PowerShell 7.5.3 vulnerability (fixed in 7.5.4)
+
+file_patterns:
+  - "*.ps1"
+  - "*.psm1"
+  - "*.psd1"
+
+exclude_patterns:
+  - "node_modules/**"
+  - "vendor/**"
+  - ".git/**"
+  - "dist/**"
+  - "build/**"
+
+suppression:
+  marker: "[SuppressMessage"
+  scope: function_or_line
+  documentation: |
+    Use PSScriptAnalyzer's SuppressMessageAttribute for targeted suppression:
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSRule', 'Justification')]
+
+# ===========================================================================
+# RULES
+# ===========================================================================
+# ID format: {severity_prefix}{number}
+#   N = NEVER (check - fails build)
+#   M = MUST (check - fails build)  
+#   S = SHOULD (warn - advisory)
+#   G = GUIDANCE (not checked)
+#
+# mechanical: true  = validator/PSScriptAnalyzer implements this
+# mechanical: false = code review only
+# ===========================================================================
+
+rules:
+
+  # =========================================================================
+  # NEVER - Security vulnerabilities and data corruption
+  # =========================================================================
+
+  N1:
+    title: Invoke-Expression with User Input
+    severity: NEVER
+    mechanical: true
+    pssa_rule: PSAvoidUsingInvokeExpression
+    description: |
+      Invoke-Expression executes arbitrary strings as code. With any external input,
+      this creates command injection vulnerabilities. The "iex" alias is equally dangerous.
+    check:
+      type: grep
+      pattern: 'Invoke-Expression|[^a-zA-Z]iex\s'
+      flags: -Ein
+      exclude: SuppressMessage
+    note: |
+      CRITICAL SECURITY: Invoke-Expression is the PowerShell equivalent of eval().
+      Attackers routinely exploit iex in download-and-execute attacks.
+      Use parameter binding, the call operator (&), or splatting instead.
+    examples:
+      bad:
+        - 'Invoke-Expression $userInput'
+        - 'iex (Get-Content script.ps1)'
+        - '$cmd | iex'
+      good:
+        - '& $command $args'
+        - '$params = @{ Name = $value }; Get-Process @params'
+        - '& ([scriptblock]::Create($trustedCode))'
+
+  N2:
+    title: Plain Text Passwords in Code
+    severity: NEVER
+    mechanical: true
+    pssa_rule: PSAvoidUsingPlainTextForPassword
+    description: |
+      Never store passwords, API keys, or secrets as plain text in scripts.
+      Use SecureString, the SecretManagement module, or environment variables.
+    check:
+      type: grep
+      pattern: '-Password\s+[''"][^''"]+[''"]|password\s*=\s*[''"][^''"]+[''"]'
+      flags: -Ein
+      exclude: SuppressMessage
+    note: |
+      Plain text secrets in code end up in version control, logs, and memory dumps.
+      PowerShell 7+ has the SecretManagement module for proper secret handling.
+    examples:
+      bad:
+        - '$cred = New-Object PSCredential("user", ("P@ssw0rd" | ConvertTo-SecureString -AsPlainText))'
+        - '$password = "MySecret123"'
+      good:
+        - '$cred = Get-Credential'
+        - '$secret = Get-Secret -Name "MyAPIKey"'
+        - '$password = $env:SERVICE_PASSWORD | ConvertTo-SecureString -AsPlainText -Force'
+
+  N3:
+    title: Invoke-WebRequest Without -UseBasicParsing
+    severity: NEVER
+    mechanical: true
+    description: |
+      Invoke-WebRequest without -UseBasicParsing uses DOM parsing which can execute
+      embedded scripts. CVE-2025-54100 exploits this for RCE. Windows PowerShell 5.1
+      requires -UseBasicParsing explicitly; PowerShell 7+ defaults to basic parsing
+      but explicit is safer for cross-version scripts.
+    check:
+      type: script
+      code: |
+        # Check for Invoke-WebRequest or iwr without -UseBasicParsing
+        for f in "$@"; do
+          grep -Ein 'Invoke-WebRequest|[^a-zA-Z]iwr\s' "$f" 2>/dev/null | \
+          grep -v 'UseBasicParsing' | grep -v 'SuppressMessage' | \
+          sed "s|^|$f:|"
+        done
+    note: |
+      December 2025 CVE-2025-54100 patches added security prompts for unsafe parsing.
+      Always use -UseBasicParsing for automation scripts that run unattended.
+    examples:
+      bad:
+        - '$response = Invoke-WebRequest $url'
+        - 'iwr https://example.com/api'
+      good:
+        - '$response = Invoke-WebRequest $url -UseBasicParsing'
+        - 'Invoke-RestMethod $url  # Doesn''t have DOM parsing issue'
+
+  N4:
+    title: ConvertTo-SecureString with -AsPlainText in Source
+    severity: NEVER
+    mechanical: true
+    pssa_rule: PSAvoidUsingConvertToSecureStringWithPlainText
+    description: |
+      Using ConvertTo-SecureString -AsPlainText with a literal string defeats the purpose
+      of SecureString. The secret is still in plain text in your source code.
+    check:
+      type: grep
+      pattern: 'ConvertTo-SecureString.*-AsPlainText.*[''"][^''"]+[''"]'
+      flags: -Ein
+    examples:
+      bad:
+        - '"MyPassword" | ConvertTo-SecureString -AsPlainText -Force'
+      good:
+        - 'Read-Host -AsSecureString -Prompt "Password"'
+        - '$env:PASSWORD | ConvertTo-SecureString -AsPlainText -Force'
+
+  N5:
+    title: Using Aliases in Scripts
+    severity: NEVER
+    mechanical: true
+    pssa_rule: PSAvoidUsingCmdletAliases
+    description: |
+      Aliases like %, ?, foreach, where, ls, cat, curl vary by platform and session.
+      Scripts using aliases may fail on Linux/macOS or in constrained environments.
+    check:
+      type: grep
+      pattern: '^\s*(%|[?]|\bls\b|\bcat\b|\bcurl\b|\bwget\b|\bdiff\b|\bsort\b)\s'
+      flags: -En
+      exclude: SuppressMessage
+    note: |
+      CROSS-PLATFORM: On Linux, 'curl' and 'wget' are native commands, not aliases.
+      'ls' behaves differently. Use full cmdlet names for portability.
+    examples:
+      bad:
+        - '% { $_.Name }'
+        - 'ls | ? { $_.Length -gt 1000 }'
+        - 'curl $url'
+      good:
+        - 'ForEach-Object { $_.Name }'
+        - 'Get-ChildItem | Where-Object { $_.Length -gt 1000 }'
+        - 'Invoke-WebRequest $url -UseBasicParsing'
+
+  N6:
+    title: Write-Host for Data Output
+    severity: NEVER
+    mechanical: true
+    pssa_rule: PSAvoidUsingWriteHost
+    description: |
+      Write-Host writes to the console, not the pipeline. Output cannot be captured,
+      redirected, or used by other commands. Use Write-Output for data.
+    check:
+      type: grep
+      pattern: 'Write-Host.*\$[a-zA-Z]'
+      flags: -En
+      exclude: SuppressMessage
+    note: |
+      Write-Host is acceptable for interactive feedback (progress, prompts).
+      For function return values and data, use Write-Output or implicit output.
+    examples:
+      bad:
+        - 'Write-Host "User: $username"  # Can''t be captured!'
+        - 'function Get-Data { Write-Host $result }'
+      good:
+        - 'Write-Output "User: $username"'
+        - '"User: $username"  # Implicit output'
+        - 'Write-Verbose "Processing $item"  # For diagnostics'
+
+  N7:
+    title: Positional Parameters in Scripts
+    severity: NEVER
+    mechanical: true
+    pssa_rule: PSAvoidUsingPositionalParameters
+    description: |
+      Positional parameters make code harder to read and prone to errors when
+      cmdlet signatures change. Always use named parameters in scripts.
+    check:
+      type: grep
+      pattern: '\b(Copy-Item|Move-Item|Set-Content|Out-File)\s+[^-]'
+      flags: -En
+    note: |
+      Interactive use of positional parameters is fine; scripts should be explicit.
+    examples:
+      bad:
+        - 'Copy-Item $source $dest'
+        - 'Set-Content $path $data'
+      good:
+        - 'Copy-Item -Path $source -Destination $dest'
+        - 'Set-Content -Path $path -Value $data'
+
+  N8:
+    title: Backtick Line Continuation in Middle of Expressions
+    severity: NEVER
+    mechanical: false
+    description: |
+      Backticks for line continuation are fragile - trailing whitespace after
+      the backtick breaks the script silently. Use splatting or natural breaks.
+    note: |
+      Backticks are acceptable after pipeline operators where natural breaks work.
+      For long parameter lists, use splatting.
+    examples:
+      bad:
+        - |
+          Get-Process `
+            -Name "notepad" `   # Trailing space after backtick = broken!
+            -ErrorAction Stop
+      good:
+        - |
+          $params = @{
+              Name = "notepad"
+              ErrorAction = "Stop"
+          }
+          Get-Process @params
+        - |
+          Get-Process |
+              Where-Object { $_.CPU -gt 100 } |
+              Sort-Object CPU
+
+  N9:
+    title: Hardcoded Paths
+    severity: NEVER
+    mechanical: true
+    description: |
+      Hardcoded paths like C:\Temp or /tmp break cross-platform scripts.
+      Use environment variables and Join-Path for portability.
+    check:
+      type: script
+      code: |
+        # Exclude comment lines before checking for hardcoded paths
+        for f in "$@"; do
+          grep -v '^\s*#' "$f" 2>/dev/null | grep -n "['\"][A-Za-z]:\\\|['\"]/tmp/" | \
+          while read -r line; do echo "$f:$line"; done
+        done
+    examples:
+      bad:
+        - '$logFile = "C:\Temp\log.txt"'
+        - '$config = "/etc/myapp/config.json"'
+      good:
+        - '$logFile = Join-Path $env:TEMP "log.txt"'
+        - '$logFile = Join-Path ([System.IO.Path]::GetTempPath()) "log.txt"'
+
+  N10:
+    title: Assignment in Conditional (= vs -eq)
+    severity: NEVER
+    mechanical: false
+    description: |
+      Using = instead of -eq in conditionals performs assignment, not comparison.
+      This silently succeeds and always evaluates to the assigned value.
+    check:
+      type: grep
+      pattern: 'if\s*\([^)]*\$\w+\s*=\s*[^=]'
+      flags: -En
+    note: |
+      PowerShell doesn't warn about assignment in conditions. This is a common
+      mistake that causes subtle bugs.
+    examples:
+      bad:
+        - 'if ($status = "Active") { ... }  # Always true!'
+        - 'Where-Object { $_.Name = "test" }'
+      good:
+        - 'if ($status -eq "Active") { ... }'
+        - 'Where-Object { $_.Name -eq "test" }'
+
+  # =========================================================================
+  # MUST - Required for reliable scripts
+  # =========================================================================
+
+  M1:
+    title: Set-StrictMode Required
+    severity: MUST
+    mechanical: true
+    description: |
+      Scripts must enable strict mode to catch undefined variables and other
+      common mistakes early. Use Set-StrictMode -Version Latest.
+    check:
+      type: script
+      code: |
+        # Report files missing Set-StrictMode
+        grep -L 'Set-StrictMode' "$@" 2>/dev/null | \
+        while read -r f; do echo "$f: Missing Set-StrictMode"; done
+    note: |
+      Strict mode catches: uninitialized variables, non-existent properties,
+      function calls with wrong syntax, and more. Essential for production scripts.
+
+      CAVEAT: -Version Latest is non-deterministic. A script written for PS 5.1
+      using -Version Latest may fail under PS 7+ due to stricter rules. For maximum
+      portability, use -Version 3.0 (highest defined level as of Jan 2026).
+    examples:
+      required:
+        - 'Set-StrictMode -Version Latest'
+        - 'Set-StrictMode -Version 3.0  # Portable across versions'
+
+  M2:
+    title: ErrorActionPreference Stop for Critical Scripts
+    severity: MUST
+    mechanical: true
+    description: |
+      Production scripts should set $ErrorActionPreference = 'Stop' or use
+      -ErrorAction Stop on critical commands to catch failures.
+    check:
+      type: script
+      code: |
+        # Report files missing ErrorActionPreference or -ErrorAction Stop
+        grep -L -E '\$ErrorActionPreference.*Stop|-ErrorAction\s+Stop' "$@" 2>/dev/null | \
+        while read -r f; do echo "$f: Missing ErrorActionPreference or -ErrorAction Stop"; done
+    note: |
+      PowerShell's default is Continue, which silently proceeds after errors.
+      For automation, this leads to cascading failures and corrupted state.
+    examples:
+      good:
+        - '$ErrorActionPreference = "Stop"'
+        - 'Get-Content $file -ErrorAction Stop'
+
+  M3:
+    title: Try-Catch for Error Handling
+    severity: MUST
+    mechanical: false
+    description: |
+      Scripts performing operations that can fail must use try-catch blocks
+      with -ErrorAction Stop to properly handle errors.
+    note: |
+      Try-catch only catches terminating errors. Non-terminating errors require
+      -ErrorAction Stop to be caught. Always include specific exception types
+      when the recovery action differs.
+    examples:
+      bad:
+        - |
+          $content = Get-Content $file
+          Process-Data $content  # If Get-Content fails, this runs with $null!
+      good:
+        - |
+          try {
+              $content = Get-Content $file -ErrorAction Stop
+              Process-Data $content
+          }
+          catch [System.IO.FileNotFoundException] {
+              Write-Error "File not found: $file"
+          }
+          catch {
+              Write-Error "Failed to read file: $_"
+          }
+
+  M4:
+    title: CmdletBinding for Advanced Functions
+    severity: MUST
+    mechanical: true
+    pssa_rule: PSUseCmdletBinding
+    description: |
+      Functions should use [CmdletBinding()] to enable common parameters like
+      -Verbose, -Debug, -ErrorAction, and -WhatIf support.
+    check:
+      type: script
+      code: |
+        # Find functions without CmdletBinding
+        grep -Pzo 'function\s+\w+[^{]*\{(?![^}]*\[CmdletBinding)' "$file"
+    examples:
+      bad:
+        - |
+          function Get-Data {
+              param($Path)
+              Get-Content $Path
+          }
+      good:
+        - |
+          function Get-Data {
+              [CmdletBinding()]
+              param(
+                  [Parameter(Mandatory)]
+                  [string]$Path
+              )
+              Get-Content $Path
+          }
+
+  M5:
+    title: Approved Verbs for Functions
+    severity: MUST
+    mechanical: true
+    pssa_rule: PSUseApprovedVerbs
+    description: |
+      Function names must use approved PowerShell verbs (Get, Set, New, Remove, etc.)
+      to maintain consistency with the PowerShell ecosystem.
+    check:
+      type: script
+      code: |
+        # Check for functions not using approved verbs
+        grep -Po 'function\s+\K[A-Za-z]+-' "$file" | \
+        while read -r verb; do
+          verb="${verb%-}"
+          if ! pwsh -c "Get-Verb '$verb'" 2>/dev/null | grep -q "$verb"; then
+            echo "$file: Unapproved verb '$verb'"
+          fi
+        done
+    note: |
+      Run Get-Verb to see the full list of approved verbs. Use the closest match
+      or consider if your function is doing too much (single responsibility).
+    examples:
+      bad:
+        - 'function Fetch-Data { }'
+        - 'function Calculate-Sum { }'
+      good:
+        - 'function Get-Data { }'
+        - 'function Measure-Sum { }'
+
+  M6:
+    title: Parameter Validation
+    severity: MUST
+    mechanical: true
+    description: |
+      Parameters must have type constraints and validation attributes.
+      Use [Parameter(Mandatory)] for required parameters.
+    check:
+      type: grep
+      pattern: 'param\s*\(\s*\$'
+      flags: -En
+      message: "Parameter without type constraint"
+    note: |
+      Validation attributes: [ValidateNotNullOrEmpty()], [ValidateRange()],
+      [ValidateSet()], [ValidateScript()], [ValidatePattern()]
+    examples:
+      bad:
+        - |
+          param($Path, $Count)
+      good:
+        - |
+          param(
+              [Parameter(Mandatory)]
+              [ValidateNotNullOrEmpty()]
+              [string]$Path,
+              
+              [ValidateRange(1, 100)]
+              [int]$Count = 10
+          )
+
+  # =========================================================================
+  # SHOULD - Strongly recommended practices
+  # =========================================================================
+
+  S1:
+    title: Use #Requires Statements
+    severity: SHOULD
+    mechanical: true
+    description: |
+      Scripts should declare their requirements with #Requires statements
+      to fail fast if prerequisites aren't met.
+    check:
+      type: presence
+      pattern: '#Requires'
+      flags: -l
+    note: |
+      #Requires -Version 7.0
+      #Requires -Modules @{ ModuleName="Az"; ModuleVersion="10.0.0" }
+      #Requires -RunAsAdministrator
+    examples:
+      good:
+        - |
+          #Requires -Version 7.0
+          #Requires -Modules ActiveDirectory
+          
+          # Script code...
+
+  S2:
+    title: Comment-Based Help
+    severity: SHOULD
+    mechanical: true
+    pssa_rule: PSProvideCommentHelp
+    description: |
+      Functions should include comment-based help with at minimum .SYNOPSIS
+      and .PARAMETER documentation for discoverability via Get-Help.
+    check:
+      type: script
+      code: |
+        # Check functions without help comments
+        grep -Pzo 'function\s+\w+[^}]*\{(?![^}]*\.SYNOPSIS)' "$file"
+    examples:
+      good:
+        - |
+          function Get-UserReport {
+              <#
+              .SYNOPSIS
+                  Generates a user activity report.
+              
+              .DESCRIPTION
+                  Retrieves user login history and generates a formatted report.
+              
+              .PARAMETER UserName
+                  The username to generate a report for.
+              
+              .EXAMPLE
+                  Get-UserReport -UserName "jsmith"
+              #>
+              [CmdletBinding()]
+              param([string]$UserName)
+              # ...
+          }
+
+  S3:
+    title: ShouldProcess for Destructive Operations
+    severity: SHOULD
+    mechanical: true
+    pssa_rule: PSUseShouldProcessForStateChangingFunctions
+    description: |
+      Functions that modify state (files, registry, AD, etc.) should support
+      -WhatIf and -Confirm via SupportsShouldProcess.
+    check:
+      type: script
+      code: |
+        # Check for Set/Remove/New functions without ShouldProcess
+        grep -E 'function\s+(Set|Remove|New|Clear|Disable|Enable)-' "$file" | \
+        while read -r line; do
+          if ! grep -A20 "$line" "$file" | grep -q 'SupportsShouldProcess'; then
+            echo "$file: $line - Missing ShouldProcess"
+          fi
+        done
+    examples:
+      good:
+        - |
+          function Remove-UserData {
+              [CmdletBinding(SupportsShouldProcess, ConfirmImpact='High')]
+              param([string]$UserName)
+              
+              if ($PSCmdlet.ShouldProcess($UserName, "Remove all user data")) {
+                  # Perform deletion
+              }
+          }
+
+  S4:
+    title: OutputType Attribute
+    severity: SHOULD
+    mechanical: false
+    pssa_rule: PSUseOutputTypeCorrectly
+    description: |
+      Functions should declare their output type with [OutputType()] for
+      better tooling support and documentation. Run PSScriptAnalyzer for enforcement.
+    examples:
+      good:
+        - |
+          function Get-ServerStatus {
+              [CmdletBinding()]
+              [OutputType([PSCustomObject])]
+              param([string]$ServerName)
+              
+              [PSCustomObject]@{
+                  Name = $ServerName
+                  Status = "Online"
+              }
+          }
+
+  S5:
+    title: Use PascalCase for Variables
+    severity: SHOULD
+    mechanical: false
+    description: |
+      Use PascalCase for local variables ($UserName) consistent with .NET
+      conventions. Use SCREAMING_SNAKE_CASE for constants.
+    examples:
+      good:
+        - '$UserName = "jsmith"'
+        - '$MaxRetryCount = 3'
+        - '$script:CacheTimeout = 300'
+      bad:
+        - '$user_name = "jsmith"'
+        - '$USERNAME = "jsmith"  # Unless constant'
+
+  S6:
+    title: Explicitly Handle $null Comparisons
+    severity: SHOULD
+    mechanical: true
+    pssa_rule: PSPossibleIncorrectComparisonWithNull
+    description: |
+      Always put $null on the left side of comparisons. When on the right,
+      arrays are filtered instead of compared.
+    check:
+      type: grep
+      pattern: '\$\w+\s+-eq\s+\$null|\$\w+\s+-ne\s+\$null'
+      flags: -En
+    note: |
+      $array -eq $null filters the array for null elements.
+      $null -eq $array compares the whole array to null.
+    examples:
+      bad:
+        - 'if ($result -eq $null) { }'
+      good:
+        - 'if ($null -eq $result) { }'
+        - 'if (-not $result) { }  # For boolean context'
+
+  S7:
+    title: Avoid Global Variables
+    severity: SHOULD
+    mechanical: true
+    pssa_rule: PSAvoidGlobalVars
+    description: |
+      Avoid using $global: scope. It pollutes the session and creates hidden
+      dependencies. Use parameters or script scope instead.
+    check:
+      type: grep
+      pattern: '\$global:'
+      flags: -En
+      exclude: SuppressMessage
+    examples:
+      bad:
+        - '$global:Config = Get-Config'
+      good:
+        - '$script:Config = Get-Config'
+        - 'function Get-Data { param($Config) }'
+
+  S8:
+    title: Avoid Empty Catch Blocks
+    severity: SHOULD
+    mechanical: true
+    pssa_rule: PSAvoidEmptyCatchBlock
+    description: |
+      Empty catch blocks silently swallow errors, making debugging impossible.
+      At minimum, log the error.
+    check:
+      type: grep
+      pattern: 'catch\s*\{\s*\}'
+      flags: -En
+    examples:
+      bad:
+        - 'try { Do-Thing } catch { }'
+      good:
+        - |
+          try { Do-Thing } 
+          catch { 
+              Write-Warning "Operation failed: $_"
+          }
+
+  S9:
+    title: Use Single Quotes for Literal Strings
+    severity: SHOULD
+    mechanical: false
+    description: |
+      Use single quotes for strings that don't need variable expansion.
+      This prevents accidental injection and is slightly faster.
+    examples:
+      good:
+        - '$path = ''C:\Users'''
+        - '$pattern = ''^[a-z]+$'''
+      when_double_quotes:
+        - '$message = "Hello, $UserName"'
+        - '$path = "$BasePath\$FileName"'
+
+  S10:
+    title: Specify Encoding for File Operations
+    severity: SHOULD
+    mechanical: false
+    description: |
+      PowerShell 7 defaults to UTF-8 without BOM; Windows PowerShell varies.
+      Specify -Encoding explicitly for cross-platform and interop scenarios.
+    note: |
+      Windows PowerShell 5.1: varies by cmdlet (often UTF-16 or ASCII)
+      PowerShell 7+: UTF-8 without BOM
+      For legacy system interop, use -Encoding UTF8BOM
+    examples:
+      good:
+        - 'Set-Content -Path $file -Value $data -Encoding UTF8'
+        - 'Out-File -Path $log -Encoding UTF8 -Append'
+        - 'Get-Content -Path $file -Encoding UTF8'
+
+  S11:
+    title: Use Join-Path for Path Construction
+    severity: SHOULD
+    mechanical: true
+    description: |
+      Never concatenate paths with string operations. Use Join-Path for
+      cross-platform compatibility (handles / vs \).
+    check:
+      type: grep
+      pattern: '\$\w+\s*\+\s*[''"][\\/]|[''"][\\/][''"]'
+      flags: -En
+    note: |
+      Join-Path handles directory separators correctly on Windows and Unix.
+      It also normalizes paths from user input.
+    examples:
+      bad:
+        - '$fullPath = $basePath + "\" + $fileName'
+        - '$fullPath = "$basePath\$fileName"'
+      good:
+        - '$fullPath = Join-Path $basePath $fileName'
+        - '$fullPath = [System.IO.Path]::Combine($basePath, $fileName)'
+
+  S12:
+    title: Check $IsWindows/$IsLinux/$IsMacOS for Platform Code
+    severity: SHOULD
+    mechanical: false
+    description: |
+      For platform-specific code, use the automatic variables $IsWindows,
+      $IsLinux, and $IsMacOS introduced in PowerShell 6+.
+    note: |
+      These variables don't exist in Windows PowerShell 5.1. For scripts
+      supporting both, check if the variable exists first.
+    examples:
+      good:
+        - |
+          if ($IsWindows) {
+              $configPath = Join-Path $env:APPDATA "MyApp\config.json"
+          } elseif ($IsLinux -or $IsMacOS) {
+              $configPath = Join-Path $HOME ".config/myapp/config.json"
+          }
+        - |
+          # For 5.1 compatibility
+          if (-not (Test-Path variable:IsWindows)) {
+              $IsWindows = $true
+          }
+
+  S13:
+    title: Avoid Select-Object -ExpandProperty When Not Needed
+    severity: SHOULD
+    mechanical: false
+    description: |
+      Use member access ($object.Property) instead of Select-Object -ExpandProperty
+      for single properties. It's clearer and faster.
+    examples:
+      bad:
+        - '$name = Get-Process | Select-Object -First 1 -ExpandProperty Name'
+      good:
+        - '$name = (Get-Process | Select-Object -First 1).Name'
+        - '$names = (Get-Process).Name  # Array of all names'
+
+  # =========================================================================
+  # GUIDANCE - Design principles (not mechanically checked)
+  # =========================================================================
+
+  G1:
+    title: Script Template
+    severity: GUIDANCE
+    mechanical: false
+    description: Standard template for production PowerShell scripts.
+    examples:
+      template:
+        - |
+          #Requires -Version 7.0
+          
+          <#
+          .SYNOPSIS
+              Brief description of the script.
+          
+          .DESCRIPTION
+              Detailed description of what the script does.
+          
+          .PARAMETER Path
+              Description of the Path parameter.
+          
+          .EXAMPLE
+              .\Script-Name.ps1 -Path "C:\Data"
+          #>
+          
+          [CmdletBinding()]
+          param(
+              [Parameter(Mandatory)]
+              [ValidateNotNullOrEmpty()]
+              [string]$Path
+          )
+          
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          
+          #region Functions
+          function Write-Log {
+              [CmdletBinding()]
+              param(
+                  [string]$Message,
+                  [ValidateSet('Info', 'Warning', 'Error')]
+                  [string]$Level = 'Info'
+              )
+              $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+              Write-Verbose "[$timestamp] [$Level] $Message"
+          }
+          #endregion
+          
+          #region Main
+          try {
+              Write-Log "Starting script with Path: $Path"
+              
+              # Main script logic here
+              
+              Write-Log "Script completed successfully"
+          }
+          catch {
+              Write-Log "Script failed: $_" -Level Error
+              throw
+          }
+          finally {
+              # Cleanup code here
+          }
+          #endregion
+
+  G2:
+    title: Module Structure
+    severity: GUIDANCE
+    mechanical: false
+    description: Recommended structure for PowerShell modules.
+    examples:
+      structure:
+        - |
+          MyModule/
+          ├── MyModule.psd1          # Module manifest
+          ├── MyModule.psm1          # Root module
+          ├── Public/                # Exported functions
+          │   ├── Get-Something.ps1
+          │   └── Set-Something.ps1
+          ├── Private/               # Internal functions
+          │   └── Helper-Function.ps1
+          ├── Classes/               # PowerShell classes
+          │   └── MyClass.ps1
+          ├── Tests/                 # Pester tests
+          │   ├── Get-Something.Tests.ps1
+          │   └── Set-Something.Tests.ps1
+          └── docs/                  # Documentation
+
+  G3:
+    title: Splatting for Readability
+    severity: GUIDANCE
+    mechanical: false
+    description: |
+      Use splatting (@params) for commands with many parameters.
+      This improves readability and makes parameter changes easier.
+    examples:
+      good:
+        - |
+          $mailParams = @{
+              To         = $recipients
+              From       = $sender
+              Subject    = $subject
+              Body       = $body
+              SmtpServer = $smtpServer
+              Priority   = 'High'
+          }
+          Send-MailMessage @mailParams
+
+  G4:
+    title: Pipeline vs ForEach
+    severity: GUIDANCE
+    mechanical: false
+    description: |
+      Use pipeline (|) for streaming large data sets. Use ForEach-Object -Parallel
+      for CPU-bound operations in PowerShell 7+. Use foreach statement for
+      small collections when you need break/continue.
+    examples:
+      pipeline_streaming:
+        - 'Get-ChildItem -Recurse | Where-Object { $_.Length -gt 1MB }'
+      parallel_processing:
+        - |
+          $servers | ForEach-Object -Parallel {
+              Test-Connection $_ -Count 1
+          } -ThrottleLimit 10
+      foreach_with_control:
+        - |
+          foreach ($item in $smallCollection) {
+              if ($item.Skip) { continue }
+              Process-Item $item
+          }
+
+  G5:
+    title: Cross-Platform Considerations
+    severity: GUIDANCE
+    mechanical: false
+    description: Key differences when writing cross-platform scripts.
+    examples:
+      considerations:
+        - |
+          # Environment variables are case-sensitive on Linux
+          $env:PATH        # Windows: works
+          $env:Path        # Linux: works (PowerShell normalizes)
+          $env:path        # Use consistent casing
+          
+          # Use static .NET methods for platform-independent values
+          [Environment]::UserName        # Instead of $env:USERNAME
+          [Environment]::MachineName     # Instead of $env:COMPUTERNAME
+          [IO.Path]::GetTempPath()       # Instead of $env:TEMP
+          [Environment]::NewLine         # Instead of "`r`n" or "`n"
+          
+          # File system is case-sensitive on Linux
+          Get-ChildItem "Config.json"    # Won't find config.json on Linux!
+
+  G6:
+    title: SecretManagement for Credentials
+    severity: GUIDANCE
+    mechanical: false
+    description: |
+      Use the SecretManagement module (PowerShell 7+) for storing and
+      retrieving secrets securely. Supports multiple vault backends.
+    examples:
+      usage:
+        - |
+          # Install modules (one-time)
+          Install-Module Microsoft.PowerShell.SecretManagement
+          Install-Module Microsoft.PowerShell.SecretStore
+          
+          # Register a vault
+          Register-SecretVault -Name LocalStore -ModuleName Microsoft.PowerShell.SecretStore
+          
+          # Store a secret
+          Set-Secret -Name "APIKey" -Secret $secureString -Vault LocalStore
+          
+          # Retrieve a secret
+          $apiKey = Get-Secret -Name "APIKey" -AsPlainText
+
+# ===========================================================================
+# PATTERNS - Decision trees and reference tables
+# ===========================================================================
+
+patterns:
+  error_handling_decision:
+    - "Will this operation fail sometimes? → Add -ErrorAction Stop"
+    - "Is the failure recoverable? → Use try-catch with specific handler"
+    - "Is it critical/unrecoverable? → Let it throw, wrap in top-level try-catch"
+    - "Should the user see it? → Use Write-Error, not throw"
+    - "Is it informational? → Use Write-Warning or Write-Verbose"
+
+  pipeline_vs_foreach:
+    - "Large dataset (1000+) → Pipeline (memory efficient)"
+    - "Need break/continue → foreach statement"
+    - "CPU-bound parallel → ForEach-Object -Parallel (PS7+)"
+    - "Need index → for loop or .ForEach() with $PSItem"
+
+  output_decision:
+    - "Return data? → Write-Output or implicit output"
+    - "Status message? → Write-Verbose (honor -Verbose)"
+    - "Warning? → Write-Warning"
+    - "Error but continue? → Write-Error"
+    - "Error and stop? → throw"
+    - "Interactive only? → Write-Host (last resort)"
+
+# ===========================================================================
+# INFO CHECKS - Statistics for reporting
+# ===========================================================================
+
+info:
+  function_count:
+    pattern: '^\s*function\s+\w+'
+    flags: -cE
+    label: "Function definitions"
+
+  cmdletbinding_count:
+    pattern: '\[CmdletBinding'
+    flags: -cE
+    label: "Advanced functions"
+
+  try_catch_count:
+    pattern: '^\s*try\s*\{'
+    flags: -cE
+    label: "Try-catch blocks"
+
+  error_action_stop:
+    pattern: '-ErrorAction\s+Stop'
+    flags: -ci
+    label: "Explicit error handling"
+
+  comment_help_blocks:
+    pattern: '\.SYNOPSIS'
+    flags: -ci
+    label: "Functions with help"
+
+# ===========================================================================
+# ANTI-PATTERNS - Quick reference
+# ===========================================================================
+
+anti_patterns:
+  - pattern: "Invoke-Expression with input"
+    problem: "Command injection vulnerability"
+    fix: "Use & operator or splatting"
+  
+  - pattern: "Plain text passwords"
+    problem: "Credential exposure"
+    fix: "Get-Credential, SecretManagement, env vars"
+  
+  - pattern: "Write-Host for data"
+    problem: "Output can't be captured"
+    fix: "Write-Output or implicit output"
+  
+  - pattern: "Aliases in scripts"
+    problem: "Cross-platform failures"
+    fix: "Full cmdlet names"
+  
+  - pattern: "$var -eq $null"
+    problem: "Array filtering instead of comparison"
+    fix: "$null -eq $var"
+  
+  - pattern: "String path concatenation"
+    problem: "Wrong separator on Linux"
+    fix: "Join-Path"
+  
+  - pattern: "No -ErrorAction Stop"
+    problem: "Silent failures"
+    fix: "-ErrorAction Stop or $ErrorActionPreference"
+  
+  - pattern: "Empty catch block"
+    problem: "Swallowed errors"
+    fix: "At minimum, log the error"
+  
+  - pattern: "= instead of -eq"
+    problem: "Assignment in conditional"
+    fix: "Use -eq for comparison"
+  
+  - pattern: "Global variables"
+    problem: "Hidden dependencies"
+    fix: "Parameters or script scope"
+
+# ===========================================================================
+# PSSA INTEGRATION - PSScriptAnalyzer rule mapping
+# ===========================================================================
+
+pssa_integration:
+  settings_file: |
+    # PSScriptAnalyzerSettings.psd1
+    @{
+        Severity = @('Error', 'Warning')
+        IncludeRules = @(
+            'PSAvoidUsingInvokeExpression',
+            'PSAvoidUsingPlainTextForPassword',
+            'PSAvoidUsingCmdletAliases',
+            'PSAvoidUsingWriteHost',
+            'PSAvoidUsingPositionalParameters',
+            'PSAvoidUsingAllowUnencryptedAuthentication',  # PSSA 1.24.0+
+            'PSUseCmdletBinding',
+            'PSUseApprovedVerbs',
+            'PSProvideCommentHelp',
+            'PSUseShouldProcessForStateChangingFunctions',
+            'PSPossibleIncorrectComparisonWithNull',
+            'PSAvoidGlobalVars',
+            'PSAvoidEmptyCatchBlock',
+            'PSUseOutputTypeCorrectly'
+        )
+        Rules = @{
+            PSAvoidUsingCmdletAliases = @{
+                allowlist = @()
+            }
+        }
+    }
+  
+  run_command: |
+    Invoke-ScriptAnalyzer -Path . -Recurse -Settings PSScriptAnalyzerSettings.psd1
+
+# ===========================================================================
+# SOURCES
+# ===========================================================================
+
+sources:
+  - title: "PowerShell Documentation"
+    url: "https://learn.microsoft.com/en-us/powershell/"
+  
+  - title: "PSScriptAnalyzer Rules"
+    url: "https://learn.microsoft.com/en-us/powershell/utility-modules/psscriptanalyzer/rules/readme"
+  
+  - title: "PowerShell Best Practices and Style Guide"
+    url: "https://github.com/PoshCode/PowerShellPracticeAndStyle"
+  
+  - title: "Preventing Script Injection Attacks"
+    url: "https://learn.microsoft.com/en-us/powershell/scripting/security/preventing-script-injection"
+  
+  - title: "CVE-2025-54100 (Invoke-WebRequest)"
+    url: "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-54100"
+    note: "December 2025 - DOM parsing vulnerability"
+  
+  - title: "Differences from Windows PowerShell"
+    url: "https://learn.microsoft.com/en-us/powershell/scripting/whats-new/differences-from-windows-powershell"
