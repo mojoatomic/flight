@@ -1,24 +1,30 @@
 #!/bin/bash
-set -e
+# install.sh - Install Flight into a project
+set -euo pipefail
 
-REPO="https://github.com/mojoatomic/flight.git"
-TMP="/tmp/flight-$$"
+readonly REPO="https://github.com/mojoatomic/flight.git"
+readonly TMP_DIR="$(mktemp -d)"
+
+cleanup() {
+    local exit_code=$?
+    rm -rf "$TMP_DIR"
+    exit "$exit_code"
+}
+trap cleanup EXIT
 
 echo "Installing Flight..."
 
-git clone --depth 1 "$REPO" "$TMP" 2>/dev/null
+git clone --depth 1 "$REPO" "$TMP_DIR" 2>/dev/null
 
 # Copy Flight core
-cp -r "$TMP/.flight" .
-cp -r "$TMP/.claude" .
-cp "$TMP/update.sh" .
+cp -r "$TMP_DIR/.flight" .
+cp -r "$TMP_DIR/.claude" .
+cp "$TMP_DIR/update.sh" .
 
 # Copy project files only if they don't exist
-[ ! -f CLAUDE.md ] && cp "$TMP/CLAUDE.md" .
-[ ! -f PROMPT.md ] && cp "$TMP/PROMPT.md" . 2>/dev/null || true
-[ ! -f @fix_plan.md ] && cp "$TMP/@fix_plan.md" . 2>/dev/null || true
-
-rm -rf "$TMP"
+[[ ! -f CLAUDE.md ]] && cp "$TMP_DIR/CLAUDE.md" .
+[[ ! -f PROMPT.md ]] && cp "$TMP_DIR/PROMPT.md" . 2>/dev/null || true
+[[ ! -f @fix_plan.md ]] && cp "$TMP_DIR/@fix_plan.md" . 2>/dev/null || true
 
 # Make scripts executable
 chmod +x update.sh 2>/dev/null || true
@@ -27,49 +33,49 @@ chmod +x .flight/domains/*.validate.sh 2>/dev/null || true
 chmod +x .flight/domains/*.sh 2>/dev/null || true
 
 # Add npm scripts if package.json exists
-if [ -f package.json ]; then
+if [[ -f package.json ]]; then
     if command -v jq &> /dev/null; then
         # Check if lint script exists
         HAS_LINT=$(jq -r '.scripts.lint // empty' package.json)
 
-        if [ -n "$HAS_LINT" ]; then
+        if [[ -n "$HAS_LINT" ]]; then
             # Lint exists - add validate and preflight
             jq '.scripts.validate = ".flight/validate-all.sh" |
                 .scripts.preflight = "npm run validate && npm run lint"' package.json > package.json.tmp \
                 && mv package.json.tmp package.json
-            echo "✅ Added npm scripts (validate, preflight) to package.json"
+            echo "Added npm scripts (validate, preflight) to package.json"
         else
             # No lint - add validate only, warn about lint
             jq '.scripts.validate = ".flight/validate-all.sh"' package.json > package.json.tmp \
                 && mv package.json.tmp package.json
-            echo "✅ Added 'validate' script to package.json"
-            echo "⚠️  No 'lint' script found. Add ESLint, then add:"
+            echo "Added 'validate' script to package.json"
+            echo "No 'lint' script found. Add ESLint, then add:"
             echo '    "preflight": "npm run validate && npm run lint"'
         fi
     else
-        echo "⚠️  jq not found. Add these scripts to package.json manually:"
+        echo "jq not found. Add these scripts to package.json manually:"
         echo '    "lint": "eslint .",'
         echo '    "validate": ".flight/validate-all.sh",'
         echo '    "preflight": "npm run validate && npm run lint"'
     fi
 else
-    echo "ℹ️  No package.json found - add scripts when you create one"
+    echo "No package.json found - add scripts when you create one"
 fi
 
 echo ""
-echo "✅ Flight installed"
+echo "Flight installed"
 echo ""
 echo "Local CI:"
 echo "  npm run validate  - Run all domain validators"
 echo "  npm run preflight - Validate + lint before commit"
 echo ""
-echo "Commands:"
+echo "Skills (use as /command in Claude Code):"
 echo "  /flight-prd       - Transform idea into atomic tasks"
 echo "  /flight-prime     - Research task and context"
 echo "  /flight-compile   - Build PROMPT.md"
 echo "  /flight-validate  - Run domain validation"
 echo "  /flight-tighten   - Strengthen rules on failure"
 echo ""
-echo "IMPORTANT: Read .flight/FLIGHT.md before using any commands!"
+echo "IMPORTANT: Read .flight/FLIGHT.md before starting!"
 echo ""
 echo "Update Flight:  ./update.sh"

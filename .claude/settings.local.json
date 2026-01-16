@@ -19,7 +19,30 @@
       "Bash(grep:*)",
       "Bash(for f in *.md)",
       "Bash(do echo \"$f\")",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr edit 30 --title \"Config-driven validation with /flight-scan command\" --body \"$\\(cat <<''EOF''\n## Summary\n\n- Replace dynamic detection with config-driven approach using `flight.json`\n- Add `/flight-scan` Claude command to detect domains and generate config\n- `validate-all.sh` now reads `enabled_domains` from `flight.json`\n- Legacy mode falls back to code-hygiene only with helpful message\n- Reduces complexity: ~400 lines → ~250 lines\n\n## How It Works\n\n1. Run `/flight-scan` in a project\n2. Command detects domains via file patterns and package.json dependencies\n3. Writes `.flight/flight.json` with detected domains\n4. `validate-all.sh` reads config and runs only enabled validators\n\n## Adding New Domains\n\nNow requires only:\n1. Create `.flight/domains/new-domain.flight`\n2. Run `/flight-scan`\n\nNo changes to `validate-all.sh` needed.\n\n## Test Results\n\n| Project | Domains | Validators |\n|---------|---------|------------|\n| Flight | code-hygiene, bash | 2 |\n| topoforge | code-hygiene, typescript, javascript, react | 4 |\n| SecFlo | code-hygiene, typescript, javascript, react, nextjs, clerk, sms-twilio, testing, sql, api | 9 |\n\n🤖 Generated with [Claude Code]\\(https://claude.ai/code\\)\nEOF\n\\)\")",
+      "Bash(gh pr merge:*)",
+      "Bash(git pull:*)",
+      "Bash(git fetch:*)",
+      "Bash(xargs:*)",
+      "WebSearch",
+      "mcp__firecrawl__firecrawl_scrape",
+      "Bash(gh pr create:*)",
+      "Bash(.flight/bin/flight-domain-compile:*)",
+      "Bash(.flight/validate-all.sh:*)",
+      "Bash(head:*)",
+      "Bash(/Users/dougfennell/vscode/projects/flight/.flight/validate-all.sh:*)",
+      "Bash(for f in .flight/domains/*.flight)",
+      "Bash(git reset:*)",
+      "Bash(source:*)",
+      "Bash(printf:*)",
+      "Bash(flight_get_files \"*.sh\")",
+      "Bash(do echo \"=== $f ===\" grep -A 1 '```bash' \"$f\")",
+      "Bash(gh issue create:*)",
+      "Skill(flight-prd)",
+      "Bash(name=\"flight-prime\")",
+      "Bash(echo:*)"
     ]
   }
 }

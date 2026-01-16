@@ -106,13 +106,13 @@ your-project/
 │       ├── javascript.md / .validate.sh
 │       ├── react.md / .validate.sh
 │       └── ...
-├── .claude/commands/          # Slash commands
-│   ├── flight-prd.md
-│   ├── flight-prime.md
-│   ├── flight-compile.md
-│   ├── flight-validate.md
-│   ├── flight-tighten.md
-│   └── flight-create-validator.md
+├── .claude/skills/            # Flight skills (SKILL.md format)
+│   ├── flight-prd/SKILL.md
+│   ├── flight-prime/SKILL.md
+│   ├── flight-compile/SKILL.md
+│   ├── flight-validate/SKILL.md
+│   ├── flight-tighten/SKILL.md
+│   └── flight-scan/SKILL.md
 └── CLAUDE.md                  # Project instructions
 ```
 
@@ -128,7 +128,7 @@ curl -fsSL https://raw.githubusercontent.com/mojoatomic/flight/main/update.sh | 
 ```
 
 Updates:
-- `.claude/commands/*` (all slash commands)
+- `.claude/skills/*` (all Flight skills)
 - `.flight/FLIGHT.md` (core methodology)
 - `.flight/validate-all.sh`
 - `.flight/domains/*` (all stock domains)
@@ -483,7 +483,7 @@ Flight commands **re-inject rules at decision points**. Every `/flight-prime` lo
 
 ### With Claude Code
 
-Flight commands are automatically available in Claude Code when `.claude/commands/` exists in your project.
+Flight commands are automatically available in Claude Code when `.claude/skills/` exists in your project.
 
 ---
 
