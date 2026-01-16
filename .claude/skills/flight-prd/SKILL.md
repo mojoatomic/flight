@@ -10,12 +10,19 @@ Transform a rough product idea into atomic tasks that can be executed one at a t
 ## Usage
 
 ```
-/flight-prd <rough product idea>
+/flight-prd <rough product idea> [--no-research]
 ```
 
 ## Arguments
 
 - `$ARGUMENTS` - Rough product description, feature request, or problem statement
+
+## Flags
+
+| Flag | Behavior |
+|------|----------|
+| (none) | Full workflow including temporal research |
+| `--no-research` | Skip dependency research (for experts or fast iteration) |
 
 ---
 
@@ -35,13 +42,13 @@ Instead of one big PRD, output a **task queue** that feeds the Flight loop:
 ```
 /flight-prd "rough idea"
     ↓
+[Step 2B: Temporal Research - automatic]
+    ↓
 PRD.md              # Vision (human reference)
 MILESTONES.md       # Phases (human planning)
-    ↓
-/flight-research    # Temporal validation (versions, landmines)
-    ↓
+known-landmines.md  # Temporal issues discovered
 tasks/
-  001-project-setup.md
+  001-project-setup.md  # Version pins from research
   002-database-schema.md
   003-auth-system.md
   ...
@@ -126,33 +133,108 @@ NOTE: Better results with [Context7/Firecrawl]. Install from:
 Proceed with available tools, or install first?
 ```
 
-### 2B. Temporal Research Gate (RECOMMENDED)
+### 2B. Dependency Temporal Research (AUTOMATIC)
 
-**Before continuing to task decomposition, run temporal research:**
+**Skip this step only if `--no-research` flag was provided.**
+
+This step validates that your tech stack choices are current. It runs automatically as part of `/flight-prd`.
+
+#### 2B-1. Date Anchor (MANDATORY)
+
+**BEFORE ANY RESEARCH QUERIES**, output:
 
 ```
-/flight-research
+📅 Research Date: {CURRENT_DATE}
+🔍 Research Window: {YEAR-1}-01-01 to {CURRENT_DATE}
 ```
 
-This validates that your tech stack choices are current:
-- Discovers breaking changes in recent versions
-- Identifies version incompatibilities
-- Updates `.flight/known-landmines.md` with findings
-- Pins versions in task files to avoid surprises
+This anchors ALL subsequent searches. Without this, queries return stale results.
 
-**Why this matters:**
-- Problem space research (Step 2) tells you WHAT to build
-- Temporal research tells you HOW to build it safely
-- Skipping this risks hours of debugging version issues
+#### 2B-2. Identify Dependencies
 
-**Output after /flight-research:**
+From your tech stack decisions in Step 2, list major dependencies:
+
+```markdown
+## Dependencies to Research
+
+| Package | Category |
+|---------|----------|
+| next | Framework |
+| react | Frontend |
+| prisma | Database |
+| tailwindcss | Styling |
+
+**Skipped (tooling):** eslint, prettier, @types/*
 ```
-📅 Research Date: {date}
-📦 Dependencies: express@4.21.0, react@19.0.0, ...
-⚠️ Landmines: 2 new issues discovered
+
+**Skip by default:** `@types/*`, `eslint*`, `prettier*`, `*-loader`, `*-plugin`
+
+#### 2B-3. Check Existing Landmines
+
+If `.flight/known-landmines.md` exists:
+1. Read the "Last Full Review" date
+2. If >3 months old, treat ALL entries as NEEDS_VERIFICATION
+3. Use entries as research STARTING POINTS, not facts
+
+If no landmines file exists, note: "No existing landmines file. Will create if issues found."
+
+#### 2B-4. Research Each Dependency
+
+For each major dependency, run date-anchored searches:
+
+**Breaking Changes (GitHub):**
+```
+"{library} breaking changes {YEAR-1}-{YEAR}" site:github.com
 ```
 
-Then continue with Step 3.
+**Migration Guide:**
+```
+"{library} v{X} migration guide after:{YEAR-1}-01-01"
+```
+
+**Integration Issues (if using scaffold tools):**
+```
+"create-next-app {library} {YEAR}" OR "vite {library} {YEAR}"
+```
+
+#### 2B-5. Update Landmines File
+
+If issues discovered, create/update `.flight/known-landmines.md`:
+
+```markdown
+### {Issue Title}
+**Discovered:** {CURRENT_DATE}
+**Status:** ACTIVE
+**Re-verify After:** {CURRENT_DATE + 6 months}
+**Issue:** {description}
+**Verify By:** Search "{library} {issue} fixed {YEAR}"
+**Solution:** {workaround or version pin}
+```
+
+Update file header with: `**Last Full Review:** {CURRENT_DATE}`
+
+#### 2B-6. Output Research Summary
+
+```markdown
+## Temporal Research Complete
+
+📅 **Research Date:** {CURRENT_DATE}
+📦 **Dependencies Researched:** {count}
+
+### Version Recommendations
+
+| Package | Latest | Recommended | Reason |
+|---------|--------|-------------|--------|
+| next | 15.1.0 | 15.1.0 | Stable |
+| prisma | 6.2.0 | 5.22.0 | v6.x has migration issues |
+
+### Landmines
+- {count} new issues discovered
+- {count} existing issues verified
+- See `.flight/known-landmines.md` for details
+```
+
+**Then continue with Step 3, using recommended versions in task files.**
 
 ### 3. Competitive Analysis
 
@@ -545,6 +627,13 @@ Run after implementing:
 - [ ] Tech stack decisions grounded in research
 - [ ] Sources cited in PRD.md
 
+### Temporal Research (unless --no-research)
+- [ ] Date anchor stated before any dependency research
+- [ ] Major dependencies researched with date-anchored queries
+- [ ] Version recommendations documented
+- [ ] Landmines file created/updated (if issues found)
+- [ ] Recommended versions used in task files
+
 ### Decomposition
 - [ ] 8-15 tasks (not too few, not too many)
 - [ ] No task exceeds 2-hour estimate
@@ -562,6 +651,7 @@ Run after implementing:
 
 ### Workflow Ready
 - [ ] tasks/ directory created
+- [ ] .flight/known-landmines.md created/updated (if issues found)
 - [ ] User knows to run `/flight-prime tasks/001-*.md` next
 - [ ] User knows to run `.flight/validate-all.sh` after each task
 - [ ] MILESTONES.md shows the journey
@@ -577,25 +667,21 @@ After running `/flight-prd`, report:
 
 - **PRD.md** - Product vision (for reference)
 - **MILESTONES.md** - [X] milestones, [Y] tasks total
+- **.flight/known-landmines.md** - Temporal issues discovered (if any)
 - **tasks/**
-  - 001-project-setup.md
+  - 001-project-setup.md (with version pins from research)
   - 002-database-schema.md
   - ...
 
-## Next: Temporal Research
+## Temporal Research Summary
 
-Before starting tasks, run:
-
-```
-/flight-research
-```
-
-This validates dependencies and discovers version issues.
+📅 **Research Date:** {date}
+📦 **Dependencies:** {count} researched
+⚠️ **Landmines:** {count} issues documented
 
 ## Workflow for Each Task
 
 ```
-/flight-research                            # Temporal validation (once)
 /flight-prime tasks/001-project-setup.md    # Research & compile
 /flight-compile                             # Create atomic prompt
 [implement]
@@ -607,7 +693,7 @@ npm run preflight                           # Local CI (validate + lint)
 
 ## Notes
 
-- `/flight-research` discovers breaking changes and pins versions
+- Temporal research was performed automatically (versions pinned in tasks)
 - Task 001 will configure local CI: ESLint + Flight validation
 - After Task 001: use `npm run preflight` (runs validate + lint)
 - This catches issues before they hit remote CI or code review
@@ -630,27 +716,23 @@ npm run preflight                           # Local CI (validate + lint)
 
 ## Next Step
 
-After generating PRD.md, MILESTONES.md, and task files:
+After `/flight-prd` completes (including temporal research):
 
-**Run temporal research to validate dependencies:**
-
-```
-/flight-research
-```
-
-This discovers breaking changes, pins versions, and updates landmines.
-
-**Then begin the Flight loop:**
+**Begin the Flight loop:**
 
 ```
 /flight-prime tasks/001-project-setup.md
 ```
 
-**Workflow**: `/flight-prd` → `/flight-research` → `/flight-prime` → `/flight-compile` → [implement] → `/flight-validate` → repeat
+**Workflow**: `/flight-prd` → `/flight-prime` → `/flight-compile` → [implement] → `/flight-validate` → repeat
 
 | Response | Action |
 |----------|--------|
-| `research` or `r` | Run `/flight-research` for temporal validation |
 | `continue` or `c` | Proceed to `/flight-prime tasks/001-*.md` |
 | `review` | Display the generated task files for review |
 | Task filename | Prime that specific task (e.g., `tasks/002-*.md`) |
+
+**Note:** `/flight-research` is still available standalone for:
+- Existing projects needing dependency validation
+- Adding new dependencies mid-project
+- Re-checking stale landmines (>3 months old)

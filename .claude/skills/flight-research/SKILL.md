@@ -1,11 +1,17 @@
 ---
 name: flight-research
-description: Temporal research for dependencies - validates versions, discovers issues, updates landmines. Use before implementation to catch breaking changes and version incompatibilities.
+description: Temporal research for dependencies - validates versions, discovers issues, updates landmines. Use for existing projects, mid-project dependency additions, or when /flight-prd --no-research was used.
 ---
 
 # /flight-research
 
 Temporal research for dependencies. Validates versions, discovers breaking changes, updates known landmines.
+
+**Note:** For new projects, `/flight-prd` runs temporal research automatically (Step 2B). Use this standalone skill for:
+- Existing projects needing dependency validation
+- Adding new dependencies mid-project
+- Re-checking stale landmines (>3 months old)
+- After using `/flight-prd --no-research`
 
 ## Usage
 
@@ -291,10 +297,11 @@ Append to "Known Technical Issues" section (create section if missing):
 
 | Situation | Use This? |
 |-----------|-----------|
-| Before `/flight-compile` on new project | Yes |
+| New project via `/flight-prd` | No → `/flight-prd` does this automatically |
+| `/flight-prd --no-research` was used | Yes - run standalone to validate deps |
 | Adding new dependencies to existing project | Yes |
 | Resuming work on stale project (>3 months) | Yes - use `--quick` first |
-| Just finished `/flight-prd` Step 2A | Yes |
+| Mid-project dependency additions | Yes - with specific packages |
 | Already know exact versions needed | No |
 | Only changing internal code (no new deps) | No |
 
@@ -302,17 +309,16 @@ Append to "Known Technical Issues" section (create section if missing):
 
 ## Workflow Integration
 
-### New Project
+### New Project (automatic)
 
 ```
 /flight-prd "my app idea"
-  → Step 2A completes, recommends: "Run /flight-research"
+  → Step 2B runs temporal research automatically
+  → Outputs PRD.md, tasks/, known-landmines.md
+  → Versions already pinned in task files
 
-/flight-research
-  → Researches deps, updates landmines
-
-/flight-compile
-  → Has temporal context from research
+/flight-prime tasks/001-*.md
+  → Begin implementation
 ```
 
 ### Existing Project, New Dependencies
@@ -321,9 +327,10 @@ Append to "Known Technical Issues" section (create section if missing):
 /flight-research express@5 mongodb@7
   → Researches specific deps
   → Updates landmines
+  → Updates existing task files (if any)
 ```
 
-### Stale Project
+### Stale Project (>3 months since last work)
 
 ```
 /flight-research --quick
@@ -334,24 +341,29 @@ Append to "Known Technical Issues" section (create section if missing):
   → Full re-verification
 ```
 
+### After /flight-prd --no-research
+
+```
+/flight-prd "my app idea" --no-research
+  → Fast output, no temporal validation
+
+/flight-research
+  → Standalone research before implementation
+```
+
 ---
 
 ## Next Step
 
-After research completes:
+After standalone research completes:
 
 ```
-/flight-compile
+/flight-prime tasks/001-*.md
 ```
-
-Or continue with `/flight-prd` Step 3 (task decomposition).
-
-**Workflow**: `/flight-prd` Step 2A → `/flight-research` → `/flight-prd` Step 3 → `/flight-compile`
 
 | Response | Action |
 |----------|--------|
-| `compile` or `c` | Proceed to `/flight-compile` |
-| `continue` | Return to `/flight-prd` for task decomposition |
+| `prime` or `p` | Proceed to `/flight-prime tasks/001-*.md` |
 | `deep` | Re-run with `--deep` for more thorough research |
 
 ---
