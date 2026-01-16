@@ -27,9 +27,10 @@ Flight inverts this. **The rules come first. The code comes second.**
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  /flight-prd                                                                │
 │  INPUT:  Rough idea ("document collection via SMS")                         │
-│  OUTPUT: PRD.md + tasks/*.md                                                │
-│  TOOLS:  Web Search, Firecrawl, Context7                                    │
+│  OUTPUT: PRD.md + tasks/*.md + known-landmines.md                           │
+│  TOOLS:  Web Search, Firecrawl, Context7 (temporal research automatic)      │
 │  USE:    Starting from scratch, need to understand problem space            │
+│  FLAGS:  --no-research (skip temporal research for fast iteration)          │
 └──────────────────────────────────┬──────────────────────────────────────────┘
                                    │
                                    ▼
@@ -87,6 +88,8 @@ Flight inverts this. **The rules come first. The code comes second.**
 | Have domain.md, need validator | `/flight-create-validator` |
 | Have code, need to check it | `/flight-validate` |
 | New project, need domain detection | `/flight-scan` |
+| Existing project, adding new deps | `/flight-research` |
+| Stale project (>3 months old) | `/flight-research --quick` |
 
 ---
 
@@ -112,7 +115,8 @@ your-project/
 │   ├── flight-compile/SKILL.md
 │   ├── flight-validate/SKILL.md
 │   ├── flight-tighten/SKILL.md
-│   └── flight-scan/SKILL.md
+│   ├── flight-scan/SKILL.md
+│   └── flight-research/SKILL.md
 └── CLAUDE.md                  # Project instructions
 ```
 
@@ -137,27 +141,33 @@ Updates:
 Preserves:
 - `CLAUDE.md` (your project description)
 - `PROMPT.md`, `PRIME.md` (your working files)
+- `.flight/known-landmines.md` (your project's temporal data)
 - Custom domains (any `.md`/`.sh` not in Flight repo)
 
 ---
 
 ## Commands
 
-### `/flight-prd <rough idea>`
+### `/flight-prd <rough idea> [--no-research]`
 
-**Purpose:** Transform a rough product idea into atomic tasks.
+**Purpose:** Transform a rough product idea into atomic tasks with temporal validation.
 
-Claude Code excels at atomic, well-defined tasks. It struggles with large, multi-step projects. This command breaks big ideas into executable units.
+Claude Code excels at atomic, well-defined tasks. It struggles with large, multi-step projects. This command breaks big ideas into executable units AND validates that your tech stack choices are current.
 
 **Output:**
 - `PRD.md` - Product vision (human reference)
 - `MILESTONES.md` - Phases with exit criteria
-- `tasks/*.md` - Atomic task files (001-project-setup.md, 002-database-schema.md, etc.)
+- `tasks/*.md` - Atomic task files with pinned versions
+- `.flight/known-landmines.md` - Temporal issues discovered (if any)
 
 **Tools Used:**
 - Web Search → Competitors, market research, recent articles
 - Firecrawl → Deep crawl competitor sites, extract features
 - Context7 → Current docs for considered tech stack
+- Temporal Research (automatic) → Breaking changes, version issues, landmines
+
+**Flags:**
+- `--no-research` - Skip temporal research for fast iteration or when versions are known
 
 **Example:**
 ```
@@ -267,6 +277,31 @@ When validation fails, tighten examines why and suggests domain improvements to 
 **Example:**
 ```
 /flight-create-validator .flight/domains/my-domain.md
+```
+
+### `/flight-research [dependencies...] [flags]`
+
+**Purpose:** Temporal research for dependencies - validates versions, discovers breaking changes.
+
+**Note:** For new projects, `/flight-prd` runs this automatically. Use standalone for:
+- Existing projects adding new dependencies
+- Re-checking stale projects (>3 months old)
+- After using `/flight-prd --no-research`
+
+**Output:**
+- Version recommendations with reasons
+- `.flight/known-landmines.md` - Issues discovered with re-verification dates
+- Updated task files (if they exist) with pinned versions
+
+**Flags:**
+- `--quick` - Check landmines staleness only, no new searches
+- `--deep` - All deps, add Firecrawl deep dives
+- `--include-all` - Include tooling deps (eslint, prettier, @types)
+
+**Example:**
+```
+/flight-research express@5 mongodb@7
+/flight-research --quick
 ```
 
 ---

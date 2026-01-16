@@ -16,12 +16,13 @@ Flight is TDD for prompts. Rules come first, code comes second.
 
 | Situation | Command | What It Does |
 |-----------|---------|--------------|
-| Vague idea ("build SMS thing") | `/flight-prd` | Creates PRD.md + atomic task files |
+| Vague idea ("build SMS thing") | `/flight-prd` | Creates PRD.md + tasks (includes temporal research) |
 | Clear task to implement | `/flight-prime` | Gathers context → PRIME.md |
 | Have PRIME.md, ready to code | `/flight-compile` | Creates atomic PROMPT.md |
 | Code written, need to check | `/flight-validate` | Runs validators → PASS/FAIL |
 | Validation failed | `/flight-tighten` | Strengthens rules, retry |
 | Have domain.md, need validator | `/flight-create-validator` | Generates .validate.sh + tests |
+| Existing project, new deps | `/flight-research` | Validates versions, updates landmines |
 
 ---
 
@@ -30,7 +31,11 @@ Flight is TDD for prompts. Rules come first, code comes second.
 ```
 /flight-prd (if starting from scratch)
       ↓
-/flight-prime <task>
+  [Temporal research runs automatically]
+      ↓
+  PRD.md + tasks/*.md + known-landmines.md
+      ↓
+/flight-prime tasks/001-*.md
       ↓
 /flight-compile
       ↓
@@ -41,6 +46,8 @@ Flight is TDD for prompts. Rules come first, code comes second.
 PASS → Done
 FAIL → /flight-tighten → /flight-compile → repeat
 ```
+
+**Note:** `/flight-prd` includes temporal research by default. Use `--no-research` to skip.
 
 ---
 
@@ -257,6 +264,7 @@ If MCP tools aren't available, fall back to web search.
 | `.flight/domains/*.validate.sh` | Executable validators (generated from .flight) |
 | `.flight/bin/flight-domain-compile.py` | Domain compiler (generates .md + .sh) |
 | `.flight/validate-all.sh` | Auto-detect and run all relevant validators |
+| `.flight/known-landmines.md` | Temporal issues discovered during research |
 | `update.sh` | Update Flight (preserves customizations) |
 | `PRIME.md` | Output of /flight-prime |
 | `PROMPT.md` | Output of /flight-compile command (what to execute) |

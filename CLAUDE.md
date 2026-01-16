@@ -56,12 +56,31 @@ See `.flight/FLIGHT.md` for complete table.
 
 ## Flight Workflow
 
+### Starting a New Project
+
+```bash
+/flight-prd "your idea"      # Creates PRD + tasks (includes temporal research)
+/flight-prime tasks/001-*.md # Research and gather context
+/flight-compile              # Create atomic prompt
+# [implement]
+npm run preflight            # Local CI (validate + lint)
+/flight-validate             # Full Flight validation
+```
+
+### Existing Project / Clear Task
+
 ```bash
 /flight-prime "your task"    # Research and gather context
 /flight-compile              # Create atomic prompt
 # [implement]
 npm run preflight            # Local CI (validate + lint)
 /flight-validate             # Full Flight validation
+```
+
+### Adding New Dependencies Mid-Project
+
+```bash
+/flight-research express@5 mongodb@7   # Validate versions, check for issues
 ```
 
 ### Before Generating Code
