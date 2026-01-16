@@ -265,10 +265,13 @@ rules:
       Hardcoded paths like C:\Temp or /tmp break cross-platform scripts.
       Use environment variables and Join-Path for portability.
     check:
-      type: grep
-      pattern: '[''"][A-Za-z]:\\|[''"]\/tmp\/'
-      flags: -En
-      exclude: SuppressMessage
+      type: script
+      code: |
+        # Exclude comment lines before checking for hardcoded paths
+        for f in "$@"; do
+          grep -v '^\s*#' "$f" 2>/dev/null | grep -n "['\"][A-Za-z]:\\\|['\"]/tmp/" | \
+          while read -r line; do echo "$f:$line"; done
+        done
     examples:
       bad:
         - '$logFile = "C:\Temp\log.txt"'
@@ -311,10 +314,11 @@ rules:
       Scripts must enable strict mode to catch undefined variables and other
       common mistakes early. Use Set-StrictMode -Version Latest.
     check:
-      type: presence
-      pattern: 'Set-StrictMode\s+-Version'
-      flags: -l
-      message: "No Set-StrictMode found"
+      type: script
+      code: |
+        # Report files missing Set-StrictMode
+        grep -L 'Set-StrictMode' "$@" 2>/dev/null | \
+        while read -r f; do echo "$f: Missing Set-StrictMode"; done
     note: |
       Strict mode catches: uninitialized variables, non-existent properties,
       function calls with wrong syntax, and more. Essential for production scripts.
@@ -335,10 +339,11 @@ rules:
       Production scripts should set $ErrorActionPreference = 'Stop' or use
       -ErrorAction Stop on critical commands to catch failures.
     check:
-      type: presence
-      pattern: '\$ErrorActionPreference\s*=.*Stop|-ErrorAction\s+Stop'
-      flags: -l
-      message: "No error action preference set to Stop"
+      type: script
+      code: |
+        # Report files missing ErrorActionPreference or -ErrorAction Stop
+        grep -L -E '\$ErrorActionPreference.*Stop|-ErrorAction\s+Stop' "$@" 2>/dev/null | \
+        while read -r f; do echo "$f: Missing ErrorActionPreference or -ErrorAction Stop"; done
     note: |
       PowerShell's default is Continue, which silently proceeds after errors.
       For automation, this leads to cascading failures and corrupted state.

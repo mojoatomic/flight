@@ -117,17 +117,25 @@ check "N7: Positional Parameters in Scripts" \
 
 # N9: Hardcoded Paths
 check "N9: Hardcoded Paths" \
-    bash -c 'grep -En "['"'"'\"][A-Za-z]:\\\\|['"'"'\"]\\/tmp\\/" "$@" | grep -v "SuppressMessage"' _ "${FILES[@]}"
+    bash -c '# Exclude comment lines before checking for hardcoded paths
+for f in "$@"; do
+  grep -v '"'"'^\s*#'"'"' "$f" 2>/dev/null | grep -n "['"'"'\"][A-Za-z]:\\\|['"'"'\"]/tmp/" | \
+  while read -r line; do echo "$f:$line"; done
+done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## MUST Rules"
 
 # M1: Set-StrictMode Required
 check "M1: Set-StrictMode Required" \
-    bash -c 'grep -ql "Set-StrictMode\\s+-Version" "$@" || echo "No Set-StrictMode found"' _ "${FILES[@]}"
+    bash -c '# Report files missing Set-StrictMode
+grep -L '"'"'Set-StrictMode'"'"' "$@" 2>/dev/null | \
+while read -r f; do echo "$f: Missing Set-StrictMode"; done' _ "${FILES[@]}"
 
 # M2: ErrorActionPreference Stop for Critical Scripts
 check "M2: ErrorActionPreference Stop for Critical Scripts" \
-    bash -c 'grep -ql "\\\$ErrorActionPreference\\s*=.*Stop|-ErrorAction\\s+Stop" "$@" || echo "No error action preference set to Stop"' _ "${FILES[@]}"
+    bash -c '# Report files missing ErrorActionPreference or -ErrorAction Stop
+grep -L -E '"'"'\$ErrorActionPreference.*Stop|-ErrorAction\s+Stop'"'"' "$@" 2>/dev/null | \
+while read -r f; do echo "$f: Missing ErrorActionPreference or -ErrorAction Stop"; done' _ "${FILES[@]}"
 
 # M4: CmdletBinding for Advanced Functions
 check "M4: CmdletBinding for Advanced Functions" \
