@@ -278,6 +278,7 @@ Append to "Known Technical Issues" section (create section if missing):
 3. **LANDMINES ARE STARTING POINTS** - Never trust without re-verification
 4. **UPDATE, DON'T CREATE** - Only modify existing files
 5. **SKIP TOOLING BY DEFAULT** - Focus on decision dependencies
+6. **PREFER OFFICIAL SOURCES** - GitHub releases > official docs > Stack Overflow > blog posts
 
 ---
 
