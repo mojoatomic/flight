@@ -37,6 +37,9 @@ Instead of one big PRD, output a **task queue** that feeds the Flight loop:
     ↓
 PRD.md              # Vision (human reference)
 MILESTONES.md       # Phases (human planning)
+    ↓
+/flight-research    # Temporal validation (versions, landmines)
+    ↓
 tasks/
   001-project-setup.md
   002-database-schema.md
@@ -44,6 +47,8 @@ tasks/
   ...
     ↓
 /flight-prime tasks/001-project-setup.md
+    ↓
+/flight-compile
     ↓
 PROMPT.md
     ↓
@@ -120,6 +125,34 @@ NOTE: Better results with [Context7/Firecrawl]. Install from:
 
 Proceed with available tools, or install first?
 ```
+
+### 2B. Temporal Research Gate (RECOMMENDED)
+
+**Before continuing to task decomposition, run temporal research:**
+
+```
+/flight-research
+```
+
+This validates that your tech stack choices are current:
+- Discovers breaking changes in recent versions
+- Identifies version incompatibilities
+- Updates `.flight/known-landmines.md` with findings
+- Pins versions in task files to avoid surprises
+
+**Why this matters:**
+- Problem space research (Step 2) tells you WHAT to build
+- Temporal research tells you HOW to build it safely
+- Skipping this risks hours of debugging version issues
+
+**Output after /flight-research:**
+```
+📅 Research Date: {date}
+📦 Dependencies: express@4.21.0, react@19.0.0, ...
+⚠️ Landmines: 2 new issues discovered
+```
+
+Then continue with Step 3.
 
 ### 3. Competitive Analysis
 
@@ -549,10 +582,21 @@ After running `/flight-prd`, report:
   - 002-database-schema.md
   - ...
 
+## Next: Temporal Research
+
+Before starting tasks, run:
+
+```
+/flight-research
+```
+
+This validates dependencies and discovers version issues.
+
 ## Workflow for Each Task
 
 ```
-/flight-prime tasks/001-project-setup.md   # Research & compile
+/flight-research                            # Temporal validation (once)
+/flight-prime tasks/001-project-setup.md    # Research & compile
 /flight-compile                             # Create atomic prompt
 [implement]
 npm run preflight                           # Local CI (validate + lint)
@@ -563,6 +607,7 @@ npm run preflight                           # Local CI (validate + lint)
 
 ## Notes
 
+- `/flight-research` discovers breaking changes and pins versions
 - Task 001 will configure local CI: ESLint + Flight validation
 - After Task 001: use `npm run preflight` (runs validate + lint)
 - This catches issues before they hit remote CI or code review
@@ -585,16 +630,27 @@ npm run preflight                           # Local CI (validate + lint)
 
 ## Next Step
 
-After generating outputs, the Flight loop begins:
+After generating PRD.md, MILESTONES.md, and task files:
+
+**Run temporal research to validate dependencies:**
+
+```
+/flight-research
+```
+
+This discovers breaking changes, pins versions, and updates landmines.
+
+**Then begin the Flight loop:**
 
 ```
 /flight-prime tasks/001-project-setup.md
 ```
 
-**Workflow**: `/flight-prd` → `/flight-prime` → `/flight-compile` → [implement] → `/flight-validate` → repeat
+**Workflow**: `/flight-prd` → `/flight-research` → `/flight-prime` → `/flight-compile` → [implement] → `/flight-validate` → repeat
 
 | Response | Action |
 |----------|--------|
+| `research` or `r` | Run `/flight-research` for temporal validation |
 | `continue` or `c` | Proceed to `/flight-prime tasks/001-*.md` |
 | `review` | Display the generated task files for review |
 | Task filename | Prime that specific task (e.g., `tasks/002-*.md`) |
