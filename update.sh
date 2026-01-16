@@ -47,12 +47,19 @@ fi
 [[ -d "$TMP_DIR/.flight/exercises" ]] && cp -r "$TMP_DIR/.flight/exercises" .flight/
 [[ -d "$TMP_DIR/.flight/templates" ]] && cp -r "$TMP_DIR/.flight/templates" .flight/
 
+# Update inject-flight-protocol.sh
+[[ -f "$TMP_DIR/.flight/inject-flight-protocol.sh" ]] && cp "$TMP_DIR/.flight/inject-flight-protocol.sh" .flight/
+
 # Make scripts executable
 chmod +x .flight/validate-all.sh 2>/dev/null || true
 chmod +x .flight/exclusions.sh 2>/dev/null || true
 chmod +x .flight/domains/*.validate.sh 2>/dev/null || true
 chmod +x .flight/domains/*.sh 2>/dev/null || true
 chmod +x .flight/bin/* 2>/dev/null || true
+chmod +x .flight/inject-flight-protocol.sh 2>/dev/null || true
+
+# Inject/update Flight Execution Protocol in CLAUDE.md
+./.flight/inject-flight-protocol.sh .
 
 echo "Flight updated"
 echo ""
@@ -63,9 +70,10 @@ echo "  - .flight/validate-all.sh, exclusions.sh"
 echo "  - .flight/domains/* (all stock domains)"
 echo "  - .flight/bin/* (tooling scripts)"
 echo "  - .flight/examples/, exercises/, templates/"
+echo "  - CLAUDE.md (Flight Execution Protocol injected/updated)"
 echo ""
 echo "Preserved:"
-echo "  - CLAUDE.md (your project description)"
+echo "  - CLAUDE.md (your project description - protocol section updated only)"
 echo "  - PROMPT.md, PRIME.md (your working files)"
 echo "  - .flight/known-landmines.md (your project's temporal data)"
 echo "  - Custom domains (any .md/.sh not in Flight repo)"
