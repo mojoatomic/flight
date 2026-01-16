@@ -115,7 +115,7 @@ check "N8: Export Default (except Next.js special files)" \
     bash -c 'for f in "$@"; do
     basename=$(basename "$f")
     # Skip Next.js special files that require export default
-    if [[ "$basename" =~ ^(page|layout|loading|error|not-found|template|default)\.(tsx|jsx|ts|js)$ ]]; then
+    if [[ "$basename" =~ ^(page|layout|loading|error|not-found|template|default|main)\.(tsx|jsx|ts|js)$ ]]; then
         continue
     fi
     grep -En '"'"'^export default'"'"' "$f" 2>/dev/null || true

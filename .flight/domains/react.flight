@@ -224,7 +224,7 @@ rules:
         for f in "$@"; do
             basename=$(basename "$f")
             # Skip Next.js special files that require export default
-            if [[ "$basename" =~ ^(page|layout|loading|error|not-found|template|default)\.(tsx|jsx|ts|js)$ ]]; then
+            if [[ "$basename" =~ ^(page|layout|loading|error|not-found|template|default|main)\.(tsx|jsx|ts|js)$ ]]; then
                 continue
             fi
             grep -En '^export default' "$f" 2>/dev/null || true
@@ -233,6 +233,7 @@ rules:
       export default allows renaming on import, hiding the real name.
       Named exports keep names consistent across codebase.
       Next.js page.tsx, layout.tsx, etc. MUST use export default per framework.
+      Vite main.tsx is the entry point and uses default export pattern by convention.
     examples:
       bad:
         - "export default function UserCard() { ... }"
@@ -241,6 +242,17 @@ rules:
         - |
           // page.tsx - Next.js exception
           export default function HomePage() { ... }
+        - |
+          // main.tsx - Vite entry point exception
+          import { StrictMode } from 'react'
+          import { createRoot } from 'react-dom/client'
+          import { App } from './App'
+
+          createRoot(document.getElementById('root')!).render(
+            <StrictMode>
+              <App />
+            </StrictMode>
+          )
 
   N9:
     title: Props Named data/info/item/value
