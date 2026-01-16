@@ -143,6 +143,18 @@ router.get('/getUser/:id', handler)  // flight:ok
    // page.tsx - Next.js exception
    export default function HomePage() { ... }
    
+   // GOOD
+   // main.tsx - Vite entry point exception
+   import { StrictMode } from 'react'
+   import { createRoot } from 'react-dom/client'
+   import { App } from './App'
+   
+   createRoot(document.getElementById('root')!).render(
+     <StrictMode>
+       <App />
+     </StrictMode>
+   )
+   
    ```
 
 9. **Props Named data/info/item/value** - Generic prop names like data, info, item hide intent. Use domain-specific names that describe the prop's purpose.
