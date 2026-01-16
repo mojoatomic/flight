@@ -93,8 +93,11 @@ check "N2: Plain Text Passwords in Code" \
 # N3: Invoke-WebRequest Without -UseBasicParsing
 check "N3: Invoke-WebRequest Without -UseBasicParsing" \
     bash -c '# Check for Invoke-WebRequest or iwr without -UseBasicParsing
-grep -Ein '"'"'Invoke-WebRequest|[^a-zA-Z]iwr\s'"'"' "$file" | \
-grep -v '"'"'UseBasicParsing'"'"' | grep -v '"'"'SuppressMessage'"'"'' _ "${FILES[@]}"
+for f in "$@"; do
+  grep -Ein '"'"'Invoke-WebRequest|[^a-zA-Z]iwr\s'"'"' "$f" 2>/dev/null | \
+  grep -v '"'"'UseBasicParsing'"'"' | grep -v '"'"'SuppressMessage'"'"' | \
+  sed "s|^|$f:|"
+done' _ "${FILES[@]}"
 
 # N4: ConvertTo-SecureString with -AsPlainText in Source
 check "N4: ConvertTo-SecureString with -AsPlainText in Source" \
@@ -102,7 +105,7 @@ check "N4: ConvertTo-SecureString with -AsPlainText in Source" \
 
 # N5: Using Aliases in Scripts
 check "N5: Using Aliases in Scripts" \
-    bash -c 'grep -En "^\\s*(%|\\\\?|\\bls\\b|\\bcat\\b|\\bcurl\\b|\\bwget\\b|\\bdiff\\b|\\bsort\\b)\\s" "$@" | grep -v "SuppressMessage"' _ "${FILES[@]}"
+    bash -c 'grep -En "^\\s*(%|[?]|\\bls\\b|\\bcat\\b|\\bcurl\\b|\\bwget\\b|\\bdiff\\b|\\bsort\\b)\\s" "$@" | grep -v "SuppressMessage"' _ "${FILES[@]}"
 
 # N6: Write-Host for Data Output
 check "N6: Write-Host for Data Output" \

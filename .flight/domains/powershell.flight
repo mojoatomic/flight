@@ -121,8 +121,11 @@ rules:
       type: script
       code: |
         # Check for Invoke-WebRequest or iwr without -UseBasicParsing
-        grep -Ein 'Invoke-WebRequest|[^a-zA-Z]iwr\s' "$file" | \
-        grep -v 'UseBasicParsing' | grep -v 'SuppressMessage'
+        for f in "$@"; do
+          grep -Ein 'Invoke-WebRequest|[^a-zA-Z]iwr\s' "$f" 2>/dev/null | \
+          grep -v 'UseBasicParsing' | grep -v 'SuppressMessage' | \
+          sed "s|^|$f:|"
+        done
     note: |
       December 2025 CVE-2025-54100 patches added security prompts for unsafe parsing.
       Always use -UseBasicParsing for automation scripts that run unattended.
@@ -163,7 +166,7 @@ rules:
       Scripts using aliases may fail on Linux/macOS or in constrained environments.
     check:
       type: grep
-      pattern: '^\s*(%|\\?|\bls\b|\bcat\b|\bcurl\b|\bwget\b|\bdiff\b|\bsort\b)\s'
+      pattern: '^\s*(%|[?]|\bls\b|\bcat\b|\bcurl\b|\bwget\b|\bdiff\b|\bsort\b)\s'
       flags: -En
       exclude: SuppressMessage
     note: |
