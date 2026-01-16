@@ -31,6 +31,10 @@ chmod +x update.sh 2>/dev/null || true
 chmod +x .flight/validate-all.sh 2>/dev/null || true
 chmod +x .flight/domains/*.validate.sh 2>/dev/null || true
 chmod +x .flight/domains/*.sh 2>/dev/null || true
+chmod +x .flight/inject-flight-protocol.sh 2>/dev/null || true
+
+# Inject Flight Execution Protocol into CLAUDE.md
+./.flight/inject-flight-protocol.sh .
 
 # Add npm scripts if package.json exists
 if [[ -f package.json ]]; then
