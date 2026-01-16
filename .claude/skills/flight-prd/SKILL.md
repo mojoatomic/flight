@@ -137,10 +137,15 @@ Proceed with available tools, or install first?
 
 **Skip this step only if `--no-research` flag was provided.**
 
-Run `/flight-research` now. This validates that your tech stack choices are current.
+Run `/flight-research` with the tech stack identified in Step 2. Pass dependencies explicitly - no files exist yet for auto-detection.
 
 ```
-/flight-research
+/flight-research {dep1} {dep2} {dep3} ...
+```
+
+**Example** (for a Next.js + Prisma + Auth.js project):
+```
+/flight-research next react prisma tailwindcss auth-js
 ```
 
 Wait for research to complete. The output will include:
