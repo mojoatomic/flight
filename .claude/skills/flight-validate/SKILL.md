@@ -3,6 +3,21 @@ name: flight-validate
 description: Run domain validation scripts against code - PASS or FAIL with no interpretation. Use after implementing code to verify it meets domain constraints.
 ---
 
+## ⚠️ EXECUTION RULES (MANDATORY)
+
+1. **EXECUTE EACH STEP** - Do not skip steps based on "prior context"
+2. **USE TOOLS** - You MUST call Read/Bash tools, not recall from memory
+3. **SHOW WORK** - Each step must produce visible tool output
+4. **NO SHORTCUTS** - "I already read this" is NOT acceptable
+
+### Anti-Patterns (DO NOT DO THESE)
+- ❌ "I already read the domain files earlier"
+- ❌ "From earlier analysis..."
+- ❌ Summarizing steps without executing them
+- ❌ Claiming knowledge from "this conversation"
+
+---
+
 # /flight-validate
 
 Run domain validation scripts. Script says PASS or FAIL - no agent interpretation.
