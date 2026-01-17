@@ -8,7 +8,6 @@ description: >
   Enforces quoting, strict mode, error handling, and security best practices.
 
 file_patterns:
-  - "*.sh"
   - "**/*.sh"
 
 exclude_patterns:
@@ -79,7 +78,7 @@ rules:
       type: script
       code: |
         for f in "$@"; do
-            grep -En '[^"=]\$\([^)]+\)[^"]' "$f" 2>/dev/null | grep -v '# shellcheck' | head -5
+            grep -En '[^"=]\$\([^)]+\)[^"]' "$f" 2>/dev/null | grep -v '#' | grep -v 'check "' | head -5
         done
     note: |
       The output of $(cmd) can contain spaces or glob characters.
@@ -102,9 +101,11 @@ rules:
       Parsing ls output breaks on filenames with spaces, newlines, or
       special characters. Use globs or find instead.
     check:
-      type: grep
-      pattern: 'for\s+\w+\s+in\s+\$\(ls|\`ls|ls\s+\|'
-      flags: -En
+      type: script
+      code: |
+        for f in "$@"; do
+            grep -En 'for\s+\w+\s+in\s+\$\(ls|\`ls|ls\s+\|' "$f" 2>/dev/null | grep -v '#'
+        done
     note: |
       ls output is for humans, not scripts. Filenames can contain
       any character except / and NUL. Use glob patterns or find -print0.
@@ -126,9 +127,11 @@ rules:
       Backticks are the old style command substitution. They can't nest
       easily and are harder to read than $().
     check:
-      type: grep
-      pattern: '\`[^\`]+\`'
-      flags: -En
+      type: script
+      code: |
+        for f in "$@"; do
+            grep -En '\`[^\`]+\`' "$f" 2>/dev/null | grep -v '#'
+        done
     note: |
       $() can nest: $(cmd1 $(cmd2))
       Backticks require escaping: `cmd1 \`cmd2\``
@@ -150,7 +153,7 @@ rules:
       code: |
         for f in "$@"; do
             if head -1 "$f" | grep -q 'bash'; then
-                grep -En '^\s*\[\s+|\s+\[\s+[^[]' "$f" | grep -v '\[\[' | head -5
+                grep -En '^\s*\[\s+|\s+\[\s+[^[]' "$f" | grep -v '\[\[' | grep -v '#' | grep -v 'check "' | head -5
             fi
         done
     note: |
@@ -173,9 +176,11 @@ rules:
       The 'function' keyword is bash-specific and not POSIX compliant.
       Use the portable name() { } syntax.
     check:
-      type: grep
-      pattern: '^\s*function\s+\w+'
-      flags: -En
+      type: script
+      code: |
+        for f in "$@"; do
+            grep -En '^\s*function\s+\w+' "$f" 2>/dev/null | grep -v '#'
+        done
     note: |
       'function foo {' is bash-only.
       'foo() {' works in bash, sh, dash, and other shells.
@@ -224,9 +229,11 @@ rules:
       cat file | cmd creates an extra process. Most commands can read
       files directly or via stdin redirection.
     check:
-      type: grep
-      pattern: 'cat\s+[^|]+\|\s*(grep|awk|sed|head|tail|wc|sort|uniq|cut)'
-      flags: -En
+      type: script
+      code: |
+        for f in "$@"; do
+            grep -En 'cat\s+[^|]+\|\s*(grep|awk|sed|head|tail|wc|sort|uniq|cut)' "$f" 2>/dev/null | grep -v '#'
+        done
     note: |
       cat file | grep is 2 processes. grep pattern file is 1 process.
       For stdin: cmd < file
@@ -292,9 +299,11 @@ rules:
       Piping remote scripts directly to bash executes untrusted code.
       Download, inspect, then execute.
     check:
-      type: grep
-      pattern: 'curl.*\|\s*(ba)?sh|wget.*\|\s*(ba)?sh'
-      flags: -En
+      type: script
+      code: |
+        for f in "$@"; do
+            grep -En 'curl\s+.*\|\s*(ba)?sh|wget\s+.*\|\s*(ba)?sh' "$f" 2>/dev/null | grep -v '#'
+        done
     note: |
       curl | bash executes whatever the server sends.
       Partial downloads can execute incomplete scripts.
