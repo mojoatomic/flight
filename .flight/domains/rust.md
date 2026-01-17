@@ -5,15 +5,6 @@ Rust development patterns covering error handling, ownership, memory safety, con
 
 **Validation:** `rust.validate.sh` enforces NEVER/MUST rules. SHOULD rules trigger warnings. GUIDANCE is not mechanically checked.
 
-### Suppressing Warnings
-
-
-
-```javascript
-// Legacy endpoint, scheduled for deprecation in v3
-router.get('/getUser/:id', handler)  // // flight:ok
-```
-
 ---
 
 ## Invariants

@@ -20,8 +20,7 @@ check() {
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -36,8 +35,7 @@ warn() {
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -94,12 +92,12 @@ check "N1: Unsafe Block Without Safety Comment" \
       }
     }
     { prev = $0 }
-  '"'"' "$f" 2>/dev/null | grep -v "flight:ok"
+  '"'"' "$f" 2>/dev/null
 done' _ "${FILES[@]}"
 
 # N2: mem::transmute Usage
 check "N2: mem::transmute Usage" \
-    bash -c 'grep -En "mem::transmute\\s*[<(]|transmute::<" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En "mem::transmute\\s*[<(]|transmute::<" "${FILES[@]}"
 
 # N3: Panic in Library Code
 check "N3: Panic in Library Code" \
@@ -111,7 +109,7 @@ check "N3: Panic in Library Code" \
     continue
   fi
   grep -HnE '"'"'panic!\s*\(|todo!\s*\(|unimplemented!\s*\('"'"' "$f" 2>/dev/null | \
-    grep -v "flight:ok" | grep -v "unreachable!"
+    grep -v "unreachable!"
 done' _ "${FILES[@]}"
 
 # N4: .unwrap() in Production Code
@@ -122,20 +120,20 @@ check "N4: .unwrap() in Production Code" \
      [[ "$f" == *"/examples/"* ]]; then
     continue
   fi
-  grep -HnE '"'"'\.unwrap\(\s*\)'"'"' "$f" 2>/dev/null | grep -v "flight:ok"
+  grep -HnE '"'"'\.unwrap\(\s*\)'"'"' "$f" 2>/dev/null
 done' _ "${FILES[@]}"
 
 # N5: .expect() Without Descriptive Message
 check "N5: .expect() Without Descriptive Message" \
-    bash -c 'grep -En "\\.expect\\s*\\(\\s*\"\"\\s*\\)|\\.expect\\s*\\(\\s*\\)" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En "\\.expect\\s*\\(\\s*\"\"\\s*\\)|\\.expect\\s*\\(\\s*\\)" "${FILES[@]}"
 
 # N6: Raw Pointer Arithmetic Without Bounds Check
 check "N6: Raw Pointer Arithmetic Without Bounds Check" \
-    bash -c 'grep -En "\\.offset\\s*\\(|\\.add\\s*\\(|\\.sub\\s*\\(|\\.wrapping_offset\\s*\\(" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En "\\.offset\\s*\\(|\\.add\\s*\\(|\\.sub\\s*\\(|\\.wrapping_offset\\s*\\(" "${FILES[@]}"
 
 # N7: mem::forget Without Clear Justification
 check "N7: mem::forget Without Clear Justification" \
-    bash -c 'grep -En "mem::forget\\s*\\(|std::mem::forget\\s*\\(" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En "mem::forget\\s*\\(|std::mem::forget\\s*\\(" "${FILES[@]}"
 
 # N8: Mutex Held Across Await Point
 check "N8: Mutex Held Across Await Point" \
@@ -151,7 +149,7 @@ check "N8: Mutex Held Across Await Point" \
           in_lock = 0
         }
         /drop\(|}\s*$/ { in_lock = 0 }
-      '"'"' "$f" 2>/dev/null | grep -v "flight:ok"
+      '"'"' "$f" 2>/dev/null
     fi
   fi
 done' _ "${FILES[@]}"
@@ -162,28 +160,27 @@ printf '\n%s\n' "## MUST Rules"
 check "M1: Use ? Operator for Error Propagation" \
     bash -c 'for f in "$@"; do
   # Look for verbose match patterns that could use ?
-  grep -HnE '"'"'match\s+\w+\s*\{[^}]*Ok\s*\(\s*\w+\s*\)\s*=>\s*\w+\s*,'"'"' "$f" 2>/dev/null | \
-    grep -v "flight:ok"
+  grep -HnE '"'"'match\s+\w+\s*\{[^}]*Ok\s*\(\s*\w+\s*\)\s*=>\s*\w+\s*,'"'"' "$f" 2>/dev/null
 done' _ "${FILES[@]}"
 
 # M2: Clone Abuse - Cloning to Satisfy Borrow Checker
 check "M2: Clone Abuse - Cloning to Satisfy Borrow Checker" \
     bash -c 'for f in "$@"; do
   # Look for .clone() immediately before passing to function or after &
-  grep -HnE '"'"'&\w+\.clone\(\)|\.clone\(\)\s*\)'"'"' "$f" 2>/dev/null | grep -v "flight:ok"
+  grep -HnE '"'"'&\w+\.clone\(\)|\.clone\(\)\s*\)'"'"' "$f" 2>/dev/null
 done' _ "${FILES[@]}"
 
 # M3: String Parameter When &str Would Work
 check "M3: String Parameter When &str Would Work" \
-    bash -c 'grep -En "fn\\s+\\w+\\s*\\([^)]*:\\s*&?String[^)]*(,|\\))|fn\\s+\\w+\\s*<[^>]*>\\s*\\([^)]*:\\s*&?String" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En "fn\\s+\\w+\\s*\\([^)]*:\\s*&?String[^)]*(,|\\))|fn\\s+\\w+\\s*<[^>]*>\\s*\\([^)]*:\\s*&?String" "${FILES[@]}"
 
 # M4: Vec Parameter When Slice Would Work
 check "M4: Vec Parameter When Slice Would Work" \
-    bash -c 'grep -En "fn\\s+\\w+\\s*\\([^)]*:\\s*&Vec<[^>]+>[^)]*(,|\\))" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En "fn\\s+\\w+\\s*\\([^)]*:\\s*&Vec<[^>]+>[^)]*(,|\\))" "${FILES[@]}"
 
 # M5: Box<T> When T Would Work
 check "M5: Box<T> When T Would Work" \
-    bash -c 'grep -En "Box<(String|Vec<|HashMap<|HashSet<)" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En "Box<(String|Vec<|HashMap<|HashSet<)" "${FILES[@]}"
 
 # M6: println! in Library Code
 check "M6: println! in Library Code" \
@@ -194,16 +191,14 @@ check "M6: println! in Library Code" \
      [[ "$f" == *"/examples/"* ]] || [[ "$f" == *"/benches/"* ]]; then
     continue
   fi
-  grep -HnE '"'"'println!\s*\(|print!\s*\(|eprintln!\s*\(|eprint!\s*\('"'"' "$f" 2>/dev/null | \
-    grep -v "flight:ok"
+  grep -HnE '"'"'println!\s*\(|print!\s*\(|eprintln!\s*\(|eprint!\s*\('"'"' "$f" 2>/dev/null
 done' _ "${FILES[@]}"
 
 # M7: Blocking Operations in Async Context
 check "M7: Blocking Operations in Async Context" \
     bash -c 'for f in "$@"; do
   if grep -qE '"'"'async\s+fn'"'"' "$f" 2>/dev/null; then
-    grep -HnE '"'"'std::fs::|std::thread::sleep|std::io::stdin|\.read_to_string\('"'"' "$f" 2>/dev/null | \
-      grep -v "flight:ok"
+    grep -HnE '"'"'std::fs::|std::thread::sleep|std::io::stdin|\.read_to_string\('"'"' "$f" 2>/dev/null
   fi
 done' _ "${FILES[@]}"
 
@@ -217,7 +212,7 @@ check "M9: Derive Common Traits" \
       }
     }
     { prev = $0 }
-  '"'"' "$f" 2>/dev/null | grep -v "flight:ok"
+  '"'"' "$f" 2>/dev/null
 done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## SHOULD Rules"
@@ -226,16 +221,14 @@ printf '\n%s\n' "## SHOULD Rules"
 warn "S1: Use Iterators Over Manual Loops" \
     bash -c 'for f in "$@"; do
   # Look for patterns like for i in 0..vec.len() { vec[i] }
-  grep -HnE '"'"'for\s+\w+\s+in\s+0\s*\.\.\s*\w+\.len\(\)'"'"' "$f" 2>/dev/null | \
-    grep -v "flight:ok"
+  grep -HnE '"'"'for\s+\w+\s+in\s+0\s*\.\.\s*\w+\.len\(\)'"'"' "$f" 2>/dev/null
 done' _ "${FILES[@]}"
 
 # S2: Use if let for Single-Arm Matches
 warn "S2: Use if let for Single-Arm Matches" \
     bash -c 'for f in "$@"; do
   # Look for match with only one meaningful arm and _ => {}
-  grep -HnE '"'"'match\s+\w+\s*\{[^}]*_\s*=>\s*\{\s*\}[^}]*\}'"'"' "$f" 2>/dev/null | \
-    grep -v "flight:ok"
+  grep -HnE '"'"'match\s+\w+\s*\{[^}]*_\s*=>\s*\{\s*\}[^}]*\}'"'"' "$f" 2>/dev/null
 done' _ "${FILES[@]}"
 
 # S3: Implement Default for Types with Obvious Defaults
@@ -250,31 +243,30 @@ warn "S3: Implement Default for Types with Obvious Defaults" \
       fi
     fi
   fi
-done | grep -v "flight:ok"' _ "${FILES[@]}"
+done' _ "${FILES[@]}"
 
 # S5: Avoid Wildcard Imports
 warn "S5: Avoid Wildcard Imports" \
     bash -c 'for f in "$@"; do
   # Skip test modules and prelude imports
   grep -HnE '"'"'^use\s+[^;]+::\*;'"'"' "$f" 2>/dev/null | \
-    grep -vE '"'"'prelude::\*|flight:ok|#\[cfg\(test\)\]'"'"'
+    grep -vE '"'"'prelude::\*|#\[cfg\(test\)\]'"'"'
 done' _ "${FILES[@]}"
 
 # S6: Use snake_case for Functions and Variables
 warn "S6: Use snake_case for Functions and Variables" \
-    bash -c 'grep -En "(let|fn)\\s+[a-z]+[A-Z][a-zA-Z]*\\s*[=:(]" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En "(let|fn)\\s+[a-z]+[A-Z][a-zA-Z]*\\s*[=:(]" "${FILES[@]}"
 
 # S7: Avoid Large Stack Allocations
 warn "S7: Avoid Large Stack Allocations" \
     bash -c 'for f in "$@"; do
   # Look for arrays larger than 256 elements of basic types
-  grep -HnE '"'"'\[\s*[a-z0-9_]+\s*;\s*[0-9]{4,}\s*\]'"'"' "$f" 2>/dev/null | \
-    grep -v "flight:ok"
+  grep -HnE '"'"'\[\s*[a-z0-9_]+\s*;\s*[0-9]{4,}\s*\]'"'"' "$f" 2>/dev/null
 done' _ "${FILES[@]}"
 
 # S8: Prefer From/Into Over as for Type Conversions
 warn "S8: Prefer From/Into Over as for Type Conversions" \
-    bash -c 'grep -En "\\s+as\\s+(u8|u16|u32|i8|i16|i32)\\s*[;,)\\]]" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En "\\s+as\\s+(u8|u16|u32|i8|i16|i32)\\s*[;,)\\]]" "${FILES[@]}"
 
 printf '\n%s\n' "## Info"
 

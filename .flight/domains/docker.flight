@@ -13,10 +13,6 @@ file_patterns:
   - "**/Dockerfile.*"
   - "**/*.dockerfile"
 
-suppression:
-  comment: "# flight:ok"
-  guidance: "Use sparingly. Document why the suppression is acceptable."
-
 rules:
   # ═══════════════════════════════════════════════════════════════════════════
   # NEVER Rules - Security vulnerabilities (validator will reject)
@@ -39,7 +35,7 @@ rules:
           elif grep -qE "^USER\s+(root|0)\s*$" "$f" 2>/dev/null; then
             grep -HnE "^USER\s+(root|0)\s*$" "$f"
           fi
-        done | grep -v "flight:ok"
+        done
     examples:
       bad:
         - "# No USER directive at all"
@@ -62,7 +58,6 @@ rules:
       type: grep
       pattern: '(ARG|ENV)\s+\w*(PASSWORD|SECRET|API_KEY|PRIVATE_KEY|TOKEN|CREDENTIAL|AUTH)\w*\s*='
       flags: -Ein
-      exclude: "flight:ok"
     examples:
       bad:
         - "ARG DB_PASSWORD=secret123"
@@ -85,7 +80,6 @@ rules:
       type: grep
       pattern: '^ADD\s+https?://'
       flags: -Ein
-      exclude: "flight:ok"
     examples:
       bad:
         - "ADD https://example.com/file.tar.gz /app/"
@@ -107,7 +101,6 @@ rules:
       type: grep
       pattern: '--privileged|--cap-add|SYS_ADMIN|NET_ADMIN|ALL'
       flags: -Ein
-      exclude: "flight:ok"
     examples:
       bad:
         - "# In docker-compose or run commands baked into image"
@@ -128,7 +121,6 @@ rules:
       type: grep
       pattern: '(password|passwd|secret|api_key|apikey|private_key|token)\s*[=:]\s*["\047][^"\047]+["\047]'
       flags: -Ein
-      exclude: "flight:ok"
     examples:
       bad:
         - 'ENV password="hunter2"'
@@ -154,7 +146,6 @@ rules:
       type: grep
       pattern: '^WORKDIR\s+[^/]'
       flags: -En
-      exclude: "flight:ok"
     examples:
       bad:
         - "WORKDIR app"
@@ -177,8 +168,7 @@ rules:
       type: script
       code: |
         for f in "$@"; do
-          grep -HnE "^FROM\s+[^:@\s]+\s*$|^FROM\s+[^@\s]+:latest(\s|$)" "$f" 2>/dev/null | \
-            grep -v "flight:ok"
+          grep -HnE "^FROM\s+[^:@\s]+\s*$|^FROM\s+[^@\s]+:latest(\s|$)" "$f" 2>/dev/null
         done
     examples:
       bad:
@@ -203,8 +193,7 @@ rules:
       code: |
         for f in "$@"; do
           grep -HnE "^ADD\s+[^h][^\s]+\s+" "$f" 2>/dev/null | \
-            grep -vE "\.(tar|tar\.gz|tgz|tar\.bz2|tar\.xz)\s" | \
-            grep -v "flight:ok"
+            grep -vE "\.(tar|tar\.gz|tgz|tar\.bz2|tar\.xz)\s"
         done
     examples:
       bad:
@@ -228,7 +217,6 @@ rules:
       type: grep
       pattern: '^MAINTAINER\s+'
       flags: -Ein
-      exclude: "flight:ok"
     examples:
       bad:
         - 'MAINTAINER John Doe <john@example.com>'
@@ -249,8 +237,7 @@ rules:
       type: script
       code: |
         for f in "$@"; do
-          grep -HnE "^(CMD|ENTRYPOINT)\s+[^\[]" "$f" 2>/dev/null | \
-            grep -v "flight:ok"
+          grep -HnE "^(CMD|ENTRYPOINT)\s+[^\[]" "$f" 2>/dev/null
         done
     examples:
       bad:
@@ -279,7 +266,7 @@ rules:
               echo "$f: RUN commands use pipes but SHELL pipefail not set"
             fi
           fi
-        done | grep -v "flight:ok"
+        done
     examples:
       bad:
         - |
@@ -311,7 +298,7 @@ rules:
               fi
             done
           done
-        done | grep -v "flight:ok"
+        done
     examples:
       bad:
         - "EXPOSE 0"
@@ -339,7 +326,7 @@ rules:
       code: |
         for f in "$@"; do
           grep -HnE "apt-get\s+install.*\s[a-z][a-z0-9+-]+(\s|$)" "$f" 2>/dev/null | \
-            grep -vE "=[0-9]|flight:ok"
+            grep -vE "=[0-9]"
         done
     examples:
       bad:
@@ -362,7 +349,7 @@ rules:
       code: |
         for f in "$@"; do
           grep -HnE "^RUN\s+.*apt-get\s+install" "$f" 2>/dev/null | \
-            grep -vE "rm\s+-rf\s+/var/lib/apt|flight:ok"
+            grep -vE "rm\s+-rf\s+/var/lib/apt"
         done
     examples:
       bad:
@@ -392,7 +379,7 @@ rules:
               echo "$f: build tools detected but no multi-stage build (single FROM)"
             fi
           fi
-        done | grep -v "flight:ok"
+        done
     examples:
       bad:
         - |
@@ -428,7 +415,7 @@ rules:
               echo "$f:$copy_all_line: COPY . before COPY package* (poor cache efficiency)"
             fi
           fi
-        done | grep -v "flight:ok"
+        done
     examples:
       bad:
         - |
@@ -456,7 +443,7 @@ rules:
           if [ ! -f "$dir/.dockerignore" ]; then
             echo "$f: no .dockerignore found in $dir"
           fi
-        done | grep -v "flight:ok"
+        done
     examples:
       bad:
         - "# No .dockerignore file"
@@ -488,7 +475,7 @@ rules:
               echo "$f: no HEALTHCHECK defined for service image"
             fi
           fi
-        done | grep -v "flight:ok"
+        done
     examples:
       bad:
         - |
@@ -517,7 +504,7 @@ rules:
           if [ "$run_count" -gt 10 ]; then
             echo "$f: $run_count RUN commands (consider combining)"
           fi
-        done | grep -v "flight:ok"
+        done
     examples:
       bad:
         - |
@@ -543,8 +530,7 @@ rules:
       type: script
       code: |
         for f in "$@"; do
-          grep -HnE "^COPY\s+\.\s+" "$f" 2>/dev/null | \
-            grep -v "flight:ok"
+          grep -HnE "^COPY\s+\.\s+" "$f" 2>/dev/null
         done
     examples:
       bad:
@@ -567,7 +553,6 @@ rules:
       type: grep
       pattern: 'apt-get\s+(upgrade|dist-upgrade)'
       flags: -Ein
-      exclude: "flight:ok"
     examples:
       bad:
         - "RUN apt-get update && apt-get upgrade -y"

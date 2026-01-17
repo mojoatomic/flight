@@ -20,8 +20,7 @@ check() {
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -36,8 +35,7 @@ warn() {
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -86,11 +84,11 @@ printf '\n%s\n' "## NEVER Rules"
 
 # N1: Ignored Errors
 check "N1: Ignored Errors" \
-    bash -c 'grep -En "[^_]\\s*,\\s*_\\s*:?=\\s*\\w+\\s*\\([^)]*\\)|_\\s*=\\s*\\w+\\.\\w+\\s*\\(" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En "[^_]\\s*,\\s*_\\s*:?=\\s*\\w+\\s*\\([^)]*\\)|_\\s*=\\s*\\w+\\.\\w+\\s*\\(" "${FILES[@]}"
 
 # N2: Panic for Normal Error Handling
 check "N2: Panic for Normal Error Handling" \
-    bash -c 'grep -Ein "panic\\s*\\(\\s*(err|fmt\\.Errorf|errors\\.New|\"[^\"]*error|\"[^\"]*fail|\"[^\"]*invalid)" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -Ein "panic\\s*\\(\\s*(err|fmt\\.Errorf|errors\\.New|\"[^\"]*error|\"[^\"]*fail|\"[^\"]*invalid)" "${FILES[@]}"
 
 # N3: math/rand for Security
 check "N3: math/rand for Security" \
@@ -98,7 +96,7 @@ check "N3: math/rand for Security" \
 
 # N4: Defer in Loop
 check "N4: Defer in Loop" \
-    bash -c 'grep -Ezn "for\\s+[^{]*\\{[^}]*defer\\s+" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -Ezn "for\\s+[^{]*\\{[^}]*defer\\s+" "${FILES[@]}"
 
 # N5: Goroutine without Lifetime Management
 check "N5: Goroutine without Lifetime Management" \
@@ -113,25 +111,25 @@ done' _ "${FILES[@]}"
 
 # N6: Unbuffered Channel in Select with Default
 check "N6: Unbuffered Channel in Select with Default" \
-    bash -c 'grep -Ezn "select\\s*\\{[^}]*case\\s+[^<]*<-[^:]*:[^}]*default:" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -Ezn "select\\s*\\{[^}]*case\\s+[^<]*<-[^:]*:[^}]*default:" "${FILES[@]}"
 
 # N7: Nil Map Write
 check "N7: Nil Map Write" \
-    bash -c 'grep -En "var\\s+\\w+\\s+map\\[[^\\]]+\\][^\\n=]*\$" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En "var\\s+\\w+\\s+map\\[[^\\]]+\\][^\\n=]*\$" "${FILES[@]}"
 
 # N8: Range Loop Variable Capture (Pre-Go 1.22)
 check "N8: Range Loop Variable Capture (Pre-Go 1.22)" \
-    bash -c 'grep -Ezn "for\\s+[^,]+,?\\s*(\\w+)\\s*:?=\\s*range[^{]*\\{[^}]*go\\s+func\\s*\\([^)]*\\)\\s*\\{[^}]*\\1" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -Ezn "for\\s+[^,]+,?\\s*(\\w+)\\s*:?=\\s*range[^{]*\\{[^}]*go\\s+func\\s*\\([^)]*\\)\\s*\\{[^}]*\\1" "${FILES[@]}"
 
 printf '\n%s\n' "## MUST Rules"
 
 # M1: MixedCaps Naming
 check "M1: MixedCaps Naming" \
-    bash -c 'grep -En "(func|var|const|type)\\s+[a-z]+_[a-z]+\\s*[=(]" "$@" | grep -v "flight:ok|_test\\.go"' _ "${FILES[@]}"
+    grep -En "(func|var|const|type)\\s+[a-z]+_[a-z]+\\s*[=(]" "${FILES[@]}"
 
 # M2: Initialisms Must Be Consistent Case
 check "M2: Initialisms Must Be Consistent Case" \
-    bash -c 'grep -En "(Url|Http|Api|Sql|Json|Xml|Html|Css|Tcp|Udp|Ip|Dns|Cpu|Gpu|Ram|Ssd|Hdd|Usb|Pdf|Csv)[A-Z]|(Url|Http|Api|Sql|Json|Xml|Html|Css|Tcp|Udp|Ip|Dns|Cpu|Gpu|Ram|Ssd|Hdd|Usb|Pdf|Csv)\\s*[=:(]" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En "(Url|Http|Api|Sql|Json|Xml|Html|Css|Tcp|Udp|Ip|Dns|Cpu|Gpu|Ram|Ssd|Hdd|Usb|Pdf|Csv)[A-Z]|(Url|Http|Api|Sql|Json|Xml|Html|Css|Tcp|Udp|Ip|Dns|Cpu|Gpu|Ram|Ssd|Hdd|Usb|Pdf|Csv)\\s*[=:(]" "${FILES[@]}"
 
 # M3: Exported Names Must Have Doc Comments
 check "M3: Exported Names Must Have Doc Comments" \
@@ -148,11 +146,11 @@ done' _ "${FILES[@]}"
 
 # M4: Context as First Parameter
 check "M4: Context as First Parameter" \
-    bash -c 'grep -En "func\\s+\\w+\\([^)]*,\\s*ctx\\s+context\\.Context|func\\s+\\w+\\([^)]*context\\.Context[^)]*,[^)]+\\)\\s*[^{]*\\{" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En "func\\s+\\w+\\([^)]*,\\s*ctx\\s+context\\.Context|func\\s+\\w+\\([^)]*context\\.Context[^)]*,[^)]+\\)\\s*[^{]*\\{" "${FILES[@]}"
 
 # M5: Error Variable Naming
 check "M5: Error Variable Naming" \
-    bash -c 'grep -En "var\\s+[A-Z][a-z]+Error\\s*=" "$@" | grep -v "Err[A-Z]|flight:ok"' _ "${FILES[@]}"
+    grep -En "var\\s+[A-Z][a-z]+Error\\s*=" "${FILES[@]}"
 
 # M6: Package Names Must Be Lowercase
 check "M6: Package Names Must Be Lowercase" \
@@ -164,7 +162,7 @@ check "M7: Receiver Name Consistency" \
 
 # M8: Error Strings Lowercase
 check "M8: Error Strings Lowercase" \
-    bash -c 'grep -En "errors\\.New\\s*\\(\\s*\"[A-Z]|fmt\\.Errorf\\s*\\(\\s*\"[A-Z]|errors\\.New\\s*\\([^)]*\\.\\s*\"\\s*\\)|fmt\\.Errorf\\s*\\([^)]*\\.\\s*\"\\s*\\)" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En "errors\\.New\\s*\\(\\s*\"[A-Z]|fmt\\.Errorf\\s*\\(\\s*\"[A-Z]|errors\\.New\\s*\\([^)]*\\.\\s*\"\\s*\\)|fmt\\.Errorf\\s*\\([^)]*\\.\\s*\"\\s*\\)" "${FILES[@]}"
 
 printf '\n%s\n' "## SHOULD Rules"
 
@@ -195,11 +193,11 @@ done' _ "${FILES[@]}"
 
 # S3: Prefer var for Zero Values
 warn "S3: Prefer var for Zero Values" \
-    bash -c 'grep -En ":=\\s*\\[\\][a-zA-Z]+\\{\\s*\\}|:=\\s*make\\s*\\(\\s*\\[\\][a-zA-Z]+\\s*,\\s*0\\s*\\)" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En ":=\\s*\\[\\][a-zA-Z]+\\{\\s*\\}|:=\\s*make\\s*\\(\\s*\\[\\][a-zA-Z]+\\s*,\\s*0\\s*\\)" "${FILES[@]}"
 
 # S4: Synchronous Functions Preferred
 warn "S4: Synchronous Functions Preferred" \
-    bash -c 'grep -Ezn "func\\s+\\w+\\([^)]*chan\\s*<-[^)]*\\)\\s*\\{[^}]*go\\s+func" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -Ezn "func\\s+\\w+\\([^)]*chan\\s*<-[^)]*\\)\\s*\\{[^}]*go\\s+func" "${FILES[@]}"
 
 # S5: Project Structure
 warn "S5: Project Structure" \
@@ -245,23 +243,23 @@ done' _ "${FILES[@]}"
 
 # S7: Avoid Global State
 warn "S7: Avoid Global State" \
-    bash -c 'grep -En "^var\\s+\\w+\\s*=\\s*&?\\w+\\{|^var\\s+\\w+\\s+\\*\\w+\\s*\$" "$@" | grep -v "Err[A-Z]|flight:ok|_test\\.go"' _ "${FILES[@]}"
+    grep -En "^var\\s+\\w+\\s*=\\s*&?\\w+\\{|^var\\s+\\w+\\s+\\*\\w+\\s*\$" "${FILES[@]}"
 
 # S8: Mutex Field Naming
 warn "S8: Mutex Field Naming" \
-    bash -c 'grep -En "sync\\.(Mutex|RWMutex)\\s*\$" "$@" | grep -v "mu\\s+sync\\.|flight:ok"' _ "${FILES[@]}"
+    grep -En "sync\\.(Mutex|RWMutex)\\s*\$" "${FILES[@]}"
 
 # S9: Check Errors Before Using Defer
 warn "S9: Check Errors Before Using Defer" \
-    bash -c 'grep -Ezn "\\w+,\\s*_\\s*:?=\\s*\\w+\\.[^)]+\\)\\s*\\n\\s*defer" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -Ezn "\\w+,\\s*_\\s*:?=\\s*\\w+\\.[^)]+\\)\\s*\\n\\s*defer" "${FILES[@]}"
 
 # S10: Indent Error Flow
 warn "S10: Indent Error Flow" \
-    bash -c 'grep -Ezn "if\\s+err\\s*==\\s*nil\\s*\\{[^}]+\\}\\s*else\\s*\\{" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -Ezn "if\\s+err\\s*==\\s*nil\\s*\\{[^}]+\\}\\s*else\\s*\\{" "${FILES[@]}"
 
 # S11: Avoid Init Functions
 warn "S11: Avoid Init Functions" \
-    bash -c 'grep -En "^func init\\s*\\(\\s*\\)" "$@" | grep -v "flight:ok|_test\\.go"' _ "${FILES[@]}"
+    grep -En "^func init\\s*\\(\\s*\\)" "${FILES[@]}"
 
 # S12: Use Meaningful Test Names
 warn "S12: Use Meaningful Test Names" \

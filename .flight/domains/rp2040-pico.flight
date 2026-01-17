@@ -19,13 +19,6 @@ exclude_patterns:
   - "**/build/**"
   - "**/.git/**"
 
-suppression:
-  comment: "flight:ok"
-  guidance: |
-    Add `/* flight:ok */` on the same line to suppress.
-    Use sparingly. Safety-critical embedded code rules should rarely be suppressed.
-    Document why the suppression is acceptable.
-
 # ===========================================================================
 # RULES
 # ===========================================================================
@@ -162,7 +155,7 @@ rules:
         - "spi_read_blocking(spi0, 0, data, len);"
       good:
         - "i2c_write_timeout_us(i2c0, addr, data, len, false, I2C_TIMEOUT_US);"
-        - "spi_write_read_blocking(spi0, tx, rx, len);  // flight:ok - bounded by len"
+        - "spi_write_read_blocking(spi0, tx, rx, len);  // bounded by len"
 
   N6:
     title: Arrays Must Have Named Size Constants

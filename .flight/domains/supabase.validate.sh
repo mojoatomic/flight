@@ -20,8 +20,7 @@ check() {
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -36,8 +35,7 @@ warn() {
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -90,7 +88,7 @@ check "N1: service_role Key in Client Code" \
   # Check for service_role in any client-accessible file
   # Skip files that are clearly server-only (api/, server/, actions/)
   if [[ "$f" != *"/api/"* ]] && [[ "$f" != *"/server/"* ]] && [[ "$f" != *".server."* ]] && [[ "$f" != *"/actions/"* ]]; then
-    grep -HnE '"'"'service_role|SERVICE_ROLE'"'"' "$f" 2>/dev/null | grep -v '"'"'flight:ok'"'"'
+    grep -HnE '"'"'service_role|SERVICE_ROLE'"'"' "$f" 2>/dev/null
   fi
 done' _ "${FILES[@]}"
 
@@ -105,7 +103,7 @@ check "N3: Raw @supabase/supabase-js in Next.js App Router" \
   # AND it looks like a Next.js app (has '"'"'use client'"'"' or next imports)
   if grep -q "from ['"'"'\"]@supabase/supabase-js['"'"'\"]" "$f" 2>/dev/null; then
     if grep -qE "'"'"'use client'"'"'|\"use client\"|from ['"'"'\"]next" "$f" 2>/dev/null; then
-      grep -Hn "from ['"'"'\"]@supabase/supabase-js['"'"'\"]" "$f" | grep -v '"'"'flight:ok'"'"'
+      grep -Hn "from ['"'"'\"]@supabase/supabase-js['"'"'\"]" "$f"
     fi
   fi
 done' _ "${FILES[@]}"
@@ -129,7 +127,7 @@ check "N5: .single() Without Error Handling" \
       print FILENAME":"NR": "$0
     }
   }
-  '"'"' "$f" 2>/dev/null | grep -v '"'"'flight:ok'"'"'
+  '"'"' "$f" 2>/dev/null
 done' _ "${FILES[@]}"
 
 # N6: Realtime Subscription Without Cleanup
@@ -139,10 +137,7 @@ check "N6: Realtime Subscription Without Cleanup" \
   if grep -q "\.channel\|\.on.*postgres_changes\|\.subscribe()" "$f" 2>/dev/null; then
     # Check if there'"'"'s cleanup (removeChannel, unsubscribe, or cleanup return)
     if ! grep -qE "removeChannel|\.unsubscribe\(\)|return.*=>.*remove|return.*\(\).*=>|cleanup" "$f" 2>/dev/null; then
-      # Skip files with flight:ok marker
-      if ! grep -q "flight:ok" "$f" 2>/dev/null; then
-        echo "$f: realtime subscription without cleanup"
-      fi
+      echo "$f: realtime subscription without cleanup"
     fi
   fi
 done' _ "${FILES[@]}"
@@ -155,7 +150,7 @@ check "N7: getSession() in Server Code for Auth Checks" \
     # Flag getSession used for auth decisions without getClaims/getUser
     if grep -q "getSession" "$f" 2>/dev/null; then
       if ! grep -qE "getClaims|getUser" "$f" 2>/dev/null; then
-        grep -Hn "getSession" "$f" | grep -v '"'"'flight:ok'"'"'
+        grep -Hn "getSession" "$f"
       fi
     fi
   fi
@@ -168,7 +163,7 @@ check "M1: Type Database Schema" \
     bash -c 'for f in "$@"; do
   # Find createBrowserClient or createServerClient without type param
   grep -En "create(Browser|Server)Client\([^<]*\)" "$f" 2>/dev/null | \
-    grep -v "<Database>" | grep -v '"'"'flight:ok'"'"' | head -3
+    grep -v "<Database>" | head -3
 done' _ "${FILES[@]}"
 
 # M2: Handle Auth State Changes
@@ -178,10 +173,7 @@ check "M2: Handle Auth State Changes" \
   if grep -q "'"'"'use client'"'"'" "$f" 2>/dev/null; then
     if grep -qE "supabase\.auth\.(getUser|getSession|signIn|signOut)" "$f" 2>/dev/null; then
       if ! grep -q "onAuthStateChange" "$f" 2>/dev/null; then
-        # Skip files with flight:ok marker
-        if ! grep -q "flight:ok" "$f" 2>/dev/null; then
-          echo "$f: uses auth without onAuthStateChange listener"
-        fi
+        echo "$f: uses auth without onAuthStateChange listener"
       fi
     fi
   fi

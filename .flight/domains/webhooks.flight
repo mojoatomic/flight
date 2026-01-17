@@ -24,12 +24,6 @@ exclude_patterns:
   - "**/.next/**"
   - "**/.git/**"
 
-suppression:
-  comment: "flight:ok"
-  guidance: |
-    Add `// flight:ok` comment on the same line to suppress.
-    Use sparingly. Document why the suppression is acceptable.
-
 # ===========================================================================
 # RULES
 # ===========================================================================

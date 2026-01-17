@@ -23,17 +23,6 @@ detection:
     - "apiVersion:"
     - "kind:"
 
-suppression:
-  comment: "flight:ok"
-  documentation: |
-    Add `# flight:ok` comment on the same line to suppress a specific check.
-    Use sparingly. Document why the suppression is acceptable.
-
-    ```yaml
-    # System daemon requiring host network access
-    hostNetwork: true  # flight:ok
-    ```
-
 rules:
   # ============================================================================
   # NEVER Rules - Security Vulnerabilities (validator will reject)
@@ -50,7 +39,6 @@ rules:
       type: grep
       pattern: 'privileged:\s*true'
       flags: -Ein
-      exclude: flight:ok
     note: |
       From Pod Security Standards (Baseline): "Privileged Pods disable most
       security mechanisms and must be disallowed."
@@ -74,7 +62,6 @@ rules:
       type: grep
       pattern: 'host(PID|IPC|Network):\s*true'
       flags: -Ein
-      exclude: flight:ok
     note: |
       From Pod Security Standards (Baseline): "Sharing the host namespaces must
       be disallowed." Only CNI plugins and system daemons may need these.
@@ -98,7 +85,6 @@ rules:
       type: grep
       pattern: 'capabilities:[\s\S]*?add:[\s\S]*?(SYS_ADMIN|NET_ADMIN|SYS_PTRACE|NET_RAW|SYS_MODULE|DAC_READ_SEARCH|ALL)\b'
       flags: -Eiz
-      exclude: flight:ok
     note: |
       SYS_ADMIN is particularly dangerous - it's essentially root. NET_ADMIN
       allows network config changes. ALL grants every capability.
@@ -127,7 +113,6 @@ rules:
       type: grep
       pattern: 'hostPath:'
       flags: -Ein
-      exclude: flight:ok
     note: |
       From Pod Security Standards (Baseline): "HostPath volumes must be forbidden."
       Use PersistentVolumeClaims or ConfigMaps/Secrets instead.
@@ -158,7 +143,7 @@ rules:
         for f in "$@"; do
           # Check for explicit true setting
           if grep -qE 'allowPrivilegeEscalation:\s*true' "$f" 2>/dev/null; then
-            grep -HnE 'allowPrivilegeEscalation:\s*true' "$f" | grep -v 'flight:ok'
+            grep -HnE 'allowPrivilegeEscalation:\s*true' "$f"
           fi
         done
     note: |
@@ -181,7 +166,6 @@ rules:
       type: grep
       pattern: 'runAsUser:\s*0\s*$'
       flags: -En
-      exclude: flight:ok
     note: |
       From Pod Security Standards (Restricted): "Containers must not set runAsUser
       to 0." Use runAsNonRoot: true and specify a non-root UID.
@@ -203,7 +187,6 @@ rules:
       type: grep
       pattern: 'name:\s*(PASSWORD|SECRET|API_KEY|TOKEN|PRIVATE_KEY|CREDENTIAL|AUTH_TOKEN)\s*\n\s*value:\s*["\x27]?[^"\x27\n]+'
       flags: -Eiz
-      exclude: flight:ok
     note: |
       Use Kubernetes Secrets with secretKeyRef, or external secret managers.
       Environment variables with secrets are logged and exposed in multiple ways.
@@ -235,7 +218,7 @@ rules:
         for f in "$@"; do
           if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet|Job|CronJob|Pod)' "$f" 2>/dev/null; then
             if grep -qE 'serviceAccountName:\s*default\s*$' "$f" 2>/dev/null; then
-              grep -HnE 'serviceAccountName:\s*default\s*$' "$f" | grep -v 'flight:ok'
+              grep -HnE 'serviceAccountName:\s*default\s*$' "$f"
             fi
           fi
         done
@@ -267,8 +250,7 @@ rules:
           # Match image: without tag or with :latest
           grep -HnE 'image:\s*["\x27]?[a-zA-Z0-9._/-]+(:latest)?\s*["\x27]?\s*$' "$f" 2>/dev/null | \
             grep -v ':[0-9]' | \
-            grep -v '@sha256:' | \
-            grep -v 'flight:ok'
+            grep -v '@sha256:'
         done
     note: |
       From kube-score: "Makes sure that an explicit non-latest tag is used."
@@ -299,7 +281,7 @@ rules:
               fi
             fi
           fi
-        done | grep -v 'flight:ok'
+        done
     note: |
       From Polaris: "Setting appropriate resource requests will ensure that all
       your applications have sufficient compute resources."
@@ -337,7 +319,7 @@ rules:
               fi
             fi
           fi
-        done | grep -v 'flight:ok'
+        done
     note: |
       Memory limits are essential to prevent OOM situations affecting other pods.
       CPU limits are recommended but can cause throttling issues.
@@ -373,7 +355,7 @@ rules:
               fi
             fi
           fi
-        done | grep -v 'flight:ok'
+        done
     note: |
       From kube-score: "Liveness probes are designed to ensure that an application
       stays in a healthy state. When a liveness probe fails, the pod will be restarted."
@@ -413,7 +395,7 @@ rules:
               fi
             fi
           fi
-        done | grep -v 'flight:ok'
+        done
     note: |
       From Polaris: "Readiness probes are designed to ensure that an application
       has reached a ready state before receiving traffic."
@@ -448,7 +430,7 @@ rules:
         for f in "$@"; do
           if grep -qE 'kind:\s*Deployment' "$f" 2>/dev/null; then
             if grep -qE 'replicas:\s*1\s*$' "$f" 2>/dev/null; then
-              grep -HnE 'replicas:\s*1\s*$' "$f" | grep -v 'flight:ok'
+              grep -HnE 'replicas:\s*1\s*$' "$f"
             fi
           fi
         done
@@ -478,7 +460,7 @@ rules:
               echo "$f: workload without labels defined"
             fi
           fi
-        done | grep -v 'flight:ok'
+        done
     note: |
       Use standard Kubernetes labels: app.kubernetes.io/name, app.kubernetes.io/instance,
       app.kubernetes.io/version, app.kubernetes.io/component.
@@ -510,7 +492,7 @@ rules:
             if ! grep -qE 'namespace:' "$f" 2>/dev/null; then
               echo "$f: resource without explicit namespace"
             elif grep -qE 'namespace:\s*default\s*$' "$f" 2>/dev/null; then
-              grep -HnE 'namespace:\s*default\s*$' "$f" | grep -v 'flight:ok'
+              grep -HnE 'namespace:\s*default\s*$' "$f"
             fi
           fi
         done
@@ -549,7 +531,7 @@ rules:
               echo "$f: securityContext.runAsNonRoot not set to true"
             fi
           fi
-        done | grep -v 'flight:ok'
+        done
     note: |
       From Pod Security Standards (Restricted): "Containers must be required to
       run as non-root users."
@@ -581,7 +563,7 @@ rules:
               fi
             fi
           fi
-        done | grep -v 'flight:ok'
+        done
     note: |
       Use emptyDir volumes for directories that need write access (e.g., /tmp).
       This significantly reduces attack surface.
@@ -615,7 +597,7 @@ rules:
               fi
             fi
           fi
-        done | grep -v 'flight:ok'
+        done
     note: |
       From Pod Security Standards (Restricted): "Containers must drop ALL
       capabilities, and are only permitted to add back NET_BIND_SERVICE."
@@ -652,7 +634,7 @@ rules:
               fi
             fi
           fi
-        done | grep -v 'flight:ok'
+        done
     note: |
       From kube-score: "Makes sure that all StatefulSets and Deployments are
       targeted by a PDB."
@@ -688,7 +670,7 @@ rules:
               fi
             fi
           fi
-        done | grep -v 'flight:ok'
+        done
     note: |
       From kube-score: "Makes sure that a podAntiAffinity has been set that
       prevents multiple pods from being scheduled on the same node."
@@ -724,7 +706,7 @@ rules:
         for f in "$@"; do
           if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet|Pod)' "$f" 2>/dev/null; then
             if grep -qE 'imagePullPolicy:\s*(Never|IfNotPresent)' "$f" 2>/dev/null; then
-              grep -HnE 'imagePullPolicy:\s*(Never|IfNotPresent)' "$f" | grep -v 'flight:ok'
+              grep -HnE 'imagePullPolicy:\s*(Never|IfNotPresent)' "$f"
             fi
           fi
         done
@@ -754,7 +736,7 @@ rules:
               echo "$f: no seccompProfile configured"
             fi
           fi
-        done | grep -v 'flight:ok'
+        done
     note: |
       From Pod Security Standards (Restricted): "Seccomp profile must be
       explicitly set to RuntimeDefault or Localhost."
@@ -785,7 +767,7 @@ rules:
               echo "$f: automountServiceAccountToken not explicitly configured"
             fi
           fi
-        done | grep -v 'flight:ok'
+        done
     note: |
       From Polaris: "Fails when automountServiceAccountToken is automounted."
       Set to false unless the workload needs to interact with the Kubernetes API.
@@ -817,7 +799,7 @@ rules:
               echo "$f: no NetworkPolicy found in directory"
             fi
           fi
-        done | grep -v 'flight:ok'
+        done
     note: |
       From kube-score: "Makes sure that all Pods are targeted by a NetworkPolicy."
       NetworkPolicies implement zero-trust networking within the cluster.
@@ -857,7 +839,7 @@ rules:
               echo "$f: liveness and readiness probes appear identical"
             fi
           fi
-        done | grep -v 'flight:ok'
+        done
     note: |
       From kube-score: "Makes sure that readiness and liveness probes are not
       identical." Use different endpoints or different timing settings.

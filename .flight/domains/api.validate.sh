@@ -20,8 +20,7 @@ check() {
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -36,8 +35,7 @@ warn() {
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -113,7 +111,7 @@ printf '\n%s\n' "## NEVER Rules"
 
 # N1: Verbs in URIs
 check "N1: Verbs in URIs" \
-    bash -c 'grep -En "['"'"'\"]/?)(create|delete|remove|update|get|fetch|add|edit|modify)([A-Z]|[_-][a-z])" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En "['\"]/?)(create|delete|remove|update|get|fetch|add|edit|modify)([A-Z]|[_-][a-z])" "${FILES[@]}"
 
 # N2: 200 OK with Error Body
 check "N2: 200 OK with Error Body" \
@@ -196,7 +194,7 @@ printf '\n%s\n' "## SHOULD Rules"
 
 # S1: Use HTTPS Always
 warn "S1: Use HTTPS Always" \
-    bash -c 'grep -Ein "http://[a-zA-Z]" "$@" | grep -v "localhost|127\\.0\\.0\\.1"' _ "${FILES[@]}"
+    grep -Ein "http://[a-zA-Z]" "${FILES[@]}"
 
 # S3: Use ISO 8601 for Dates
 if [[ ${#API_ENDPOINT_FILES[@]} -gt 0 ]]; then
@@ -264,7 +262,7 @@ fi
 
 # S12: No Hardcoded URLs
 warn "S12: No Hardcoded URLs" \
-    bash -c 'grep -EHn "https?://[a-zA-Z0-9][a-zA-Z0-9.-]+\\.(com|io|net|org|dev|app)" "$@" | grep -v "localhost|127\\.0\\.0\\.1|example\\.com|^\\s*(//|#|/\\*|\\*)"' _ "${FILES[@]}"
+    grep -EHn "https?://[a-zA-Z0-9][a-zA-Z0-9.-]+\\.(com|io|net|org|dev|app)" "${FILES[@]}"
 
 # S13: Include Request IDs
 warn "S13: Include Request IDs" \

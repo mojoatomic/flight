@@ -19,12 +19,6 @@ exclude_patterns:
   - "**/.git/**"
   - "**/*.d.ts"
 
-suppression:
-  comment: "flight:ok"
-  guidance: |
-    Add `// flight:ok` comment on the same line to suppress.
-    Use sparingly. Document why the suppression is acceptable.
-
 # ===========================================================================
 # RULES
 # ===========================================================================
@@ -60,7 +54,7 @@ rules:
             # Check if previous line has justification
             if (prev !~ /TODO|FIXME|any.*because|legacy|migration|third.party|lib types/) {
               # Check if current line has justification in a comment
-              if ($0 !~ /\/\/.*any|\/\*.*any|\/\/.*TODO|\/\/.*FIXME|\/\/.*legacy|\/\/.*migration|\/\/.*third.party|\/\/.*lib types|flight:ok/) {
+              if ($0 !~ /\/\/.*any|\/\*.*any|\/\/.*TODO|\/\/.*FIXME|\/\/.*legacy|\/\/.*migration|\/\/.*third.party|\/\/.*lib types/) {
                 print FILENAME":"NR": "$0
               }
             }
@@ -241,8 +235,8 @@ rules:
     check:
       type: script
       code: |
-        grep -En 'JSON\.parse\([^)]*\)\.(map|filter|reduce|forEach|find|some|every)\(' "$@" | grep -v 'flight:ok'
-        grep -En 'as any\)\.(map|filter|reduce|forEach|find|some|every)\(' "$@" | grep -v 'flight:ok'
+        grep -En 'JSON\.parse\([^)]*\)\.(map|filter|reduce|forEach|find|some|every)\(' "$@"
+        grep -En 'as any\)\.(map|filter|reduce|forEach|find|some|every)\(' "$@"
     note: |
       JSON.parse returns `any`. Calling .map() on it gives implicit any in the callback.
       Validate or type the parsed result first.

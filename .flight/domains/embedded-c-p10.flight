@@ -17,13 +17,6 @@ exclude_patterns:
   - "**/build/**"
   - "**/.git/**"
 
-suppression:
-  comment: "flight:ok"
-  guidance: |
-    Add `/* flight:ok */` on the same line to suppress.
-    Use sparingly. Safety-critical code rules should rarely be suppressed.
-    Document why the suppression is acceptable.
-
 # ===========================================================================
 # RULES
 # ===========================================================================

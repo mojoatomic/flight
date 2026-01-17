@@ -4,16 +4,6 @@ Go (Golang) development patterns. Covers error handling, naming, concurrency, an
 
 **Validation:** `go.validate.sh` enforces NEVER/MUST rules. SHOULD rules trigger warnings. GUIDANCE is not mechanically checked.
 
-### Suppressing Warnings
-
-Add `// flight:ok` comment on the same line to suppress a specific check.
-Use sparingly. Document why the suppression is acceptable.
-
-```javascript
-// Legacy endpoint, scheduled for deprecation in v3
-router.get('/getUser/:id', handler)  // flight:ok
-```
-
 ---
 
 ## Invariants

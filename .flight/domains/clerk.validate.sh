@@ -20,8 +20,7 @@ check() {
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -36,8 +35,7 @@ warn() {
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -90,7 +88,7 @@ check "N1: Secret Key in Client Code" \
   # Check for secret key in any client-accessible file
   # Skip files that are clearly server-only (api/, server/, actions/)
   if [[ "$f" != *"/api/"* ]] && [[ "$f" != *"/server/"* ]] && [[ "$f" != *".server."* ]] && [[ "$f" != *"/actions/"* ]] && [[ "$f" != *"middleware"* ]]; then
-    grep -HnE '"'"'CLERK_SECRET_KEY|secretKey.*clerk'"'"' "$f" 2>/dev/null | grep -v '"'"'flight:ok'"'"'
+    grep -HnE '"'"'CLERK_SECRET_KEY|secretKey.*clerk'"'"' "$f" 2>/dev/null
   fi
 done' _ "${FILES[@]}"
 
@@ -105,7 +103,7 @@ check "N3: auth() in Client Components" \
   if grep -q "'"'"'use client'"'"'" "$f" 2>/dev/null; then
     # Flag if importing auth from server
     if grep -qE "from ['"'"'\"]@clerk/nextjs/server['"'"'\"]" "$f" 2>/dev/null; then
-      grep -Hn "from ['"'"'\"]@clerk/nextjs/server['"'"'\"]" "$f" | grep -v '"'"'flight:ok'"'"'
+      grep -Hn "from ['"'"'\"]@clerk/nextjs/server['"'"'\"]" "$f"
     fi
   fi
 done' _ "${FILES[@]}"
@@ -116,7 +114,7 @@ check "N4: Synchronous auth() Call in Next.js 15+" \
   # Find auth() calls that aren'"'"'t awaited or in async context
   # Look for patterns like: const { userId } = auth() without await
   grep -HnE "const\s*\{[^}]*\}\s*=\s*auth\(\)" "$f" 2>/dev/null | \
-    grep -v "await" | grep -v '"'"'flight:ok'"'"'
+    grep -v "await"
 done' _ "${FILES[@]}"
 
 # N5: Hardcoded Clerk Keys
@@ -130,9 +128,7 @@ check "N6: Missing Webhook Signature Verification" \
   if [[ "$f" == *"webhook"* ]] && [[ "$f" == *"/api/"* ]]; then
     # Must have svix verification
     if ! grep -qE "Webhook|verifyWebhook|svix-id|svix-timestamp|svix-signature" "$f" 2>/dev/null; then
-      if ! grep -q "flight:ok" "$f" 2>/dev/null; then
-        echo "$f: webhook handler without signature verification"
-      fi
+      echo "$f: webhook handler without signature verification"
     fi
   fi
 done' _ "${FILES[@]}"
@@ -150,7 +146,7 @@ check "N7: Using userId When orgId is Required" \
     # Covers Prisma (where: { userId }) and Drizzle (eq(*.userId, ...))
     if grep -qE "where.*userId|userId.*=|eq\(.*userId" "$f" 2>/dev/null; then
       if ! grep -qE "orgId|organizationId" "$f" 2>/dev/null; then
-        grep -Hn "userId" "$f" 2>/dev/null | head -3 | grep -v '"'"'flight:ok'"'"'
+        grep -Hn "userId" "$f" 2>/dev/null | head -3
       fi
     fi
   fi
@@ -165,9 +161,7 @@ check "N8: Missing Organization Context in Protected Routes" \
     if grep -q "await auth()" "$f" 2>/dev/null; then
       if grep -qE "userId\s*\}" "$f" 2>/dev/null; then
         if ! grep -qE "orgId|organizationId|!.*org" "$f" 2>/dev/null; then
-          if ! grep -q "flight:ok" "$f" 2>/dev/null; then
-            echo "$f: auth check without orgId verification"
-          fi
+          echo "$f: auth check without orgId verification"
         fi
       fi
     fi
@@ -184,7 +178,7 @@ check "N9: Missing Null Checks for Auth Values" \
       # Check if there'"'"'s a null check before usage
       if grep -qE "userId\!|orgId\!" "$f" 2>/dev/null; then
         if ! grep -qE "if.*!.*userId|if.*!.*orgId|userId\s*\?\?" "$f" 2>/dev/null; then
-          grep -Hn "userId\!|orgId\!" "$f" | grep -v '"'"'flight:ok'"'"'
+          grep -Hn "userId\!|orgId\!" "$f"
         fi
       fi
     fi
@@ -240,9 +234,7 @@ check "M4: Validate Organization Slug in Routes" \
   if [[ "$f" == *"[orgSlug]"* ]] || [[ "$f" == *"[slug]"* ]]; then
     # Should have validation against auth orgSlug
     if ! grep -qE "orgSlug.*===|slug.*===|validateSlug|params\.orgSlug" "$f" 2>/dev/null; then
-      if ! grep -q "flight:ok" "$f" 2>/dev/null; then
-        echo "$f: org slug route without slug validation"
-      fi
+      echo "$f: org slug route without slug validation"
     fi
   fi
 done' _ "${FILES[@]}"
@@ -256,9 +248,7 @@ check "M5: Include orgId in Database Queries" \
     if grep -qE "findMany|findFirst|findUnique|select.*from|query\.|\.insert\(|\.update\(|\.delete\(" "$f" 2>/dev/null; then
       # Should have orgId in where clause
       if ! grep -qE "orgId|organization_id|organizationId" "$f" 2>/dev/null; then
-        if ! grep -q "flight:ok" "$f" 2>/dev/null; then
-          echo "$f: database query without orgId filter"
-        fi
+        echo "$f: database query without orgId filter"
       fi
     fi
   fi
@@ -272,9 +262,7 @@ check "M6: Handle Organization Switching" \
     if grep -qE "useOrganization|OrganizationSwitcher" "$f" 2>/dev/null; then
       # Should handle org changes
       if ! grep -qE "onOrganizationSelect|organization\.id.*useEffect|router\.refresh|revalidate" "$f" 2>/dev/null; then
-        if ! grep -q "flight:ok" "$f" 2>/dev/null; then
-          echo "$f: org component without change handling"
-        fi
+        echo "$f: org component without change handling"
       fi
     fi
   fi

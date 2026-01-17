@@ -20,8 +20,7 @@ check() {
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -36,8 +35,7 @@ warn() {
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -92,54 +90,51 @@ check "N1: Running as Root User" \
   elif grep -qE "^USER\s+(root|0)\s*$" "$f" 2>/dev/null; then
     grep -HnE "^USER\s+(root|0)\s*$" "$f"
   fi
-done | grep -v "flight:ok"' _ "${FILES[@]}"
+done' _ "${FILES[@]}"
 
 # N2: Secrets in Build Args or Environment
 check "N2: Secrets in Build Args or Environment" \
-    bash -c 'grep -Ein "(ARG|ENV)\\s+\\w*(PASSWORD|SECRET|API_KEY|PRIVATE_KEY|TOKEN|CREDENTIAL|AUTH)\\w*\\s*=" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -Ein "(ARG|ENV)\\s+\\w*(PASSWORD|SECRET|API_KEY|PRIVATE_KEY|TOKEN|CREDENTIAL|AUTH)\\w*\\s*=" "${FILES[@]}"
 
 # N3: ADD for Remote URLs
 check "N3: ADD for Remote URLs" \
-    bash -c 'grep -Ein "^ADD\\s+https?://" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -Ein "^ADD\\s+https?://" "${FILES[@]}"
 
 # N4: Privileged Operations in Dockerfile
 check "N4: Privileged Operations in Dockerfile" \
-    bash -c 'grep -Ein "--privileged|--cap-add|SYS_ADMIN|NET_ADMIN|ALL" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -Ein "--privileged|--cap-add|SYS_ADMIN|NET_ADMIN|ALL" "${FILES[@]}"
 
 # N5: Hardcoded Passwords or Keys
 check "N5: Hardcoded Passwords or Keys" \
-    bash -c 'grep -Ein "(password|passwd|secret|api_key|apikey|private_key|token)\\s*[=:]\\s*[\"\\047][^\"\\047]+[\"\\047]" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -Ein "(password|passwd|secret|api_key|apikey|private_key|token)\\s*[=:]\\s*[\"\\047][^\"\\047]+[\"\\047]" "${FILES[@]}"
 
 printf '\n%s\n' "## MUST Rules"
 
 # M1: Use Absolute WORKDIR
 check "M1: Use Absolute WORKDIR" \
-    bash -c 'grep -En "^WORKDIR\\s+[^/]" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En "^WORKDIR\\s+[^/]" "${FILES[@]}"
 
 # M2: Pin Base Image Versions
 check "M2: Pin Base Image Versions" \
     bash -c 'for f in "$@"; do
-  grep -HnE "^FROM\s+[^:@\s]+\s*$|^FROM\s+[^@\s]+:latest(\s|$)" "$f" 2>/dev/null | \
-    grep -v "flight:ok"
+  grep -HnE "^FROM\s+[^:@\s]+\s*$|^FROM\s+[^@\s]+:latest(\s|$)" "$f" 2>/dev/null
 done' _ "${FILES[@]}"
 
 # M3: Use COPY Instead of ADD for Local Files
 check "M3: Use COPY Instead of ADD for Local Files" \
     bash -c 'for f in "$@"; do
   grep -HnE "^ADD\s+[^h][^\s]+\s+" "$f" 2>/dev/null | \
-    grep -vE "\.(tar|tar\.gz|tgz|tar\.bz2|tar\.xz)\s" | \
-    grep -v "flight:ok"
+    grep -vE "\.(tar|tar\.gz|tgz|tar\.bz2|tar\.xz)\s"
 done' _ "${FILES[@]}"
 
 # M4: MAINTAINER is Deprecated
 check "M4: MAINTAINER is Deprecated" \
-    bash -c 'grep -Ein "^MAINTAINER\\s+" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -Ein "^MAINTAINER\\s+" "${FILES[@]}"
 
 # M5: Use JSON Notation for CMD and ENTRYPOINT
 check "M5: Use JSON Notation for CMD and ENTRYPOINT" \
     bash -c 'for f in "$@"; do
-  grep -HnE "^(CMD|ENTRYPOINT)\s+[^\[]" "$f" 2>/dev/null | \
-    grep -v "flight:ok"
+  grep -HnE "^(CMD|ENTRYPOINT)\s+[^\[]" "$f" 2>/dev/null
 done' _ "${FILES[@]}"
 
 # M6: Set SHELL Pipefail Before RUN with Pipes
@@ -150,7 +145,7 @@ check "M6: Set SHELL Pipefail Before RUN with Pipes" \
       echo "$f: RUN commands use pipes but SHELL pipefail not set"
     fi
   fi
-done | grep -v "flight:ok"' _ "${FILES[@]}"
+done' _ "${FILES[@]}"
 
 # M7: Invalid EXPOSE Port
 check "M7: Invalid EXPOSE Port" \
@@ -164,7 +159,7 @@ check "M7: Invalid EXPOSE Port" \
       fi
     done
   done
-done | grep -v "flight:ok"' _ "${FILES[@]}"
+done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## SHOULD Rules"
 
@@ -172,14 +167,14 @@ printf '\n%s\n' "## SHOULD Rules"
 warn "S1: Pin Package Versions in apt-get" \
     bash -c 'for f in "$@"; do
   grep -HnE "apt-get\s+install.*\s[a-z][a-z0-9+-]+(\s|$)" "$f" 2>/dev/null | \
-    grep -vE "=[0-9]|flight:ok"
+    grep -vE "=[0-9]"
 done' _ "${FILES[@]}"
 
 # S2: Clean Package Cache in Same Layer
 warn "S2: Clean Package Cache in Same Layer" \
     bash -c 'for f in "$@"; do
   grep -HnE "^RUN\s+.*apt-get\s+install" "$f" 2>/dev/null | \
-    grep -vE "rm\s+-rf\s+/var/lib/apt|flight:ok"
+    grep -vE "rm\s+-rf\s+/var/lib/apt"
 done' _ "${FILES[@]}"
 
 # S3: Use Multi-Stage Builds
@@ -191,7 +186,7 @@ warn "S3: Use Multi-Stage Builds" \
       echo "$f: build tools detected but no multi-stage build (single FROM)"
     fi
   fi
-done | grep -v "flight:ok"' _ "${FILES[@]}"
+done' _ "${FILES[@]}"
 
 # S4: Order Layers for Caching
 warn "S4: Order Layers for Caching" \
@@ -203,7 +198,7 @@ warn "S4: Order Layers for Caching" \
       echo "$f:$copy_all_line: COPY . before COPY package* (poor cache efficiency)"
     fi
   fi
-done | grep -v "flight:ok"' _ "${FILES[@]}"
+done' _ "${FILES[@]}"
 
 # S5: Use .dockerignore
 warn "S5: Use .dockerignore" \
@@ -212,7 +207,7 @@ warn "S5: Use .dockerignore" \
   if [ ! -f "$dir/.dockerignore" ]; then
     echo "$f: no .dockerignore found in $dir"
   fi
-done | grep -v "flight:ok"' _ "${FILES[@]}"
+done' _ "${FILES[@]}"
 
 # S6: Define HEALTHCHECK
 warn "S6: Define HEALTHCHECK" \
@@ -222,7 +217,7 @@ warn "S6: Define HEALTHCHECK" \
       echo "$f: no HEALTHCHECK defined for service image"
     fi
   fi
-done | grep -v "flight:ok"' _ "${FILES[@]}"
+done' _ "${FILES[@]}"
 
 # S7: Combine RUN Commands
 warn "S7: Combine RUN Commands" \
@@ -231,18 +226,17 @@ warn "S7: Combine RUN Commands" \
   if [ "$run_count" -gt 10 ]; then
     echo "$f: $run_count RUN commands (consider combining)"
   fi
-done | grep -v "flight:ok"' _ "${FILES[@]}"
+done' _ "${FILES[@]}"
 
 # S8: Use Specific COPY Targets
 warn "S8: Use Specific COPY Targets" \
     bash -c 'for f in "$@"; do
-  grep -HnE "^COPY\s+\.\s+" "$f" 2>/dev/null | \
-    grep -v "flight:ok"
+  grep -HnE "^COPY\s+\.\s+" "$f" 2>/dev/null
 done' _ "${FILES[@]}"
 
 # S9: Avoid apt-get upgrade
 warn "S9: Avoid apt-get upgrade" \
-    bash -c 'grep -Ein "apt-get\\s+(upgrade|dist-upgrade)" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -Ein "apt-get\\s+(upgrade|dist-upgrade)" "${FILES[@]}"
 
 printf '\n%s\n' "## Info"
 

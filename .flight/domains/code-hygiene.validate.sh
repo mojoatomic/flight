@@ -20,8 +20,7 @@ check() {
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -36,8 +35,7 @@ warn() {
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -86,30 +84,30 @@ printf '\n%s\n' "## NEVER Rules"
 
 # N1: Generic Variable Names
 check "N1: Generic Variable Names" \
-    bash -c 'grep -En "^\\s*(const|let|var|)\\s*(data|result|temp|tmp|info|item|value|val|obj|thing|stuff|ret|res|output|input|payload)\\s*=" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En "^\\s*(const|let|var|)\\s*(data|result|temp|tmp|info|item|value|val|obj|thing|stuff|ret|res|output|input|payload)\\s*=" "${FILES[@]}"
 
 # N2: Redundant Conditional Returns
 check "N2: Redundant Conditional Returns" \
-    bash -c 'grep -En "if\\s*\\([^)]+\\)\\s*return\\s+(true|false)\\s*;\\s*(else\\s*)?(return\\s+(true|false))?" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En "if\\s*\\([^)]+\\)\\s*return\\s+(true|false)\\s*;\\s*(else\\s*)?(return\\s+(true|false))?" "${FILES[@]}"
 
 # N3: Ternary Returning Boolean Literals
 check "N3: Ternary Returning Boolean Literals" \
-    bash -c 'grep -En "\\?\\s*true\\s*:\\s*false|\\?\\s*false\\s*:\\s*true" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En "\\?\\s*true\\s*:\\s*false|\\?\\s*false\\s*:\\s*true" "${FILES[@]}"
 
 # N4: Redundant Boolean Comparisons
 check "N4: Redundant Boolean Comparisons" \
-    bash -c 'grep -En "===?\\s*true|===?\\s*false|!==?\\s*true|!==?\\s*false" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En "===?\\s*true|===?\\s*false|!==?\\s*true|!==?\\s*false" "${FILES[@]}"
 
 # N5: Magic Number Calculations
 check "N5: Magic Number Calculations" \
     bash -c 'for f in "$@"; do
   grep -HnE '"'"'60\s*\*\s*60|24\s*\*\s*60|1000\s*\*\s*60|7\s*\*\s*24|1024\s*\*\s*1024'"'"' "$f" 2>/dev/null | \
-    grep -v '"'"'[A-Z_]\{2,\}\s*='"'"' | grep -v "flight:ok"
+    grep -v '"'"'[A-Z_]\{2,\}\s*='"'"'
 done' _ "${FILES[@]}"
 
 # N6: Generic Function Names
 check "N6: Generic Function Names" \
-    bash -c 'grep -En "function\\s+(handleData|processItem|processItems|doSomething|getData|setData|updateValue|handleEvent|processResult|transformData|handleInput|processInput)\\s*\\(|def\\s+(handle_data|process_item|do_something|get_data|set_data|update_value|handle_event|process_result|transform_data)\\s*\\(" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En "function\\s+(handleData|processItem|processItems|doSomething|getData|setData|updateValue|handleEvent|processResult|transformData|handleInput|processInput)\\s*\\(|def\\s+(handle_data|process_item|do_something|get_data|set_data|update_value|handle_event|process_result|transform_data)\\s*\\(" "${FILES[@]}"
 
 # N7: Single-Letter Variables Outside Loops
 check "N7: Single-Letter Variables Outside Loops" \
@@ -117,7 +115,7 @@ check "N7: Single-Letter Variables Outside Loops" \
   # Find single letter assignments not in for/while lines
   # Exclude i, j for loops and x for simple lambdas
   grep -HnE '"'"'^\s*(const|let|var|)\s+[a-hk-wyz]\s*='"'"' "$f" 2>/dev/null | \
-    grep -v '"'"'for\s*('"'"' | grep -v '"'"'while\s*('"'"' | grep -v "flight:ok"
+    grep -v '"'"'for\s*('"'"' | grep -v '"'"'while\s*('"'"'
 done' _ "${FILES[@]}"
 
 # N8: Console/Print Debugging in Production Code
@@ -129,13 +127,12 @@ check "N8: Console/Print Debugging in Production Code" \
      [[ "$f" == *"_spec."* ]] || [[ "$f" == *".spec."* ]]; then
     continue
   fi
-  grep -HnE '"'"'console\.(log|warn|error)\s*\(|print\s*\(|System\.out\.print|println!\s*\(|fmt\.Print'"'"' "$f" 2>/dev/null | \
-    grep -v "flight:ok"
+  grep -HnE '"'"'console\.(log|warn|error)\s*\(|print\s*\(|System\.out\.print|println!\s*\(|fmt\.Print'"'"' "$f" 2>/dev/null
 done' _ "${FILES[@]}"
 
 # N9: Negated Boolean Names
 check "N9: Negated Boolean Names" \
-    bash -c 'grep -En "(is|has|can|should|will)(Not|No)[A-Z]" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En "(is|has|can|should|will)(Not|No)[A-Z]" "${FILES[@]}"
 
 # N10: Inconsistent Naming Style
 check "N10: Inconsistent Naming Style" \
@@ -146,7 +143,7 @@ check "N10: Inconsistent Naming Style" \
   if [ "$camel" -gt 5 ] && [ "$snake" -gt 5 ]; then
     echo "$f: mixed naming styles (camelCase: $camel, snake_case: $snake)"
   fi
-done | grep -v "flight:ok"' _ "${FILES[@]}"
+done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## MUST Rules"
 
@@ -155,15 +152,14 @@ check "M1: Boolean Variables Use Proper Prefixes" \
     bash -c 'for f in "$@"; do
   # Find boolean assignments without proper prefix
   grep -HnE '"'"'(const|let|var)\s+[a-z]+\s*=\s*(true|false)\s*;'"'"' "$f" 2>/dev/null | \
-    grep -vE '"'"'(is|has|can|should|will|was|did|does)[A-Z]'"'"' | grep -v "flight:ok"
+    grep -vE '"'"'(is|has|can|should|will|was|did|does)[A-Z]'"'"'
 done' _ "${FILES[@]}"
 
 # M2: Collections Use Plural Names
 check "M2: Collections Use Plural Names" \
     bash -c 'for f in "$@"; do
   # Find array literals assigned to singular names
-  grep -HnE '"'"'(const|let|var)\s+(user|item|order|product|result|file|row|record|entry)\s*=\s*\['"'"' "$f" 2>/dev/null | \
-    grep -v "flight:ok"
+  grep -HnE '"'"'(const|let|var)\s+(user|item|order|product|result|file|row|record|entry)\s*=\s*\['"'"' "$f" 2>/dev/null
 done' _ "${FILES[@]}"
 
 # M3: Constants Use UPPER_SNAKE_CASE
@@ -171,15 +167,14 @@ check "M3: Constants Use UPPER_SNAKE_CASE" \
     bash -c 'for f in "$@"; do
   # Find const with numeric value not in UPPER_CASE
   grep -HnE '"'"'const\s+[a-z][a-zA-Z]*\s*=\s*[0-9]+\s*;'"'"' "$f" 2>/dev/null | \
-    grep -vE '"'"'const\s+[A-Z_]+\s*='"'"' | grep -v "flight:ok"
+    grep -vE '"'"'const\s+[A-Z_]+\s*='"'"'
 done' _ "${FILES[@]}"
 
 # M4: Error Messages Include Context
 check "M4: Error Messages Include Context" \
     bash -c 'for f in "$@"; do
   # Find short/generic error messages (less than 15 chars)
-  grep -HnE "throw\s+new\s+Error\(['"'"'\"][^'"'"'\"]{0,15}['"'"'\"]|raise\s+.*Exception\(['"'"'\"][^'"'"'\"]{0,15}['"'"'\"]" "$f" 2>/dev/null | \
-    grep -v "flight:ok"
+  grep -HnE "throw\s+new\s+Error\(['"'"'\"][^'"'"'\"]{0,15}['"'"'\"]|raise\s+.*Exception\(['"'"'\"][^'"'"'\"]{0,15}['"'"'\"]" "$f" 2>/dev/null
 done' _ "${FILES[@]}"
 
 # M5: Function Names Are Verb Phrases
@@ -187,8 +182,7 @@ check "M5: Function Names Are Verb Phrases" \
     bash -c 'for f in "$@"; do
   # Find function names that don'"'"'t start with common verb prefixes
   grep -HnE '"'"'^(export\s+)?(async\s+)?function\s+[a-z]+\s*\('"'"' "$f" 2>/dev/null | \
-    grep -vE '"'"'function\s+(get|set|fetch|load|save|send|create|update|delete|remove|add|find|check|validate|is|has|can|should|handle|process|render|init|start|stop|on|do|make|build|parse|format|convert|to|from|ensure|assert|verify|compute|calculate|generate|transform|map|filter|reduce|sort|merge|split|join|open|close|read|write|run|execute|apply|reset|clear|register|subscribe|unsubscribe|publish|emit|dispatch|trigger|mount|unmount|connect|disconnect|enable|disable|show|hide|toggle|select|deselect|activate|deactivate|delay|wait|sleep|pause|retry|poll|defer|schedule|queue|batch|throttle|debounce)([A-Z]|\s*\()'"'"' | \
-    grep -v "flight:ok"
+    grep -vE '"'"'function\s+(get|set|fetch|load|save|send|create|update|delete|remove|add|find|check|validate|is|has|can|should|handle|process|render|init|start|stop|on|do|make|build|parse|format|convert|to|from|ensure|assert|verify|compute|calculate|generate|transform|map|filter|reduce|sort|merge|split|join|open|close|read|write|run|execute|apply|reset|clear|register|subscribe|unsubscribe|publish|emit|dispatch|trigger|mount|unmount|connect|disconnect|enable|disable|show|hide|toggle|select|deselect|activate|deactivate|delay|wait|sleep|pause|retry|poll|defer|schedule|queue|batch|throttle|debounce)([A-Z]|\s*\()'"'"'
 done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## Info"

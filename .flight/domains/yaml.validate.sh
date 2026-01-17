@@ -20,8 +20,7 @@ check() {
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -36,8 +35,7 @@ warn() {
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -86,7 +84,7 @@ printf '\n%s\n' "## NEVER Rules"
 
 # N1: Tab Characters
 check "N1: Tab Characters" \
-    bash -c 'grep -n "^\\t" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -n "^\\t" "${FILES[@]}"
 
 # N2: Duplicate Keys
 check "N2: Duplicate Keys" \
@@ -117,37 +115,37 @@ END { exit found ? 1 : 0 }
 
 # N3: Unsafe YAML Load
 check "N3: Unsafe YAML Load" \
-    bash -c 'grep -Pn "yaml\\.load\\s*\\([^)]*\\)\\s*\$|yaml\\.load\\s*\\([^,)]+\\)(?!\\s*,\\s*Loader)" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -Pn "yaml\\.load\\s*\\([^)]*\\)\\s*\$|yaml\\.load\\s*\\([^,)]+\\)(?!\\s*,\\s*Loader)" "${FILES[@]}"
 
 # N4: YAML Bomb (Billion Laughs)
 check "N4: YAML Bomb (Billion Laughs)" \
-    bash -c 'grep -n "&[a-zA-Z_][a-zA-Z0-9_]*\\s*\\[\\s*\\*[a-zA-Z_]" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -n "&[a-zA-Z_][a-zA-Z0-9_]*\\s*\\[\\s*\\*[a-zA-Z_]" "${FILES[@]}"
 
 printf '\n%s\n' "## MUST Rules"
 
 # M1: Unquoted Norway Problem
 check "M1: Unquoted Norway Problem" \
-    bash -c 'grep -En ":\\s+(no|NO|No|yes|YES|Yes|on|ON|On|off|OFF|Off)\\s*(#|\$)" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En ":\\s+(no|NO|No|yes|YES|Yes|on|ON|On|off|OFF|Off)\\s*(#|\$)" "${FILES[@]}"
 
 # M2: Unquoted Sexagesimal Numbers
 check "M2: Unquoted Sexagesimal Numbers" \
-    bash -c 'grep -En ":\\s+[0-9]+:[0-9]+(:[0-9]+)?\\s*(#|\$)" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En ":\\s+[0-9]+:[0-9]+(:[0-9]+)?\\s*(#|\$)" "${FILES[@]}"
 
 # M3: Unquoted Octal Numbers
 check "M3: Unquoted Octal Numbers" \
-    bash -c 'grep -En ":\\s+0[0-7]{2,}\\s*(#|\$)" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En ":\\s+0[0-7]{2,}\\s*(#|\$)" "${FILES[@]}"
 
 # M4: Version Number Coercion
 check "M4: Version Number Coercion" \
-    bash -c 'grep -Ein "version:\\s+[0-9]+\\.[0-9]+\\s*(#|\$)" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -Ein "version:\\s+[0-9]+\\.[0-9]+\\s*(#|\$)" "${FILES[@]}"
 
 # M5: Unquoted Scientific Notation
 check "M5: Unquoted Scientific Notation" \
-    bash -c 'grep -En ":\\s+[0-9]+[eE][0-9]+\\s*(#|\$)" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En ":\\s+[0-9]+[eE][0-9]+\\s*(#|\$)" "${FILES[@]}"
 
 # M6: Unquoted Special Strings
 check "M6: Unquoted Special Strings" \
-    bash -c 'grep -En ":\\s+(null|Null|NULL|~|true|True|TRUE|false|False|FALSE|\\.inf|\\.Inf|\\.INF|\\.nan|\\.NaN|\\.NAN)\\s*(#|\$)" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En ":\\s+(null|Null|NULL|~|true|True|TRUE|false|False|FALSE|\\.inf|\\.Inf|\\.INF|\\.nan|\\.NaN|\\.NAN)\\s*(#|\$)" "${FILES[@]}"
 
 # M7: Inconsistent Indentation
 check "M7: Inconsistent Indentation" \
@@ -175,7 +173,7 @@ END { exit found ? 1 : 0 }
 
 # M8: Trailing Whitespace in Multiline
 check "M8: Trailing Whitespace in Multiline" \
-    bash -c 'grep -n "[[:space:]]+\$" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -n "[[:space:]]+\$" "${FILES[@]}"
 
 printf '\n%s\n' "## SHOULD Rules"
 
@@ -193,23 +191,23 @@ exit 0' _ "${FILES[@]}"
 
 # S2: Quote Strings Starting with Special Characters
 warn "S2: Quote Strings Starting with Special Characters" \
-    bash -c 'grep -En ":\\s+[@\`*&!|>{[%][^[:space:]]" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En ":\\s+[@\`*&!|>{[%][^[:space:]]" "${FILES[@]}"
 
 # S3: Avoid Anchors for Simple Values
 warn "S3: Avoid Anchors for Simple Values" \
-    bash -c 'grep -n "&[a-zA-Z_][a-zA-Z0-9_]*\\s+[^[{]" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -n "&[a-zA-Z_][a-zA-Z0-9_]*\\s+[^[{]" "${FILES[@]}"
 
 # S4: Use Lowercase for Boolean Values
 warn "S4: Use Lowercase for Boolean Values" \
-    bash -c 'grep -En ":\\s+(True|TRUE|False|FALSE)\\s*(#|\$)" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En ":\\s+(True|TRUE|False|FALSE)\\s*(#|\$)" "${FILES[@]}"
 
 # S5: Quote Empty Strings
 warn "S5: Quote Empty Strings" \
-    bash -c 'grep -n "^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_-]*:\\s*\$" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -n "^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_-]*:\\s*\$" "${FILES[@]}"
 
 # S6: Avoid Flow Style for Complex Structures
 warn "S6: Avoid Flow Style for Complex Structures" \
-    bash -c 'grep -n "\\{[^}]*\\{|\\[[^\\]]*\\[" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -n "\\{[^}]*\\{|\\[[^\\]]*\\[" "${FILES[@]}"
 
 printf '\n%s\n' "## Info"
 

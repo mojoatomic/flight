@@ -26,12 +26,6 @@ api_file_detection:
     - '@(app|blueprint)\.route\('
     - 'http\.HandleFunc|func\s+\w*Handler'
 
-suppression:
-  comment: "flight:ok"
-  documentation: |
-    Add `// flight:ok` comment on the same line to suppress a specific check.
-    Use sparingly. Document why the suppression is acceptable.
-
 # ===========================================================================
 # RULES
 # ===========================================================================
@@ -61,7 +55,6 @@ rules:
       type: grep
       pattern: '[''"]/?)(create|delete|remove|update|get|fetch|add|edit|modify)([A-Z]|[_-][a-z])'
       flags: -En
-      exclude: flight:ok
     examples:
       bad:
         - "POST /createUser"
