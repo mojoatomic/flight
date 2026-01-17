@@ -2,10 +2,41 @@
 # Source: Migrated from javascript.md and javascript.validate.sh
 
 domain: javascript
-version: 1.0.0
+version: 1.1.0
+schema_version: 2
 description: >
   Code quality patterns that prevent common mistakes in JavaScript/Node.js projects.
   JavaScript-specific patterns while code-hygiene covers universal patterns.
+
+provenance:
+  last_full_audit: "2026-01-16"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-16"
+
+  sources_consulted:
+    - url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide"
+      accessed: "2026-01-16"
+      note: "MDN JavaScript Guide - authoritative JS reference"
+    - url: "https://google.github.io/styleguide/jsguide.html"
+      accessed: "2026-01-16"
+      note: "Google JavaScript Style Guide"
+    - url: "https://github.com/airbnb/javascript"
+      accessed: "2026-01-16"
+      note: "Airbnb JavaScript Style Guide - widely adopted community standard"
+    - url: "https://eslint.org/docs/latest/rules/"
+      accessed: "2026-01-16"
+      note: "ESLint rules documentation - codified best practices"
+
+  coverage:
+    apis_covered:
+      - "Variable naming patterns"
+      - "Boolean handling"
+      - "Function naming"
+      - "Console usage"
+      - "Constants"
+    known_gaps:
+      - "ES modules vs CommonJS not covered"
+      - "Framework-specific patterns in separate domains"
 
 file_patterns:
   - "**/*.js"
@@ -40,6 +71,14 @@ rules:
     title: Generic Variable Names
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://github.com/airbnb/javascript#naming--descriptive"
+          accessed: "2026-01-16"
+          quote: "Avoid single letter names. Be descriptive with your naming."
     description: >
       Never use generic names like data, result, temp, info, item, value, obj, thing,
       stuff, foo, bar, baz, tmp, ret, val. Use domain-specific names instead.
@@ -64,6 +103,14 @@ rules:
     title: Redundant Conditional Returns
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://eslint.org/docs/latest/rules/no-else-return"
+          accessed: "2026-01-16"
+          quote: "If an if block contains a return statement, the else block becomes unnecessary."
     description: >
       Never write 'if (condition) return true; else return false' or equivalent.
       Return the condition directly.
@@ -85,6 +132,14 @@ rules:
     title: Ternary Returning Boolean Literals
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://eslint.org/docs/latest/rules/no-unneeded-ternary"
+          accessed: "2026-01-16"
+          quote: "Disallow ternary operators when simpler alternatives exist."
     description: >
       Never write 'condition ? true : false'. The condition is already boolean.
     check:
@@ -107,6 +162,14 @@ rules:
     title: Redundant Boolean Comparisons
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://eslint.org/docs/latest/rules/no-extra-boolean-cast"
+          accessed: "2026-01-16"
+          quote: "Disallow unnecessary boolean casts."
     description: >
       Never write '=== true', '=== false', '!== true', or '!== false'.
       Use the boolean directly.
@@ -131,6 +194,14 @@ rules:
     title: Magic Number Calculations
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://eslint.org/docs/latest/rules/no-magic-numbers"
+          accessed: "2026-01-16"
+          quote: "Magic numbers are numbers that occur multiple times in code without clear meaning."
     description: >
       Never compute at runtime what can be a constant. Pre-calculate time values
       and other derived constants.
@@ -155,6 +226,14 @@ rules:
     title: Generic Function Names
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://google.github.io/styleguide/jsguide.html#naming-method-names"
+          accessed: "2026-01-16"
+          quote: "Method names are typically verbs or verb phrases... should clearly describe what the method does."
     description: >
       Never use generic verbs like handle, process, do, run, execute, manage
       combined with generic nouns without specific context.
@@ -179,6 +258,14 @@ rules:
     title: Single-Letter Variables
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://github.com/airbnb/javascript#naming--descriptive"
+          accessed: "2026-01-16"
+          quote: "Avoid single letter names. Be descriptive with your naming."
     description: >
       Never use single-letter variables except i, j, k as loop counters.
     check:
@@ -203,6 +290,14 @@ rules:
     title: console.log in Source Files
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://eslint.org/docs/latest/rules/no-console"
+          accessed: "2026-01-16"
+          quote: "In JavaScript that is designed to be executed in the browser, it's considered a best practice to avoid using methods on console."
     description: >
       Never leave console.log statements in production source files.
       Test files are excluded from this rule.

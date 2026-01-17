@@ -237,6 +237,110 @@ error_message: "No OpenAPI/Swagger spec found"
 
 ---
 
+## Schema v2: Provenance
+
+Schema v2 adds **provenance metadata** to track when rules were verified, their confidence level, and source documentation. This combats information rot - external APIs change, and domain files need to stay current.
+
+### Why Provenance?
+
+Domain files encode "truth" about external APIs. That truth has a shelf life:
+- APIs deprecate methods
+- Best practices evolve
+- Security recommendations change
+
+Provenance answers: "When was this rule last verified? Where did it come from? Is it still valid?"
+
+### Domain-Level Provenance
+
+Add a `provenance` block at the domain level to track overall audit status:
+
+```yaml
+schema_version: 2
+
+provenance:
+  last_full_audit: "2026-01-16"     # Date of comprehensive review
+  audited_by: "flight-research"     # Who/what performed audit
+  next_audit_due: "2026-07-16"      # When to re-audit
+
+  sources_consulted:                # Documentation reviewed
+    - url: "https://docs.example.com"
+      accessed: "2026-01-16"
+      note: "Official API documentation"
+
+  coverage:                         # What's covered and what's not
+    apis_covered:
+      - "Authentication API"
+      - "Error handling patterns"
+    known_gaps:
+      - "WebSocket patterns (not yet documented)"
+```
+
+### Rule-Level Provenance
+
+Add `provenance` to individual rules to track verification:
+
+```yaml
+rules:
+  N1:
+    title: Example Rule
+    severity: NEVER
+    mechanical: true
+    description: Example with provenance
+
+    provenance:
+      last_verified: "2026-01-16"   # When this rule was verified
+      confidence: high              # high | medium | low
+      re_verify_after: "2027-01-16" # Re-check after this date
+
+      sources:                      # Where the rule came from
+        - url: "https://rfc.example.com/spec"
+          accessed: "2026-01-16"
+          quote: "Implementations MUST NOT expose internal identifiers"
+
+      # For deprecated patterns - what replaced them
+      superseded_by:
+        replacement: "newMethod()"
+        version: "2.0.0"
+        date: "2025-06-01"
+        note: "oldMethod removed in v3.0"
+
+    check:
+      type: grep
+      pattern: 'bad_pattern'
+      flags: -En
+```
+
+### Confidence Levels
+
+| Level | Meaning | Re-verify Interval |
+|-------|---------|-------------------|
+| `high` | Well-established, stable API | 12 months |
+| `medium` | Generally reliable, may change | 6 months |
+| `low` | Emerging pattern, needs validation | 3 months |
+
+### Compiler Warnings
+
+The compiler emits warnings (not errors) for provenance issues:
+
+| Warning | Cause | Action |
+|---------|-------|--------|
+| `Rule X has no sources` | Mechanical rule without provenance sources | Add sources |
+| `Rule X is stale` | Past `re_verify_after` date | Re-verify and update |
+| `Rule X has low confidence` | `confidence: low` | Consider verification |
+| `Domain audit overdue` | Past `next_audit_due` | Run `/flight-research` |
+
+### Migration from v1 to v2
+
+1. Add `schema_version: 2` after the version field
+2. Add domain-level `provenance` block with audit dates and sources
+3. Add rule-level `provenance` to mechanical rules (start with NEVER/MUST)
+4. Compile to verify: `.flight/bin/flight-domain-compile your-domain`
+5. Address any warnings
+
+**Template:** See `.flight/templates/domain-schema-v2.flight` for a complete example.
+
+---
+
 ## Research Tools
 
 Use these during `/flight-prime` and `/flight-prd`:
@@ -263,6 +367,7 @@ If MCP tools aren't available, fall back to web search.
 | `.flight/domains/*.md` | Domain rules (generated from .flight) |
 | `.flight/domains/*.validate.sh` | Executable validators (generated from .flight) |
 | `.flight/bin/flight-domain-compile.py` | Domain compiler (generates .md + .sh) |
+| `.flight/templates/domain-schema-v2.flight` | Schema v2 template with provenance |
 | `.flight/validate-all.sh` | Auto-detect and run all relevant validators |
 | `.flight/known-landmines.md` | Temporal issues discovered during research |
 | `update.sh` | Update Flight (preserves customizations) |

@@ -3,7 +3,8 @@
 # Source: Migrated from code-hygiene.md and code-hygiene.validate.sh
 
 domain: code-hygiene
-version: 1.0.0
+version: 1.1.0
+schema_version: 2
 description: >
   Universal code quality patterns that apply to ALL languages. These are
   AI-generated code smells that transcend syntax. The name should describe
@@ -31,6 +32,41 @@ exclude_patterns:
   - "**/build/**"
 
 # ===========================================================================
+# PROVENANCE - Schema v2 audit metadata
+# ===========================================================================
+
+provenance:
+  last_full_audit: "2026-01-16"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-16"
+
+  sources_consulted:
+    - url: "https://www.oreilly.com/library/view/clean-code-a/9780136083238/"
+      accessed: "2026-01-16"
+      note: "Clean Code by Robert C. Martin - naming conventions, function design"
+    - url: "https://www.oreilly.com/library/view/code-complete-2nd/0735619670/"
+      accessed: "2026-01-16"
+      note: "Code Complete by Steve McConnell - variable naming, code construction"
+    - url: "https://www.oreilly.com/library/view/the-art-of/9781449318482/"
+      accessed: "2026-01-16"
+      note: "The Art of Readable Code - naming, simplification, clarity"
+
+  coverage:
+    apis_covered:
+      - "Variable naming conventions"
+      - "Function naming conventions"
+      - "Boolean naming patterns"
+      - "Constant naming conventions"
+      - "Collection naming conventions"
+      - "Error message quality"
+      - "Debug statement detection"
+    known_gaps:
+      - "Comment quality assessment"
+      - "Code complexity metrics"
+      - "Documentation coverage"
+      - "Type annotation patterns"
+
+# ===========================================================================
 # RULES
 # ===========================================================================
 # These rules catch the most common AI code generation mistakes.
@@ -53,6 +89,14 @@ rules:
     title: Generic Variable Names
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.oreilly.com/library/view/clean-code-a/9780136083238/"
+          accessed: "2026-01-16"
+          quote: "Use Intention-Revealing Names - the name should tell you why it exists, what it does, and how it is used"
     description: >
       Do not use generic names like data, result, temp, item, value, obj.
       The name should describe WHAT it holds, not THAT it holds something.
@@ -83,6 +127,14 @@ rules:
     title: Redundant Conditional Returns
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.oreilly.com/library/view/the-art-of/9781449318482/"
+          accessed: "2026-01-16"
+          quote: "Simplify expressions - eliminate unnecessary code that adds no meaning"
     description: >
       Do not use if/else to return boolean literals. Return the condition directly.
     check:
@@ -105,6 +157,14 @@ rules:
     title: Ternary Returning Boolean Literals
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.oreilly.com/library/view/the-art-of/9781449318482/"
+          accessed: "2026-01-16"
+          quote: "Shrink code by eliminating redundant expressions"
     description: >
       Do not use ternary operator to return true/false. Use the condition directly.
     check:
@@ -130,6 +190,14 @@ rules:
     title: Redundant Boolean Comparisons
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.oreilly.com/library/view/code-complete-2nd/0735619670/"
+          accessed: "2026-01-16"
+          quote: "Use implicit comparisons to true and false in boolean expressions"
     description: >
       Do not compare booleans to true/false. Use the boolean directly.
     check:
@@ -155,6 +223,14 @@ rules:
     title: Magic Number Calculations
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.oreilly.com/library/view/clean-code-a/9780136083238/"
+          accessed: "2026-01-16"
+          quote: "Replace Magic Numbers with Named Constants"
     description: >
       Do not use raw arithmetic for time/size calculations. Define named constants.
     check:
@@ -191,6 +267,14 @@ rules:
     title: Generic Function Names
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.oreilly.com/library/view/clean-code-a/9780136083238/"
+          accessed: "2026-01-16"
+          quote: "Function names should say what they do - use descriptive names"
     description: >
       Function names should include the domain noun they operate on.
       Avoid handleData, processItem, doSomething, etc.
@@ -219,6 +303,14 @@ rules:
     title: Single-Letter Variables Outside Loops
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.oreilly.com/library/view/code-complete-2nd/0735619670/"
+          accessed: "2026-01-16"
+          quote: "Avoid names with similar meanings... single-character names should be used only for loop indices"
     description: >
       Single-letter variables are only acceptable as loop counters (i, j, k)
       or in very short lambdas. Otherwise use descriptive names.
@@ -252,6 +344,14 @@ rules:
     title: Console/Print Debugging in Production Code
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.oreilly.com/library/view/clean-code-a/9780136083238/"
+          accessed: "2026-01-16"
+          quote: "Use a logging framework rather than print statements for production code"
     description: >
       Do not leave console.log, print, or similar debugging statements in
       production code. Use a proper logging framework.
@@ -290,6 +390,14 @@ rules:
     title: Negated Boolean Names
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.oreilly.com/library/view/code-complete-2nd/0735619670/"
+          accessed: "2026-01-16"
+          quote: "Avoid negated boolean variable names... if (!notFound) is hard to read"
     description: >
       Avoid boolean names with negative prefixes (isNot, hasNo, cannot).
       They lead to confusing double negatives like !isNotValid.
@@ -319,6 +427,14 @@ rules:
     title: Inconsistent Naming Style
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.oreilly.com/library/view/code-complete-2nd/0735619670/"
+          accessed: "2026-01-16"
+          quote: "Adopt naming conventions that are consistent throughout a project"
     description: >
       Do not mix camelCase and snake_case in the same file. Pick one style
       based on language conventions and use it consistently.
@@ -363,6 +479,14 @@ rules:
     title: Boolean Variables Use Proper Prefixes
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.oreilly.com/library/view/code-complete-2nd/0735619670/"
+          accessed: "2026-01-16"
+          quote: "Give boolean variables names that imply true or false, such as done, error, found, success, ok"
     description: >
       Boolean variables and functions should use is/has/can/should/will/was/did/does
       prefixes to clearly indicate they return a boolean.
@@ -394,6 +518,14 @@ rules:
     title: Collections Use Plural Names
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.oreilly.com/library/view/the-art-of/9781449318482/"
+          accessed: "2026-01-16"
+          quote: "Use plural names for arrays, lists, and collections"
     description: >
       Arrays, lists, sets, and other collections should use plural names.
       Singular names should be used for single items.
@@ -421,6 +553,14 @@ rules:
     title: Constants Use UPPER_SNAKE_CASE
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.oreilly.com/library/view/clean-code-a/9780136083238/"
+          accessed: "2026-01-16"
+          quote: "Constants should be screaming snake case (ALL_CAPS)"
     description: >
       Constants (values that never change) should use UPPER_SNAKE_CASE
       to distinguish them from mutable variables.
@@ -450,6 +590,14 @@ rules:
     title: Error Messages Include Context
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.oreilly.com/library/view/clean-code-a/9780136083238/"
+          accessed: "2026-01-16"
+          quote: "Create informative error messages - include enough context to determine the source and location of an error"
     description: >
       Error messages should include enough context to understand what
       failed and why. Generic messages like "Invalid" or "Failed" are useless.
@@ -479,6 +627,14 @@ rules:
     title: Function Names Are Verb Phrases
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.oreilly.com/library/view/clean-code-a/9780136083238/"
+          accessed: "2026-01-16"
+          quote: "Methods should have verb or verb phrase names like postPayment, deletePage, or save"
     description: >
       Function names should start with a verb that describes the action.
       Noun-only names don't describe what the function does.

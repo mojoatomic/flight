@@ -3,7 +3,8 @@
 # Sources: Docker docs, Hadolint, CIS Docker Benchmark
 
 domain: docker
-version: 1.0.0
+version: 1.1.0
+schema_version: 2
 description: >
   Dockerfile and container image best practices. Covers security, reproducibility,
   performance optimization, and maintainability. Framework-agnostic.
@@ -13,6 +14,45 @@ file_patterns:
   - "**/Dockerfile.*"
   - "**/*.dockerfile"
 
+# ===========================================================================
+# PROVENANCE - Schema v2 audit metadata
+# ===========================================================================
+
+provenance:
+  last_full_audit: "2026-01-16"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-16"
+
+  sources_consulted:
+    - url: "https://docs.docker.com/build/building/best-practices/"
+      accessed: "2026-01-16"
+      note: "Docker Official Best Practices - authoritative guide"
+    - url: "https://github.com/hadolint/hadolint"
+      accessed: "2026-01-16"
+      note: "Hadolint - Dockerfile linter with DL rule codes"
+    - url: "https://www.cisecurity.org/benchmark/docker"
+      accessed: "2026-01-16"
+      note: "CIS Docker Benchmark - security hardening guidelines"
+    - url: "https://github.com/GoogleContainerTools/distroless"
+      accessed: "2026-01-16"
+      note: "Google Distroless - minimal base images"
+    - url: "https://github.com/opencontainers/image-spec"
+      accessed: "2026-01-16"
+      note: "OCI Image Spec - container image standards"
+
+  coverage:
+    apis_covered:
+      - "Dockerfile instructions (FROM, RUN, COPY, ADD, etc.)"
+      - "Security best practices (USER, secrets, capabilities)"
+      - "Build optimization (multi-stage, layer caching)"
+      - "Image metadata (LABEL, HEALTHCHECK)"
+      - "Package management (apt-get patterns)"
+    known_gaps:
+      - "BuildKit advanced features"
+      - "Docker Compose validation"
+      - "Container runtime configuration"
+      - "Registry authentication patterns"
+
 rules:
   # ═══════════════════════════════════════════════════════════════════════════
   # NEVER Rules - Security vulnerabilities (validator will reject)
@@ -21,6 +61,14 @@ rules:
   N1:
     title: Running as Root User
     severity: NEVER
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.cisecurity.org/benchmark/docker"
+          accessed: "2026-01-16"
+          quote: "CIS 4.1: Ensure a user for the container has been created"
     description: >
       Containers should not run as root. Running as root inside a container
       means running as root on the host if container escape occurs.
@@ -49,6 +97,14 @@ rules:
   N2:
     title: Secrets in Build Args or Environment
     severity: NEVER
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://docs.docker.com/build/building/secrets/"
+          accessed: "2026-01-16"
+          quote: "Build arguments are visible in docker history - use secret mounts instead"
     description: >
       Never pass secrets via ARG or ENV. Build args are visible in image history.
       Environment variables may be logged or exposed. Use secret mounts instead.
@@ -71,6 +127,14 @@ rules:
   N3:
     title: ADD for Remote URLs
     severity: NEVER
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://github.com/hadolint/hadolint/wiki/DL3020"
+          accessed: "2026-01-16"
+          quote: "DL3020: Use COPY instead of ADD for files and folders"
     description: >
       Do not use ADD for downloading remote files. ADD with URLs is unpredictable
       and cannot be verified. Use RUN with curl/wget for checksums and control.
@@ -92,6 +156,14 @@ rules:
   N4:
     title: Privileged Operations in Dockerfile
     severity: NEVER
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.cisecurity.org/benchmark/docker"
+          accessed: "2026-01-16"
+          quote: "CIS 5.3: Do not use privileged containers; CIS 5.4: Do not allow privilege escalation"
     description: >
       Do not configure privileged capabilities in Dockerfile. Capabilities should
       be granted at runtime with minimal scope, not baked into images.
@@ -112,6 +184,14 @@ rules:
   N5:
     title: Hardcoded Passwords or Keys
     severity: NEVER
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.cisecurity.org/benchmark/docker"
+          accessed: "2026-01-16"
+          quote: "CIS 4.10: Do not store secrets in Dockerfiles"
     description: >
       Never hardcode passwords, API keys, or other secrets directly in Dockerfiles.
       These become permanently visible in image layers and history.
@@ -137,6 +217,14 @@ rules:
   M1:
     title: Use Absolute WORKDIR
     severity: MUST
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://github.com/hadolint/hadolint/wiki/DL3000"
+          accessed: "2026-01-16"
+          quote: "DL3000: Use absolute WORKDIR"
     description: >
       WORKDIR must be an absolute path. Relative paths cause confusion and
       may behave differently depending on previous instructions.
@@ -159,6 +247,14 @@ rules:
   M2:
     title: Pin Base Image Versions
     severity: MUST
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://github.com/hadolint/hadolint/wiki/DL3007"
+          accessed: "2026-01-16"
+          quote: "DL3007: Using latest is prone to errors if the image will ever update"
     description: >
       Always pin base image versions with specific tags or SHA digests.
       Using 'latest' or no tag causes unpredictable builds and security issues.
@@ -183,6 +279,14 @@ rules:
   M3:
     title: Use COPY Instead of ADD for Local Files
     severity: MUST
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://docs.docker.com/build/building/best-practices/#add-or-copy"
+          accessed: "2026-01-16"
+          quote: "COPY is preferred over ADD because it's more transparent"
     description: >
       Use COPY for copying local files. ADD has implicit behaviors (tar extraction,
       URL fetching) that make builds unpredictable. Use ADD only for tar extraction.
@@ -208,6 +312,14 @@ rules:
   M4:
     title: MAINTAINER is Deprecated
     severity: MUST
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://github.com/hadolint/hadolint/wiki/DL4000"
+          accessed: "2026-01-16"
+          quote: "DL4000: MAINTAINER is deprecated"
     description: >
       MAINTAINER instruction is deprecated. Use LABEL maintainer="..." instead
       for better metadata handling and OCI compliance.
@@ -228,6 +340,14 @@ rules:
   M5:
     title: Use JSON Notation for CMD and ENTRYPOINT
     severity: MUST
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://github.com/hadolint/hadolint/wiki/DL3025"
+          accessed: "2026-01-16"
+          quote: "DL3025: Use arguments JSON notation for CMD and ENTRYPOINT arguments"
     description: >
       Use JSON array format (exec form) for CMD and ENTRYPOINT. Shell form
       invokes a shell wrapper, preventing proper signal handling and PID 1 issues.
@@ -252,6 +372,14 @@ rules:
   M6:
     title: Set SHELL Pipefail Before RUN with Pipes
     severity: MUST
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://github.com/hadolint/hadolint/wiki/DL4006"
+          accessed: "2026-01-16"
+          quote: "DL4006: Set the SHELL option -o pipefail before RUN with a pipe in it"
     description: >
       When using pipes in RUN commands, set SHELL with pipefail option.
       Without pipefail, only the exit code of the last command is checked.
@@ -280,6 +408,14 @@ rules:
   M7:
     title: Invalid EXPOSE Port
     severity: MUST
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://github.com/hadolint/hadolint/wiki/DL3011"
+          accessed: "2026-01-16"
+          quote: "DL3011: Valid UNIX ports range from 0 to 65535"
     description: >
       EXPOSE must specify valid port numbers (1-65535). Invalid ports
       indicate configuration errors.
@@ -316,6 +452,14 @@ rules:
   S1:
     title: Pin Package Versions in apt-get
     severity: SHOULD
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://github.com/hadolint/hadolint/wiki/DL3008"
+          accessed: "2026-01-16"
+          quote: "DL3008: Pin versions in apt-get install"
     description: >
       Pin versions in apt-get install for reproducible builds. Unpinned packages
       may change between builds, causing subtle breakages.
@@ -339,6 +483,14 @@ rules:
   S2:
     title: Clean Package Cache in Same Layer
     severity: SHOULD
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://docs.docker.com/build/building/best-practices/#apt-get"
+          accessed: "2026-01-16"
+          quote: "Clean up the apt cache by removing /var/lib/apt/lists in the same RUN statement"
     description: >
       Remove package manager cache in the same RUN layer as install.
       Cleaning in a separate layer doesn't reduce image size due to layer caching.
@@ -364,6 +516,14 @@ rules:
   S3:
     title: Use Multi-Stage Builds
     severity: SHOULD
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://docs.docker.com/build/building/multi-stage/"
+          accessed: "2026-01-16"
+          quote: "Multi-stage builds allow you to drastically reduce the size of your final image"
     description: >
       Use multi-stage builds to reduce final image size. Build dependencies
       should not be included in production images.
@@ -399,6 +559,14 @@ rules:
   S4:
     title: Order Layers for Caching
     severity: SHOULD
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://docs.docker.com/build/building/best-practices/#leverage-build-cache"
+          accessed: "2026-01-16"
+          quote: "Order instructions from least to most frequently changing to leverage cache"
     description: >
       Order Dockerfile instructions from least to most frequently changing.
       COPY package*.json before COPY . to maximize cache reuse.
@@ -430,6 +598,14 @@ rules:
   S5:
     title: Use .dockerignore
     severity: SHOULD
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://docs.docker.com/build/building/context/#dockerignore-files"
+          accessed: "2026-01-16"
+          quote: "Use .dockerignore to exclude files not relevant to the build"
     description: >
       Create a .dockerignore file to exclude unnecessary files from build context.
       Reduces build time and prevents accidental inclusion of secrets.
@@ -461,6 +637,14 @@ rules:
   S6:
     title: Define HEALTHCHECK
     severity: SHOULD
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.cisecurity.org/benchmark/docker"
+          accessed: "2026-01-16"
+          quote: "CIS 4.6: Add HEALTHCHECK instruction to the container image"
     description: >
       Define HEALTHCHECK instruction for container health monitoring.
       Enables orchestrators to detect and replace unhealthy containers.
@@ -491,6 +675,14 @@ rules:
   S7:
     title: Combine RUN Commands
     severity: SHOULD
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://docs.docker.com/build/building/best-practices/#minimize-the-number-of-layers"
+          accessed: "2026-01-16"
+          quote: "Minimize the number of layers by combining RUN commands where possible"
     description: >
       Combine related RUN commands to minimize layers. Each RUN creates a new
       layer, increasing image size and complexity.
@@ -521,6 +713,14 @@ rules:
   S8:
     title: Use Specific COPY Targets
     severity: SHOULD
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://docs.docker.com/build/building/best-practices/#leverage-build-cache"
+          accessed: "2026-01-16"
+          quote: "Copy only the files you need to improve cache efficiency"
     description: >
       Avoid COPY . when possible. Copy only required files to improve
       cache efficiency and reduce unintended file inclusion.
@@ -544,6 +744,14 @@ rules:
   S9:
     title: Avoid apt-get upgrade
     severity: SHOULD
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://github.com/hadolint/hadolint/wiki/DL3005"
+          accessed: "2026-01-16"
+          quote: "DL3005: Do not use apt-get upgrade or dist-upgrade"
     description: >
       Avoid apt-get upgrade/dist-upgrade in Dockerfiles. Upgrading packages
       can cause unpredictable changes. Pin base images instead.

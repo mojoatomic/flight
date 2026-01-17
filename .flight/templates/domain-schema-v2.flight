@@ -1,0 +1,283 @@
+# ===========================================================================
+# FLIGHT DOMAIN TEMPLATE - Schema v2 (with Provenance)
+# ===========================================================================
+# This template demonstrates the complete schema v2 structure.
+# Copy this file, rename to your-domain.flight, and customize.
+#
+# Schema v2 adds provenance metadata to track:
+#   - When rules were last verified
+#   - Confidence levels and staleness
+#   - Source documentation with quotes
+#   - Deprecated patterns and their replacements
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# DOMAIN METADATA (required)
+# ---------------------------------------------------------------------------
+domain: example                    # Domain identifier (becomes filename prefix)
+version: 1.0.0                     # Semantic version of this domain spec
+schema_version: 2                  # Schema version (2 = provenance support)
+description: Example domain demonstrating schema v2 provenance features.
+
+# ---------------------------------------------------------------------------
+# DOMAIN-LEVEL PROVENANCE (schema v2)
+# ---------------------------------------------------------------------------
+# Tracks audit history and coverage for the entire domain.
+# The compiler warns if next_audit_due is in the past.
+provenance:
+  last_full_audit: "2026-01-16"    # Date of last comprehensive audit
+  audited_by: "flight-research"    # Who/what performed the audit
+  next_audit_due: "2026-07-16"     # When to re-audit (6 months recommended)
+
+  # Sources consulted during domain creation/audit
+  sources_consulted:
+    - url: "https://example.com/official-docs"
+      accessed: "2026-01-16"
+      note: "Official documentation"
+    - url: "https://example.com/best-practices"
+      accessed: "2026-01-16"
+      note: "Community best practices guide"
+
+  # Document what this domain covers and known gaps
+  coverage:
+    apis_covered:
+      - "Core API patterns"
+      - "Authentication flows"
+      - "Error handling"
+    known_gaps:
+      - "WebSocket patterns (not yet documented)"
+      - "GraphQL integration (out of scope)"
+
+# ---------------------------------------------------------------------------
+# FILE PATTERNS
+# ---------------------------------------------------------------------------
+# Glob patterns for files this domain applies to.
+# Used by validate-all.sh to auto-detect relevant validators.
+file_patterns:
+  - "**/*.example"
+  - "**/example/**/*.ts"
+
+# ---------------------------------------------------------------------------
+# API FILE DETECTION (optional)
+# ---------------------------------------------------------------------------
+# For domains with api_files_only rules, define how to identify API files.
+# api_file_detection:
+#   paths:
+#     - "api/"
+#     - "routes/"
+#   patterns:
+#     - 'app\.(get|post|put|delete)\('
+
+# ===========================================================================
+# RULES
+# ===========================================================================
+# ID format: {severity_prefix}{number}
+#   N = NEVER (check - fails build)
+#   M = MUST (check - fails build)
+#   S = SHOULD (warn - advisory)
+#   G = GUIDANCE (not mechanically checked)
+#
+# Schema v2 adds optional 'provenance' block to each rule.
+# ===========================================================================
+
+rules:
+
+  # =========================================================================
+  # NEVER - Validator will reject
+  # =========================================================================
+
+  N1:
+    title: Example Never Rule
+    severity: NEVER
+    mechanical: true
+    description: Demonstrates a NEVER rule with full provenance
+
+    # Rule-level provenance (schema v2)
+    provenance:
+      last_verified: "2026-01-16"       # When this rule was last verified
+      confidence: high                   # high | medium | low
+      re_verify_after: "2027-01-16"     # Re-verify after this date (compiler warns if stale)
+      sources:
+        - url: "https://example.com/docs/security"
+          accessed: "2026-01-16"
+          quote: "Never expose internal identifiers in public APIs"
+        - url: "https://owasp.org/example"
+          accessed: "2026-01-16"
+          quote: "This is a known security anti-pattern"
+
+    check:
+      type: grep
+      pattern: 'dangerous_pattern'
+      flags: -Ein
+
+    examples:
+      bad:
+        - "dangerous_pattern('exposed')"
+      good:
+        - "safe_pattern('protected')"
+
+  N2:
+    title: Deprecated Pattern Example
+    severity: NEVER
+    mechanical: true
+    description: Shows superseded_by for deprecated APIs
+
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://example.com/changelog/v2"
+          accessed: "2026-01-16"
+          quote: "oldMethod is deprecated in v2.0, use newMethod instead"
+
+      # Use superseded_by when an API/pattern has been replaced
+      superseded_by:
+        replacement: "newMethod()"      # What to use instead
+        version: "2.0.0"                # Version that introduced replacement
+        date: "2025-06-01"              # When deprecated
+        note: "oldMethod will be removed in v3.0"
+
+    check:
+      type: grep
+      pattern: 'oldMethod\('
+      flags: -En
+
+    examples:
+      bad:
+        - "oldMethod(args)"
+      good:
+        - "newMethod(args)"
+
+  # =========================================================================
+  # MUST - Validator will reject
+  # =========================================================================
+
+  M1:
+    title: Example Must Rule
+    severity: MUST
+    mechanical: true
+    description: Required pattern with provenance
+
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://example.com/docs/requirements"
+          accessed: "2026-01-16"
+          quote: "All implementations must include error handling"
+
+    check:
+      type: presence
+      pattern: 'errorHandler|try.*catch'
+      flags: -l
+      invert: true
+      message: "No error handling pattern found"
+
+    examples:
+      good:
+        - "try { riskyOperation() } catch (e) { errorHandler(e) }"
+
+  M2:
+    title: Non-Mechanical Must Rule
+    severity: MUST
+    mechanical: false
+    description: Rules too complex for grep go here
+    note: "Requires human/AI judgment - semantic analysis needed"
+
+  # =========================================================================
+  # SHOULD - Validator warns (doesn't fail)
+  # =========================================================================
+
+  S1:
+    title: Example Should Rule
+    severity: SHOULD
+    mechanical: true
+    description: Best practice with medium confidence
+
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: medium                 # Medium = verify more frequently
+      re_verify_after: "2026-07-16"     # 6 months for medium confidence
+      sources:
+        - url: "https://example.com/best-practices"
+          accessed: "2026-01-16"
+          quote: "Using descriptive names improves maintainability"
+
+    check:
+      type: grep
+      pattern: 'var [a-z]$'
+      flags: -En
+
+    examples:
+      bad:
+        - "var x = getValue()"
+      good:
+        - "var userCount = getValue()"
+
+  S2:
+    title: Low Confidence Rule Example
+    severity: SHOULD
+    mechanical: true
+    description: Emerging pattern - needs more validation
+
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: low                    # Low = compiler emits warning
+      re_verify_after: "2026-04-16"     # 3 months for low confidence
+      sources:
+        - url: "https://blog.example.com/new-pattern"
+          accessed: "2026-01-16"
+          quote: "This new approach shows promise but needs more validation"
+
+    check:
+      type: presence
+      pattern: 'newExperimentalPattern'
+      flags: -l
+      invert: true
+      message: "Consider using newExperimentalPattern"
+
+  # =========================================================================
+  # GUIDANCE - Not mechanically checked
+  # =========================================================================
+
+  G1:
+    title: Example Guidance
+    severity: GUIDANCE
+    mechanical: false
+    description: Architectural guidance that can't be validated mechanically
+    note: "Review during code review - requires understanding context"
+    examples:
+      good:
+        - "Follow the principle of least privilege"
+        - "Design for testability"
+
+# ===========================================================================
+# PATTERNS - Reference material (documentation only)
+# ===========================================================================
+patterns:
+  naming_conventions:
+    - "Use camelCase for variables"
+    - "Use PascalCase for classes"
+    - "Use SCREAMING_SNAKE_CASE for constants"
+
+# ===========================================================================
+# INFO - Statistics for reporting (not pass/fail)
+# ===========================================================================
+info:
+  example_count:
+    pattern: 'examplePattern'
+    flags: -c
+    label: "Example pattern occurrences"
+
+# ===========================================================================
+# ANTI-PATTERNS - Quick reference table
+# ===========================================================================
+anti_patterns:
+  - pattern: "Exposed internals"
+    example: "Using database IDs in URLs"
+    fix: "Use opaque identifiers"
+  - pattern: "Missing error handling"
+    example: "Ignoring promise rejections"
+    fix: "Add try/catch or .catch()"

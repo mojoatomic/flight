@@ -1,6 +1,43 @@
 domain: api
-version: 1.0.0
+version: 1.1.0
+schema_version: 2
 description: REST/HTTP API design patterns. Framework-agnostic. Prevents common integration failures.
+
+# ===========================================================================
+# PROVENANCE - Schema v2 audit trail
+# ===========================================================================
+provenance:
+  last_full_audit: "2026-01-16"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-16"
+  sources_consulted:
+    - url: "https://www.rfc-editor.org/rfc/rfc9110.html"
+      accessed: "2026-01-16"
+      note: "HTTP Semantics - current standard"
+    - url: "https://www.rfc-editor.org/rfc/rfc9457.html"
+      accessed: "2026-01-16"
+      note: "Problem Details for HTTP APIs"
+    - url: "https://github.com/microsoft/api-guidelines"
+      accessed: "2026-01-16"
+      note: "Microsoft REST API Guidelines"
+    - url: "https://cloud.google.com/apis/design"
+      accessed: "2026-01-16"
+      note: "Google API Design Guide"
+    - url: "https://owasp.org/www-project-api-security/"
+      accessed: "2026-01-16"
+      note: "OWASP API Security Top 10"
+  coverage:
+    apis_covered:
+      - "HTTP methods and status codes (RFC 9110)"
+      - "Error response format (RFC 9457)"
+      - "URI design and versioning"
+      - "Pagination patterns"
+      - "Security headers (CORS, rate limiting)"
+    known_gaps:
+      - "GraphQL-specific patterns"
+      - "gRPC/Protocol Buffers"
+      - "WebSocket APIs"
+      - "Hypermedia (HATEOAS) patterns"
 
 file_patterns:
   - "**/routes*.{js,ts}"
@@ -52,6 +89,17 @@ rules:
     mechanical: true
     api_files_only: true
     description: URIs identify resources, HTTP methods define actions
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.rfc-editor.org/rfc/rfc9110.html#section-4"
+          accessed: "2026-01-16"
+          quote: "The method token indicates the request method to be performed on the target resource"
+        - url: "https://cloud.google.com/apis/design/resources"
+          accessed: "2026-01-16"
+          quote: "A resource-oriented API is generally modeled as a resource hierarchy"
     check:
       type: grep
       pattern: '[''"]/?(create|delete|remove|update|get|fetch|add|edit|modify)([A-Z]|[_-][a-z])'
@@ -72,6 +120,14 @@ rules:
     mechanical: true
     api_files_only: true
     description: Status code must reflect outcome
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.rfc-editor.org/rfc/rfc9110.html#section-15"
+          accessed: "2026-01-16"
+          quote: "Status codes indicate the result of the attempt to understand and satisfy the request"
     check:
       type: grep
       pattern: 'status\(200\).*[''"]?error[''"]?\s*:|\.ok\(.*[''"]?error[''"]?\s*:|status.*200.*success.*false'
@@ -87,6 +143,17 @@ rules:
     severity: NEVER
     mechanical: true
     description: Auto-increment IDs leak data (record count, sequence)
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/"
+          accessed: "2026-01-16"
+          quote: "Attackers can exploit API endpoints that are vulnerable to broken object-level authorization by manipulating the ID of an object"
+        - url: "https://stripe.com/docs/api/pagination"
+          accessed: "2026-01-16"
+          quote: "Stripe uses cursor-based pagination via starting_after and ending_before parameters"
     check:
       type: grep
       pattern: 'after_id|before_id|since_id|last_id|start_id'
@@ -120,6 +187,17 @@ rules:
     severity: NEVER
     mechanical: true
     description: URLs are logged everywhere (proxies, browsers, servers)
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://owasp.org/API-Security/editions/2023/en/0xa2-broken-authentication/"
+          accessed: "2026-01-16"
+          quote: "Sensitive authentication data should be transferred in headers or POST body, never in URLs"
+        - url: "https://www.rfc-editor.org/rfc/rfc9110.html#section-17.9"
+          accessed: "2026-01-16"
+          quote: "URIs are intended to be shared, not secured"
     check:
       type: grep
       pattern: 'req\.(query|params)(\.(password|secret|api_key|token|auth)|\[[''"]?(password|secret|api_key|token|auth))|(\{[^}]*(password|secret|api_key|token|auth)[^}]*\})\s*=\s*req\.(query|params)'
@@ -138,6 +216,17 @@ rules:
     mechanical: true
     api_files_only: true
     description: Performance degrades at scale (database scans and discards rows)
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: medium
+      re_verify_after: "2026-07-16"
+      sources:
+        - url: "https://use-the-index-luke.com/no-offset"
+          accessed: "2026-01-16"
+          quote: "The database must still fetch these rows from the disk and bring them in order before it can send the following ones"
+        - url: "https://slack.engineering/evolving-api-pagination-at-slack/"
+          accessed: "2026-01-16"
+          quote: "Cursor-based pagination provides stable results even when data changes"
     check:
       type: grep
       pattern: 'offset.*limit|page.*per_page|skip.*take'
@@ -155,6 +244,17 @@ rules:
     mechanical: true
     api_files_only: true
     description: Server errors mask validation failures
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.rfc-editor.org/rfc/rfc9110.html#section-15.5"
+          accessed: "2026-01-16"
+          quote: "4xx status codes indicate the client seems to have erred"
+        - url: "https://www.rfc-editor.org/rfc/rfc9110.html#section-15.6"
+          accessed: "2026-01-16"
+          quote: "5xx status codes indicate the server is aware that it has erred or is incapable"
     check:
       type: grep
       pattern: 'catch.*\{[^}]*(status\(500\)|res\.status\s*=\s*500)|(ValidationError|validate|invalid).*500|500.*(validation|invalid)'
@@ -170,6 +270,17 @@ rules:
     severity: NEVER
     mechanical: true
     description: Security vulnerability - allows any origin to send credentials
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://fetch.spec.whatwg.org/#http-access-control-allow-origin"
+          accessed: "2026-01-16"
+          quote: "If credentials mode is 'include', then Access-Control-Allow-Origin cannot be *"
+        - url: "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/"
+          accessed: "2026-01-16"
+          quote: "CORS misconfigurations can lead to sensitive data exposure"
     check:
       type: multi-condition
       logic: AND
@@ -233,6 +344,14 @@ rules:
     mechanical: true
     api_files_only: true
     description: Use Problem Details for HTTP APIs (RFC 9457 supersedes RFC 7807)
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.rfc-editor.org/rfc/rfc9457.html"
+          accessed: "2026-01-16"
+          quote: "This document defines a 'problem detail' to carry machine-readable details of errors in HTTP response content"
     check:
       type: presence
       pattern: 'application/problem\+json|type.*title.*status|ProblemDetails'
@@ -256,6 +375,17 @@ rules:
     severity: MUST
     mechanical: true
     description: Collections should use plural nouns
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://cloud.google.com/apis/design/resource_names"
+          accessed: "2026-01-16"
+          quote: "Collection IDs should use plural form and lowerCamelCase"
+        - url: "https://github.com/microsoft/api-guidelines/blob/vNext/azure/Guidelines.md"
+          accessed: "2026-01-16"
+          quote: "Collection names must be plural nouns"
     check:
       type: grep
       pattern: '[''"]/(user|product|order|item|account|customer|payment)(/|[''""])'
@@ -273,6 +403,17 @@ rules:
     severity: MUST
     mechanical: true
     description: Paginated responses must include navigation metadata
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://stripe.com/docs/api/pagination"
+          accessed: "2026-01-16"
+          quote: "The response contains a has_more attribute indicating whether more pages are available"
+        - url: "https://cloud.google.com/apis/design/design_patterns#list_pagination"
+          accessed: "2026-01-16"
+          quote: "List methods must support pagination... next_page_token in response"
     check:
       type: script
       code: |
@@ -311,6 +452,17 @@ rules:
     severity: MUST
     mechanical: true
     description: APIs must be versioned
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://github.com/microsoft/api-guidelines/blob/vNext/azure/Guidelines.md#api-versioning"
+          accessed: "2026-01-16"
+          quote: "All APIs must support explicit versioning"
+        - url: "https://stripe.com/docs/api/versioning"
+          accessed: "2026-01-16"
+          quote: "When backwards-incompatible changes are made, a new dated version is released"
     check:
       type: presence
       pattern: '/v[0-9]+([/''"?]|$)|version.*header|api-version'
@@ -330,6 +482,17 @@ rules:
     severity: MUST
     mechanical: true
     description: Include rate limiting information in responses
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/"
+          accessed: "2026-01-16"
+          quote: "RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset headers for rate limiting"
+        - url: "https://www.rfc-editor.org/rfc/rfc9110.html#name-retry-after"
+          accessed: "2026-01-16"
+          quote: "Retry-After indicates how long the user agent ought to wait before making a follow-up request"
     check:
       type: presence
       pattern: 'x-ratelimit|rate.?limit|retry-after'
@@ -348,6 +511,14 @@ rules:
     severity: MUST
     mechanical: true
     description: Created responses must include Location header
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.rfc-editor.org/rfc/rfc9110.html#name-201-created"
+          accessed: "2026-01-16"
+          quote: "The primary resource created by the request is identified by... a Location header field"
     check:
       type: script
       code: |
@@ -369,6 +540,14 @@ rules:
     severity: MUST
     mechanical: true
     description: All responses must have explicit Content-Type
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.rfc-editor.org/rfc/rfc9110.html#name-content-type"
+          accessed: "2026-01-16"
+          quote: "Content-Type indicates the media type of the associated representation"
     check:
       type: presence
       pattern: 'content-type|\.type\(|\.json\('
@@ -389,6 +568,17 @@ rules:
     severity: SHOULD
     mechanical: true
     description: Never expose APIs over plain HTTP
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.rfc-editor.org/rfc/rfc9110.html#section-17.1"
+          accessed: "2026-01-16"
+          quote: "HTTP relies on the HTTP connection security mechanism to provide confidentiality of sensitive information"
+        - url: "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/09-Testing_for_Weak_Cryptography/01-Testing_for_Weak_Transport_Layer_Security"
+          accessed: "2026-01-16"
+          quote: "All traffic including authentication and session tokens must be encrypted in transit using TLS"
     check:
       type: grep
       pattern: 'http://[a-zA-Z]'
@@ -418,6 +608,17 @@ rules:
     mechanical: true
     api_files_only: true
     description: Use standard date format with timezone
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.iso.org/iso-8601-date-and-time-format.html"
+          accessed: "2026-01-16"
+          quote: "ISO 8601 addresses the exchange of date and time-related data"
+        - url: "https://www.rfc-editor.org/rfc/rfc3339"
+          accessed: "2026-01-16"
+          quote: "Internet date/time format based on ISO 8601"
     check:
       type: presence
       pattern: 'toISOString|ISO.*8601|datetime|DateTimeFormatter'
@@ -436,6 +637,17 @@ rules:
     severity: SHOULD
     mechanical: true
     description: Use snake_case or camelCase consistently, never mix
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://cloud.google.com/apis/design/naming_convention"
+          accessed: "2026-01-16"
+          quote: "Field names should be in snake_case"
+        - url: "https://github.com/microsoft/api-guidelines/blob/vNext/Guidelines.md"
+          accessed: "2026-01-16"
+          quote: "Property names should be camelCase"
     check:
       type: script
       code: |
@@ -496,6 +708,14 @@ rules:
     mechanical: true
     api_files_only: true
     description: POST operations should support idempotency keys
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://stripe.com/docs/api/idempotent_requests"
+          accessed: "2026-01-16"
+          quote: "Idempotency keys allow you to safely retry requests without accidentally performing the same operation twice"
     check:
       type: presence
       pattern: 'idempotency|idempotent'
@@ -512,6 +732,14 @@ rules:
     mechanical: true
     api_files_only: true
     description: Include CORS headers for browser-based API consumers
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://fetch.spec.whatwg.org/#http-cors-protocol"
+          accessed: "2026-01-16"
+          quote: "CORS protocol lets servers indicate what origins have permission to read that information"
     check:
       type: presence
       pattern: 'access-control-allow|cors\(|cors\.enable'
@@ -529,6 +757,14 @@ rules:
     severity: SHOULD
     mechanical: true
     description: Use async pattern for operations > 10 seconds
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.rfc-editor.org/rfc/rfc9110.html#name-202-accepted"
+          accessed: "2026-01-16"
+          quote: "The 202 status code indicates that the request has been accepted for processing, but the processing has not been completed"
     check:
       type: script
       code: |
@@ -558,6 +794,14 @@ rules:
     mechanical: true
     api_files_only: true
     description: Maintain machine-readable API documentation
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://spec.openapis.org/oas/v3.1.0"
+          accessed: "2026-01-16"
+          quote: "The OpenAPI Specification defines a standard, language-agnostic interface to HTTP APIs"
     check:
       type: file_exists
       paths:
@@ -581,6 +825,14 @@ rules:
     severity: SHOULD
     mechanical: true
     description: Use configuration/environment for external URLs
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://12factor.net/config"
+          accessed: "2026-01-16"
+          quote: "Store config in the environment... strict separation of config from code"
     check:
       type: grep
       pattern: 'https?://[a-zA-Z0-9][a-zA-Z0-9.-]+\.(com|io|net|org|dev|app)'
@@ -598,6 +850,17 @@ rules:
     severity: SHOULD
     mechanical: true
     description: Enable tracing across services with request/trace IDs
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.w3.org/TR/trace-context/"
+          accessed: "2026-01-16"
+          quote: "Trace Context specification defines traceparent and tracestate headers for distributed tracing"
+        - url: "https://opentelemetry.io/docs/concepts/signals/traces/"
+          accessed: "2026-01-16"
+          quote: "A trace represents the journey of a request through a distributed system"
     check:
       type: script
       code: |

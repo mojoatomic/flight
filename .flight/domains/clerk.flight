@@ -2,7 +2,8 @@
 # Source: Official Clerk docs, multi-tenant best practices, organization patterns
 
 domain: clerk
-version: 1.0.0
+version: 1.1.0
+schema_version: 2
 description: >
   Clerk authentication and multi-tenant organization patterns for SaaS applications
   using TypeScript/Next.js App Router. Covers clerkMiddleware, auth(), organizations,
@@ -18,6 +19,47 @@ exclude_patterns:
   - "**/build/**"
   - "**/.git/**"
   - "**/*.d.ts"
+
+# ===========================================================================
+# PROVENANCE - Schema v2 audit metadata
+# ===========================================================================
+
+provenance:
+  last_full_audit: "2026-01-16"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-16"
+
+  sources_consulted:
+    - url: "https://clerk.com/docs/quickstarts/nextjs"
+      accessed: "2026-01-16"
+      note: "Clerk Next.js Quickstart - setup and configuration"
+    - url: "https://clerk.com/docs/references/nextjs/clerk-middleware"
+      accessed: "2026-01-16"
+      note: "Clerk Middleware Reference - clerkMiddleware, createRouteMatcher"
+    - url: "https://clerk.com/docs/organizations/overview"
+      accessed: "2026-01-16"
+      note: "Clerk Organizations Guide - multi-tenant patterns"
+    - url: "https://clerk.com/docs/webhooks/overview"
+      accessed: "2026-01-16"
+      note: "Clerk Webhooks - signature verification, event handling"
+    - url: "https://clerk.com/docs/guides/multi-tenant-saas"
+      accessed: "2026-01-16"
+      note: "Multi-Tenant SaaS with Clerk - orgId patterns, data isolation"
+
+  coverage:
+    apis_covered:
+      - "clerkMiddleware and route protection"
+      - "auth() and currentUser() server functions"
+      - "useAuth, useUser, useOrganization hooks"
+      - "Organization switching and context"
+      - "Webhook verification with svix"
+      - "Multi-tenant data isolation patterns"
+      - "Role-based access control with has()"
+    known_gaps:
+      - "Clerk Elements (custom UI components)"
+      - "Session tokens and JWT customization"
+      - "Clerk Backend API patterns"
+      - "Organization invitation flows"
 
 # ===========================================================================
 # RULES
@@ -42,6 +84,14 @@ rules:
     title: Secret Key in Client Code
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://clerk.com/docs/quickstarts/nextjs"
+          accessed: "2026-01-16"
+          quote: "CLERK_SECRET_KEY should only be used on the server-side"
     description: >
       CLERK_SECRET_KEY must never appear in client-accessible code.
       It has admin privileges. Only use in server-side code that is
@@ -77,6 +127,14 @@ rules:
     title: Deprecated authMiddleware
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://clerk.com/docs/references/nextjs/clerk-middleware"
+          accessed: "2026-01-16"
+          quote: "authMiddleware has been deprecated in favor of clerkMiddleware"
     description: >
       authMiddleware is deprecated. Use clerkMiddleware() instead.
       authMiddleware has known issues with Next.js 14+ and doesn't
@@ -108,6 +166,14 @@ rules:
     title: auth() in Client Components
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://clerk.com/docs/references/nextjs/auth"
+          accessed: "2026-01-16"
+          quote: "auth() is a server-only helper that returns the current auth state"
     description: >
       auth() from @clerk/nextjs/server cannot be used in client components.
       It's a server-only function. Use useAuth() hook in client components.
@@ -143,6 +209,14 @@ rules:
     title: Synchronous auth() Call in Next.js 15+
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://clerk.com/docs/upgrade-guides/core-2/nextjs"
+          accessed: "2026-01-16"
+          quote: "auth() now returns a Promise in Next.js 15+ and must be awaited"
     description: >
       In Next.js 15+, auth() returns a Promise. Must be awaited.
       Synchronous usage causes runtime errors.
@@ -171,6 +245,14 @@ rules:
     title: Hardcoded Clerk Keys
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://clerk.com/docs/quickstarts/nextjs"
+          accessed: "2026-01-16"
+          quote: "Store your keys in environment variables - never commit them to source control"
     description: >
       Never hardcode Clerk publishable or secret keys. Use environment
       variables. Hardcoded credentials get committed and leaked.
@@ -194,6 +276,14 @@ rules:
     title: Missing Webhook Signature Verification
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://clerk.com/docs/webhooks/overview"
+          accessed: "2026-01-16"
+          quote: "Always verify the webhook signature before processing events"
     description: >
       Clerk webhooks must verify the svix signature. Without verification,
       attackers can send fake webhook events to your API.
@@ -238,6 +328,14 @@ rules:
     title: Using userId When orgId is Required
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://clerk.com/docs/guides/multi-tenant-saas"
+          accessed: "2026-01-16"
+          quote: "In multi-tenant apps, always scope data queries by orgId, not userId"
     description: >
       In multi-tenant apps, data must be scoped to orgId, not userId.
       A user can be in multiple orgs. Using userId creates data leaks.
@@ -283,6 +381,14 @@ rules:
     title: Missing Organization Context in Protected Routes
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://clerk.com/docs/organizations/overview"
+          accessed: "2026-01-16"
+          quote: "Check for orgId in protected routes to ensure users have selected an organization"
     description: >
       Protected routes in multi-tenant apps must check for orgId.
       A valid session without org context means the user hasn't selected an org.
@@ -326,6 +432,14 @@ rules:
     title: Missing Null Checks for Auth Values
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://clerk.com/docs/references/nextjs/auth"
+          accessed: "2026-01-16"
+          quote: "auth() returns null for userId and orgId when the user is not authenticated"
     description: >
       auth() can return null for userId and orgId. Using them without
       null checks causes runtime errors and security issues.
@@ -375,6 +489,14 @@ rules:
     title: ClerkProvider at Root
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://clerk.com/docs/quickstarts/nextjs"
+          accessed: "2026-01-16"
+          quote: "Wrap your application in ClerkProvider at the root layout"
     description: >
       ClerkProvider must wrap the application at the root layout.
       Without it, Clerk hooks and components won't work.
@@ -420,6 +542,14 @@ rules:
     title: Middleware Matcher Configuration
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://clerk.com/docs/references/nextjs/clerk-middleware"
+          accessed: "2026-01-16"
+          quote: "Export a config object with a matcher to control which routes the middleware runs on"
     description: >
       Clerk middleware must have a matcher config to avoid running on
       static files and internal Next.js routes.
@@ -463,6 +593,14 @@ rules:
     title: Use createRouteMatcher for Route Protection
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://clerk.com/docs/references/nextjs/clerk-middleware"
+          accessed: "2026-01-16"
+          quote: "Use createRouteMatcher() to define protected and public routes declaratively"
     description: >
       Use createRouteMatcher() with clerkMiddleware for route protection.
       This is the recommended pattern over manual path checks.
@@ -505,6 +643,14 @@ rules:
     title: Validate Organization Slug in Routes
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://clerk.com/docs/organizations/overview"
+          accessed: "2026-01-16"
+          quote: "Validate URL slugs against the authenticated user's organization to prevent unauthorized access"
     description: >
       When using org slug in URL ([orgSlug]), validate it matches
       the user's current organization to prevent URL manipulation.
@@ -549,6 +695,14 @@ rules:
     title: Include orgId in Database Queries
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://clerk.com/docs/guides/multi-tenant-saas"
+          accessed: "2026-01-16"
+          quote: "All tenant data queries must include orgId to enforce tenant isolation"
     description: >
       All data queries must include orgId to enforce tenant isolation.
       This is the fundamental multi-tenant security boundary.
@@ -594,42 +748,67 @@ rules:
     title: Handle Organization Switching
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://clerk.com/docs/components/organization-switcher"
+          accessed: "2026-01-16"
+          quote: "Use afterSelectOrganizationUrl or setActive() to handle navigation when users switch organizations"
     description: >
       When a user switches organizations, the app must handle the
-      context change - clearing cached data and updating UI.
+      context change. Use afterSelectOrganizationUrl for navigation
+      or build a custom flow with clerk.setActive() for programmatic control.
     check:
       type: script
       code: |
         for f in "$@"; do
-          # Check client files using organization hooks
+          # Check client files using OrganizationSwitcher
           if grep -q "'use client'" "$f" 2>/dev/null; then
-            if grep -qE "useOrganization|OrganizationSwitcher" "$f" 2>/dev/null; then
-              # Should handle org changes
-              if ! grep -qE "onOrganizationSelect|organization\.id.*useEffect|router\.refresh|revalidate" "$f" 2>/dev/null; then
-                echo "$f: org component without change handling"
+            if grep -qE "OrganizationSwitcher" "$f" 2>/dev/null; then
+              # Should have URL prop or custom navigation handling
+              if ! grep -qE "afterSelectOrganizationUrl|setActive|router\.(push|replace|refresh)" "$f" 2>/dev/null; then
+                echo "$f: OrganizationSwitcher without navigation handling"
               fi
             fi
           fi
         done
     note: |
-      When org changes, you need to:
-      1. Clear any cached data for the old org
-      2. Refetch data for the new org
-      3. Update any org-specific UI state
+      OrganizationSwitcher uses URL-based navigation props, NOT callbacks:
+      - afterSelectOrganizationUrl: Navigate after org switch
+      - afterCreateOrganizationUrl: Navigate after org creation
+      - afterLeaveOrganizationUrl: Navigate after leaving org
 
-      Use OrganizationSwitcher's afterSelectOrganization callback:
+      Use dynamic segments like :id or :slug for org-specific URLs:
 
       <OrganizationSwitcher
-        afterSelectOrganization={() => router.refresh()}
+        afterSelectOrganizationUrl="/dashboard/:slug"
       />
+
+      For programmatic control, build a custom flow using clerk.setActive():
+
+      const { setActive } = useClerk()
+      await setActive({ organization: orgId })
+      router.refresh()
     examples:
       good:
         - |
+          // URL-based navigation (recommended)
           <OrganizationSwitcher
-            afterSelectOrganization={() => {
-              router.refresh()
-            }}
+            afterSelectOrganizationUrl="/dashboard/:slug"
+            afterCreateOrganizationUrl="/onboarding/:slug"
           />
+        - |
+          // Custom flow with programmatic control
+          import { useClerk } from '@clerk/nextjs'
+
+          const { setActive } = useClerk()
+
+          async function switchOrg(orgId: string) {
+            await setActive({ organization: orgId })
+            router.refresh()
+          }
 
   # =========================================================================
   # SHOULD - Best practices (advisory)
@@ -653,19 +832,25 @@ rules:
       import { OrganizationSwitcher } from '@clerk/nextjs'
 
       <OrganizationSwitcher
-        afterSelectOrganization={() => router.refresh()}
+        afterSelectOrganizationUrl="/dashboard/:slug"
         appearance={{...}}
       />
+
+      Available URL props (all accept dynamic segments :id, :slug):
+      - afterSelectOrganizationUrl
+      - afterCreateOrganizationUrl
+      - afterLeaveOrganizationUrl
     examples:
       good:
         - |
           import { OrganizationSwitcher } from '@clerk/nextjs'
 
           export function OrgSwitcher() {
-            const router = useRouter()
             return (
               <OrganizationSwitcher
-                afterSelectOrganization={() => router.refresh()}
+                afterSelectOrganizationUrl="/dashboard/:slug"
+                afterCreateOrganizationUrl="/onboarding/:slug"
+                hidePersonal={true}
               />
             )
           }
