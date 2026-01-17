@@ -1,12 +1,43 @@
 # nextjs.flight - Next.js 14+ App Router patterns
-# Source: Migrated from nextjs.md and nextjs.validate.sh
 
 domain: nextjs
-version: 1.0.0
+version: 1.1.0
+schema_version: 2
 description: >
   Next.js 14+ App Router patterns for server components, routing, and data fetching.
   Enforces proper client/server boundaries, prevents secret exposure, and promotes
   parallel data fetching.
+
+provenance:
+  last_full_audit: "2026-01-16"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-16"
+
+  sources_consulted:
+    - url: "https://nextjs.org/docs/app"
+      accessed: "2026-01-16"
+      note: "Next.js App Router documentation"
+    - url: "https://nextjs.org/docs/app/building-your-application/rendering/server-components"
+      accessed: "2026-01-16"
+      note: "Server Components rendering documentation"
+    - url: "https://nextjs.org/docs/app/building-your-application/routing/route-handlers"
+      accessed: "2026-01-16"
+      note: "Route Handlers documentation"
+    - url: "https://nextjs.org/docs/app/building-your-application/configuring/environment-variables"
+      accessed: "2026-01-16"
+      note: "Environment Variables documentation"
+
+  coverage:
+    apis_covered:
+      - "Server Components vs Client Components"
+      - "Route Handlers (app/api)"
+      - "Environment variable handling"
+      - "Error and loading boundaries"
+      - "Dynamic routes with notFound()"
+    known_gaps:
+      - "Server Actions not fully covered"
+      - "Parallel Routes not covered"
+      - "Intercepting Routes not covered"
 
 file_patterns:
   - "app/**/*.tsx"
@@ -43,6 +74,14 @@ rules:
     title: "'use client' in page.tsx Files"
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://nextjs.org/docs/app/building-your-application/rendering/server-components"
+          accessed: "2026-01-16"
+          quote: "By default, Next.js uses Server Components... move the 'use client' directive down in the tree."
     description: >
       Page components should be server components by default. Adding 'use client'
       at the page level kills SSR benefits for the entire page tree.
@@ -81,6 +120,14 @@ rules:
     title: React Hooks in Server Components
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://nextjs.org/docs/app/building-your-application/rendering/server-components"
+          accessed: "2026-01-16"
+          quote: "Server Components do not support hooks like useState or useEffect."
     description: >
       useState, useEffect, and other React hooks cannot be used in server components.
       Files without 'use client' directive are server components.
@@ -116,6 +163,14 @@ rules:
     title: useEffect Fetch for Initial Page Data
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://nextjs.org/docs/app/building-your-application/data-fetching"
+          accessed: "2026-01-16"
+          quote: "We recommend fetching data in Server Components... reduces client-server waterfalls."
     description: >
       Don't use useEffect to fetch initial page data. Server components can
       fetch data directly, avoiding the extra round trip.
@@ -148,6 +203,14 @@ rules:
     title: process.env in Client Components
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://nextjs.org/docs/app/building-your-application/configuring/environment-variables"
+          accessed: "2026-01-16"
+          quote: "By default, environment variables are only available on the server... prefix with NEXT_PUBLIC_ to make available in the browser."
     description: >
       Non-NEXT_PUBLIC_ environment variables are not available in client components
       and would expose secrets if they were. Only NEXT_PUBLIC_ vars are safe client-side.
@@ -181,6 +244,14 @@ rules:
     title: "'any' Type in Route Handlers"
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://nextjs.org/docs/app/building-your-application/routing/route-handlers"
+          accessed: "2026-01-16"
+          quote: "TypeScript warning: Response.json() requires TypeScript 5.2 or higher."
     description: >
       Route handlers should validate input, not use 'any'. External data
       from requests is unknown until validated.
@@ -214,6 +285,14 @@ rules:
     title: Hardcoded Multi-segment Routes
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: medium
+      re_verify_after: "2026-07-16"
+      sources:
+        - url: "https://nextjs.org/docs/app/building-your-application/routing"
+          accessed: "2026-01-16"
+          quote: "Next.js uses file-system based routing where folders define routes."
     description: >
       Hardcoded route strings with multiple segments are fragile.
       Use centralized route constants for maintainability.
@@ -241,6 +320,14 @@ rules:
     title: console.log in App Directory
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://eslint.org/docs/latest/rules/no-console"
+          accessed: "2026-01-16"
+          quote: "In JavaScript that is designed to be executed in the browser, it's considered a best practice to avoid using methods on console."
     description: >
       Console statements in production code indicate incomplete development
       or forgotten debugging. Remove before deploying.
@@ -262,6 +349,14 @@ rules:
     title: Fat Route Handlers (>50 lines)
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: medium
+      re_verify_after: "2026-07-16"
+      sources:
+        - url: "https://nextjs.org/docs/app/building-your-application/routing/route-handlers"
+          accessed: "2026-01-16"
+          quote: "Route Handlers can be nested inside the app directory... similar to page.tsx."
     description: >
       Route handlers should be thin orchestrators. Extract business logic
       to separate functions for testability and reuse.
@@ -301,6 +396,14 @@ rules:
     title: Dynamic Routes Should Use notFound()
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://nextjs.org/docs/app/api-reference/functions/not-found"
+          accessed: "2026-01-16"
+          quote: "The notFound function allows you to render the not-found file within a route segment."
     description: >
       Dynamic route pages ([id], [slug]) should call notFound() when the
       resource doesn't exist, rendering the not-found.tsx boundary.
@@ -332,6 +435,14 @@ rules:
     title: Consider Promise.all for Independent Fetches
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://nextjs.org/docs/app/building-your-application/data-fetching/fetching"
+          accessed: "2026-01-16"
+          quote: "To reduce total time it takes to get data, you can fetch data in parallel."
     description: >
       Multiple sequential awaits that don't depend on each other should use
       Promise.all to fetch in parallel and reduce load time.
@@ -367,6 +478,14 @@ rules:
     title: Pages Should Have loading.tsx
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://nextjs.org/docs/app/building-your-application/routing/loading-ui-and-streaming"
+          accessed: "2026-01-16"
+          quote: "The special file loading.js helps you create meaningful Loading UI with React Suspense."
     description: >
       Directories with page.tsx should have loading.tsx to show instant
       loading state while the page suspends.
@@ -394,6 +513,14 @@ rules:
     title: Pages Should Have error.tsx
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://nextjs.org/docs/app/building-your-application/routing/error-handling"
+          accessed: "2026-01-16"
+          quote: "The error.js file convention allows you to gracefully handle unexpected runtime errors."
     description: >
       Directories with page.tsx should have error.tsx to handle errors
       gracefully instead of crashing the entire app.
@@ -421,6 +548,14 @@ rules:
     title: Server-Only Import for Sensitive Files
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://nextjs.org/docs/app/building-your-application/rendering/composition-patterns"
+          accessed: "2026-01-16"
+          quote: "To prevent this from happening, we can use the server-only package to give developers a build-time error."
     description: >
       Database and auth files should import 'server-only' to prevent
       accidental import in client components.
@@ -640,16 +775,3 @@ anti_patterns:
     description: "No validation"
     fix: "Zod + unknown"
 
-# ===========================================================================
-# SOURCES
-# ===========================================================================
-
-sources:
-  - title: "Next.js Documentation - App Router"
-    url: "https://nextjs.org/docs/app"
-
-  - title: "Next.js Documentation - Server Components"
-    url: "https://nextjs.org/docs/app/building-your-application/rendering/server-components"
-
-  - title: "Next.js Documentation - Route Handlers"
-    url: "https://nextjs.org/docs/app/building-your-application/routing/route-handlers"

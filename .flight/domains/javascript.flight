@@ -34,9 +34,13 @@ provenance:
       - "Function naming"
       - "Console usage"
       - "Constants"
+      - "var vs let/const scoping"
+      - "Strict equality operators"
+      - "Async/await patterns"
     known_gaps:
       - "ES modules vs CommonJS not covered"
       - "Framework-specific patterns in separate domains"
+      - "Floating promises (hard to validate mechanically)"
 
 file_patterns:
   - "**/*.js"
@@ -321,6 +325,114 @@ rules:
         - "// Use proper logging"
         - "logger.debug('Processing order', { orderId });"
 
+  N9:
+    title: var Declaration
+    severity: NEVER
+    mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://eslint.org/docs/latest/rules/no-var"
+          accessed: "2026-01-16"
+          quote: "ECMAScript 6 allows programmers to create variables with block scope using let and const... Using let and const where appropriate makes code easier to understand."
+    description: >
+      Never use var. Use const for values that won't be reassigned, let for values
+      that will. Block scoping and temporal dead zone prevent common bugs.
+    check:
+      type: grep
+      pattern: '\bvar\s+\w+\s*='
+      flags: -En
+    note: |
+      var is function-scoped and hoisted, leading to confusing behavior.
+      let and const are block-scoped with temporal dead zone, catching errors earlier.
+    examples:
+      bad:
+        - "var count = 0;"
+        - "var user = getUser();"
+        - "for (var i = 0; i < 10; i++) { ... }"
+      good:
+        - "const user = getUser();"
+        - "let count = 0;"
+        - "for (let i = 0; i < 10; i++) { ... }"
+
+  N10:
+    title: Loose Equality
+    severity: NEVER
+    mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://eslint.org/docs/latest/rules/eqeqeq"
+          accessed: "2026-01-16"
+          quote: "It is considered good practice to use the type-safe equality operators === and !== instead of their regular counterparts."
+    description: >
+      Never use == or !=. Use === and !== to avoid type coercion bugs.
+      Type coercion rules are complex and lead to unexpected behavior.
+    check:
+      type: grep
+      pattern: '[^=!<>]==[^=]|!=[^=]'
+      flags: -En
+    note: |
+      == performs type coercion with surprising rules: "0" == false is true,
+      null == undefined is true. Use === for predictable comparisons.
+    examples:
+      bad:
+        - "if (x == null) { ... }"
+        - "if (count != 0) { ... }"
+        - "if (status == 'active') { ... }"
+      good:
+        - "if (x === null || x === undefined) { ... }"
+        - "if (count !== 0) { ... }"
+        - "if (status === 'active') { ... }"
+
+  # =========================================================================
+  # SHOULD - Best practices (validator warns)
+  # =========================================================================
+
+  S1:
+    title: Await in Loops
+    severity: SHOULD
+    mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://eslint.org/docs/latest/rules/no-await-in-loop"
+          accessed: "2026-01-16"
+          quote: "Performing an operation on each element of an iterable is a common task. However, performing await inside of a loop is an indication that the program is not taking full advantage of the parallelization benefits of async/await."
+    description: >
+      Avoid await inside loops. Sequential awaits are slow when operations
+      are independent. Use Promise.all() for parallel execution.
+    check:
+      type: script
+      code: |
+        for f in "$@"; do
+          if grep -qE 'for\s*\(|while\s*\(' "$f"; then
+            # Check for await that's NOT part of Promise.all
+            await_lines=$(grep -n 'await\s' "$f" | grep -v 'Promise\.all')
+            if [[ -n "$await_lines" ]]; then
+              echo "$f: has await inside potential loop"
+            fi
+          fi
+        done
+    note: |
+      Each await in a loop waits for completion before the next iteration.
+      If operations are independent, Promise.all() runs them in parallel.
+    examples:
+      bad:
+        - |
+          for (const user of users) {
+            await sendEmail(user);  // Sequential - slow!
+          }
+      good:
+        - |
+          await Promise.all(users.map(user => sendEmail(user)));
+
   # =========================================================================
   # GUIDANCE - Best practices (not mechanically checked)
   # =========================================================================
@@ -445,3 +557,12 @@ anti_patterns:
   - pattern: "const temp = ..."
     problem: "Temporary smell"
     fix: "Name by purpose"
+  - pattern: "var x = ..."
+    problem: "Function scope, hoisting"
+    fix: "Use const or let"
+  - pattern: "x == y"
+    problem: "Type coercion bugs"
+    fix: "Use === or !=="
+  - pattern: "for (...) { await ... }"
+    problem: "Sequential when parallel possible"
+    fix: "Use Promise.all()"

@@ -1,12 +1,47 @@
 # kubernetes.flight - Kubernetes YAML manifest best practices
 # Flight domain for Kubernetes resource validation
-# Sources: Pod Security Standards, NSA/CISA Hardening Guide, kube-score, Polaris
 
 domain: kubernetes
-version: 1.0.0
+version: 1.1.0
+schema_version: 2
 description: |
   Kubernetes YAML manifest best practices. Covers security, reliability,
   resource management, and operational excellence. Framework-agnostic.
+
+provenance:
+  last_full_audit: "2026-01-16"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-16"
+
+  sources_consulted:
+    - url: "https://kubernetes.io/docs/concepts/security/pod-security-standards/"
+      accessed: "2026-01-16"
+      note: "Kubernetes Pod Security Standards - Baseline and Restricted policies"
+    - url: "https://media.defense.gov/2022/Aug/29/2003066362/-1/-1/0/CTR_KUBERNETES_HARDENING_GUIDANCE_1.2_20220829.PDF"
+      accessed: "2026-01-16"
+      note: "NSA/CISA Kubernetes Hardening Guide v1.2"
+    - url: "https://github.com/zegl/kube-score"
+      accessed: "2026-01-16"
+      note: "kube-score - Static analysis for Kubernetes manifests"
+    - url: "https://polaris.docs.fairwinds.com/"
+      accessed: "2026-01-16"
+      note: "Polaris - Kubernetes best practices validation"
+    - url: "https://www.cisecurity.org/benchmark/kubernetes"
+      accessed: "2026-01-16"
+      note: "CIS Kubernetes Benchmark"
+
+  coverage:
+    apis_covered:
+      - "Pod Security Standards (Baseline, Restricted)"
+      - "Container security contexts"
+      - "Resource management (requests, limits)"
+      - "Health probes (liveness, readiness)"
+      - "Network policies"
+      - "Service accounts"
+    known_gaps:
+      - "Helm chart validation not covered"
+      - "Kustomize overlay validation not covered"
+      - "Operator-specific CRDs not validated"
 
 file_patterns:
   - "**/*.yaml"
@@ -32,6 +67,14 @@ rules:
     title: Privileged Containers
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://kubernetes.io/docs/concepts/security/pod-security-standards/"
+          accessed: "2026-01-16"
+          quote: "Privileged Pods disable most security mechanisms and must be disallowed."
     description: |
       Do not run privileged containers. Privileged mode disables most security
       mechanisms and grants full host access. Container escape becomes trivial.
@@ -55,6 +98,14 @@ rules:
     title: Host Namespace Sharing
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://kubernetes.io/docs/concepts/security/pod-security-standards/"
+          accessed: "2026-01-16"
+          quote: "Sharing the host namespaces must be disallowed."
     description: |
       Do not share host namespaces (hostPID, hostIPC, hostNetwork). This breaks
       container isolation and allows access to host processes, IPC, and network.
@@ -78,6 +129,14 @@ rules:
     title: Dangerous Capabilities
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://kubernetes.io/docs/concepts/security/pod-security-standards/"
+          accessed: "2026-01-16"
+          quote: "Adding additional capabilities beyond those listed must be disallowed."
     description: |
       Do not add dangerous capabilities like SYS_ADMIN, NET_ADMIN, or ALL.
       These capabilities enable privilege escalation and container escape.
@@ -106,6 +165,14 @@ rules:
     title: HostPath Volume Mounts
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://kubernetes.io/docs/concepts/security/pod-security-standards/"
+          accessed: "2026-01-16"
+          quote: "HostPath volumes must be forbidden."
     description: |
       Do not mount host filesystem paths. HostPath volumes allow container escape
       by accessing sensitive host files like /etc/shadow or Docker socket.
@@ -134,6 +201,14 @@ rules:
     title: Privilege Escalation Allowed
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://kubernetes.io/docs/concepts/security/pod-security-standards/"
+          accessed: "2026-01-16"
+          quote: "Privilege escalation should not be allowed."
     description: |
       Explicitly disable privilege escalation. When allowPrivilegeEscalation is
       true or unset, processes can gain more privileges than their parent.
@@ -159,6 +234,14 @@ rules:
     title: Running as Root User
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://kubernetes.io/docs/concepts/security/pod-security-standards/"
+          accessed: "2026-01-16"
+          quote: "Containers must not set runAsUser to 0."
     description: |
       Do not run containers as root (UID 0). Root inside a container has the
       same UID as root on the host, enabling privilege escalation.
@@ -180,6 +263,14 @@ rules:
     title: Secrets in Environment Variables
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://media.defense.gov/2022/Aug/29/2003066362/-1/-1/0/CTR_KUBERNETES_HARDENING_GUIDANCE_1.2_20220829.PDF"
+          accessed: "2026-01-16"
+          quote: "Secrets should not be passed as environment variables."
     description: |
       Do not hardcode secrets in environment variables. Secrets in env vars are
       visible in pod specs, logs, and kubectl describe output.
@@ -209,6 +300,14 @@ rules:
     title: Default ServiceAccount
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://polaris.docs.fairwinds.com/checks/security/"
+          accessed: "2026-01-16"
+          quote: "Workloads should not use the default service account."
     description: |
       Do not use the default ServiceAccount for workloads. The default account
       may have excessive permissions. Create dedicated ServiceAccounts.
@@ -240,6 +339,14 @@ rules:
     title: Container Image Tag Required
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://github.com/zegl/kube-score"
+          accessed: "2026-01-16"
+          quote: "Makes sure that an explicit non-latest tag is used."
     description: |
       Always specify explicit image tags. Using :latest or no tag causes
       unpredictable deployments and makes rollbacks impossible.
@@ -267,6 +374,14 @@ rules:
     title: Resource Requests Required
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://polaris.docs.fairwinds.com/checks/reliability/"
+          accessed: "2026-01-16"
+          quote: "Setting appropriate resource requests will ensure that all your applications have sufficient compute resources."
     description: |
       Always set resource requests for CPU and memory. Without requests,
       the scheduler cannot make informed decisions and autoscaling fails.
@@ -305,6 +420,14 @@ rules:
     title: Resource Limits Required
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://polaris.docs.fairwinds.com/checks/reliability/"
+          accessed: "2026-01-16"
+          quote: "Setting memory limits is important to keep applications from using too many resources."
     description: |
       Always set resource limits for memory. Without limits, a single
       misbehaving container can consume all node resources.
@@ -341,6 +464,14 @@ rules:
     title: Liveness Probe Required
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://github.com/zegl/kube-score"
+          accessed: "2026-01-16"
+          quote: "Liveness probes are designed to ensure that an application stays in a healthy state."
     description: |
       Define liveness probes for long-running containers. Without liveness
       probes, Kubernetes cannot detect and restart deadlocked applications.
@@ -381,6 +512,14 @@ rules:
     title: Readiness Probe Required
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://polaris.docs.fairwinds.com/checks/reliability/"
+          accessed: "2026-01-16"
+          quote: "Readiness probes are designed to ensure that an application has reached a ready state before receiving traffic."
     description: |
       Define readiness probes for services. Without readiness probes, traffic
       is sent to pods before they're ready, causing errors.
@@ -421,6 +560,14 @@ rules:
     title: Deployment Replicas
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://github.com/zegl/kube-score"
+          accessed: "2026-01-16"
+          quote: "Makes sure that Deployment has multiple replicas."
     description: |
       Deployments should have at least 2 replicas for high availability.
       Single replica deployments have no redundancy during updates or failures.
@@ -448,6 +595,14 @@ rules:
     title: Labels Required
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels/"
+          accessed: "2026-01-16"
+          quote: "A common set of labels allows tools to work interoperably, describing objects in a common manner."
     description: |
       Pods must have standard labels for identification and selection.
       Missing labels break service discovery and monitoring.
@@ -481,6 +636,14 @@ rules:
     title: Namespace Required
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://media.defense.gov/2022/Aug/29/2003066362/-1/-1/0/CTR_KUBERNETES_HARDENING_GUIDANCE_1.2_20220829.PDF"
+          accessed: "2026-01-16"
+          quote: "Use namespaces to isolate workloads... avoid using default namespace."
     description: |
       Specify namespace explicitly. Relying on kubectl context can deploy
       to wrong namespace. Never use 'default' namespace for applications.
@@ -519,6 +682,14 @@ rules:
     title: Run as Non-Root
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://kubernetes.io/docs/concepts/security/pod-security-standards/"
+          accessed: "2026-01-16"
+          quote: "Containers must be required to run as non-root users."
     description: |
       Set runAsNonRoot: true in securityContext. This provides defense in depth
       even if the container image runs as non-root by default.
@@ -549,6 +720,14 @@ rules:
     title: Read-Only Root Filesystem
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://polaris.docs.fairwinds.com/checks/security/"
+          accessed: "2026-01-16"
+          quote: "An immutable root filesystem prevents attackers from storing malicious binaries."
     description: |
       Set readOnlyRootFilesystem: true. This prevents attackers from modifying
       container binaries or installing malware.
@@ -582,6 +761,14 @@ rules:
     title: Drop All Capabilities
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://kubernetes.io/docs/concepts/security/pod-security-standards/"
+          accessed: "2026-01-16"
+          quote: "Containers must drop ALL capabilities, and are only permitted to add back NET_BIND_SERVICE."
     description: |
       Drop all Linux capabilities and only add back what's needed.
       By default, containers get several capabilities that are rarely needed.
@@ -617,6 +804,14 @@ rules:
     title: PodDisruptionBudget Required
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://github.com/zegl/kube-score"
+          accessed: "2026-01-16"
+          quote: "Makes sure that all StatefulSets and Deployments are targeted by a PDB."
     description: |
       Create PodDisruptionBudgets for critical deployments. PDBs ensure minimum
       availability during voluntary disruptions like node drains.
@@ -656,6 +851,14 @@ rules:
     title: Pod Anti-Affinity
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://github.com/zegl/kube-score"
+          accessed: "2026-01-16"
+          quote: "Makes sure that a podAntiAffinity has been set that prevents multiple pods from being scheduled on the same node."
     description: |
       Configure pod anti-affinity to spread replicas across nodes.
       Without anti-affinity, all replicas may run on the same node.
@@ -697,6 +900,14 @@ rules:
     title: Image Pull Policy Always
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://github.com/zegl/kube-score"
+          accessed: "2026-01-16"
+          quote: "Makes sure that the pullPolicy is set to Always."
     description: |
       Set imagePullPolicy to Always. This ensures fresh images are pulled
       and ImagePullSecrets are always validated.
@@ -724,6 +935,14 @@ rules:
     title: Seccomp Profile
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://kubernetes.io/docs/concepts/security/pod-security-standards/"
+          accessed: "2026-01-16"
+          quote: "Seccomp profile must be explicitly set to RuntimeDefault or Localhost."
     description: |
       Configure a Seccomp profile to restrict system calls.
       Seccomp significantly reduces the kernel attack surface.
@@ -754,6 +973,14 @@ rules:
     title: Service Account Token Automount
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://polaris.docs.fairwinds.com/checks/security/"
+          accessed: "2026-01-16"
+          quote: "Fails when automountServiceAccountToken is automounted."
     description: |
       Disable automatic mounting of ServiceAccount tokens when not needed.
       Most applications don't need Kubernetes API access.
@@ -786,6 +1013,14 @@ rules:
     title: Network Policy
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://github.com/zegl/kube-score"
+          accessed: "2026-01-16"
+          quote: "Makes sure that all Pods are targeted by a NetworkPolicy."
     description: |
       Create NetworkPolicies to restrict pod-to-pod communication.
       By default, all pods can communicate with each other.
@@ -822,6 +1057,14 @@ rules:
     title: Probes Must Differ
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://github.com/zegl/kube-score"
+          accessed: "2026-01-16"
+          quote: "Makes sure that readiness and liveness probes are not identical."
     description: |
       Liveness and readiness probes should not be identical.
       Identical probes can cause cascading failures during startup.
@@ -1058,18 +1301,3 @@ anti_patterns:
     example: "hostPath: /var/run"
     fix: "Use PVC, ConfigMap, or Secret volumes"
 
-sources:
-  - title: "Kubernetes Pod Security Standards"
-    url: "https://kubernetes.io/docs/concepts/security/pod-security-standards/"
-
-  - title: "NSA/CISA Kubernetes Hardening Guide"
-    url: "https://media.defense.gov/2022/Aug/29/2003066362/-1/-1/0/CTR_KUBERNETES_HARDENING_GUIDANCE_1.2_20220829.PDF"
-
-  - title: "kube-score - Static analysis for Kubernetes"
-    url: "https://github.com/zegl/kube-score"
-
-  - title: "Polaris - Best practices validation"
-    url: "https://polaris.docs.fairwinds.com/"
-
-  - title: "CIS Kubernetes Benchmark"
-    url: "https://www.cisecurity.org/benchmark/kubernetes"
