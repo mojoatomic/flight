@@ -20,8 +20,7 @@ check() {
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -36,8 +35,7 @@ warn() {
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -86,11 +84,11 @@ printf '\n%s\n' "## NEVER Rules"
 
 # N1: Invoke-Expression with User Input
 check "N1: Invoke-Expression with User Input" \
-    bash -c 'grep -Ein "Invoke-Expression|[^a-zA-Z]iex\\s" "$@" | grep -v "SuppressMessage"' _ "${FILES[@]}"
+    grep -Ein "Invoke-Expression|[^a-zA-Z]iex\\s" "${FILES[@]}"
 
 # N2: Plain Text Passwords in Code
 check "N2: Plain Text Passwords in Code" \
-    bash -c 'grep -Ein "-Password\\s+['"'"'\"][^'"'"'\"]+['"'"'\"]|password\\s*=\\s*['"'"'\"][^'"'"'\"]+['"'"'\"]" "$@" | grep -v "SuppressMessage"' _ "${FILES[@]}"
+    grep -Ein "-Password\\s+['\"][^'\"]+['\"]|password\\s*=\\s*['\"][^'\"]+['\"]" "${FILES[@]}"
 
 # N3: Invoke-WebRequest Without -UseBasicParsing
 check "N3: Invoke-WebRequest Without -UseBasicParsing" \
@@ -107,11 +105,11 @@ check "N4: ConvertTo-SecureString with -AsPlainText in Source" \
 
 # N5: Using Aliases in Scripts
 check "N5: Using Aliases in Scripts" \
-    bash -c 'grep -En "^\\s*(%|[?]|\\bls\\b|\\bcat\\b|\\bcurl\\b|\\bwget\\b|\\bdiff\\b|\\bsort\\b)\\s" "$@" | grep -v "SuppressMessage"' _ "${FILES[@]}"
+    grep -En "^\\s*(%|[?]|\\bls\\b|\\bcat\\b|\\bcurl\\b|\\bwget\\b|\\bdiff\\b|\\bsort\\b)\\s" "${FILES[@]}"
 
 # N6: Write-Host for Data Output
 check "N6: Write-Host for Data Output" \
-    bash -c 'grep -En "Write-Host.*\\\$[a-zA-Z]" "$@" | grep -v "SuppressMessage"' _ "${FILES[@]}"
+    grep -En "Write-Host.*\\\$[a-zA-Z]" "${FILES[@]}"
 
 # N7: Positional Parameters in Scripts
 check "N7: Positional Parameters in Scripts" \
@@ -186,7 +184,7 @@ warn "S6: Explicitly Handle \$null Comparisons" \
 
 # S7: Avoid Global Variables
 warn "S7: Avoid Global Variables" \
-    bash -c 'grep -En "\\\$global:" "$@" | grep -v "SuppressMessage"' _ "${FILES[@]}"
+    grep -En "\\\$global:" "${FILES[@]}"
 
 # S8: Avoid Empty Catch Blocks
 warn "S8: Avoid Empty Catch Blocks" \

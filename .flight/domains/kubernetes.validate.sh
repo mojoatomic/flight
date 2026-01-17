@@ -20,8 +20,7 @@ check() {
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -36,8 +35,7 @@ warn() {
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -86,43 +84,43 @@ printf '\n%s\n' "## NEVER Rules"
 
 # N1: Privileged Containers
 check "N1: Privileged Containers" \
-    bash -c 'grep -Ein "privileged:\\s*true" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -Ein "privileged:\\s*true" "${FILES[@]}"
 
 # N2: Host Namespace Sharing
 check "N2: Host Namespace Sharing" \
-    bash -c 'grep -Ein "host(PID|IPC|Network):\\s*true" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -Ein "host(PID|IPC|Network):\\s*true" "${FILES[@]}"
 
 # N3: Dangerous Capabilities
 check "N3: Dangerous Capabilities" \
-    bash -c 'grep -Eiz "capabilities:[\\s\\S]*?add:[\\s\\S]*?(SYS_ADMIN|NET_ADMIN|SYS_PTRACE|NET_RAW|SYS_MODULE|DAC_READ_SEARCH|ALL)\\b" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -Eiz "capabilities:[\\s\\S]*?add:[\\s\\S]*?(SYS_ADMIN|NET_ADMIN|SYS_PTRACE|NET_RAW|SYS_MODULE|DAC_READ_SEARCH|ALL)\\b" "${FILES[@]}"
 
 # N4: HostPath Volume Mounts
 check "N4: HostPath Volume Mounts" \
-    bash -c 'grep -Ein "hostPath:" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -Ein "hostPath:" "${FILES[@]}"
 
 # N5: Privilege Escalation Allowed
 check "N5: Privilege Escalation Allowed" \
     bash -c 'for f in "$@"; do
   # Check for explicit true setting
   if grep -qE '"'"'allowPrivilegeEscalation:\s*true'"'"' "$f" 2>/dev/null; then
-    grep -HnE '"'"'allowPrivilegeEscalation:\s*true'"'"' "$f" | grep -v '"'"'flight:ok'"'"'
+    grep -HnE '"'"'allowPrivilegeEscalation:\s*true'"'"' "$f"
   fi
 done' _ "${FILES[@]}"
 
 # N6: Running as Root User
 check "N6: Running as Root User" \
-    bash -c 'grep -En "runAsUser:\\s*0\\s*\$" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -En "runAsUser:\\s*0\\s*\$" "${FILES[@]}"
 
 # N7: Secrets in Environment Variables
 check "N7: Secrets in Environment Variables" \
-    bash -c 'grep -Eiz "name:\\s*(PASSWORD|SECRET|API_KEY|TOKEN|PRIVATE_KEY|CREDENTIAL|AUTH_TOKEN)\\s*\\n\\s*value:\\s*[\"\\x27]?[^\"\\x27\\n]+" "$@" | grep -v "flight:ok"' _ "${FILES[@]}"
+    grep -Eiz "name:\\s*(PASSWORD|SECRET|API_KEY|TOKEN|PRIVATE_KEY|CREDENTIAL|AUTH_TOKEN)\\s*\\n\\s*value:\\s*[\"\\x27]?[^\"\\x27\\n]+" "${FILES[@]}"
 
 # N8: Default ServiceAccount
 check "N8: Default ServiceAccount" \
     bash -c 'for f in "$@"; do
   if grep -qE '"'"'kind:\s*(Deployment|StatefulSet|DaemonSet|Job|CronJob|Pod)'"'"' "$f" 2>/dev/null; then
     if grep -qE '"'"'serviceAccountName:\s*default\s*$'"'"' "$f" 2>/dev/null; then
-      grep -HnE '"'"'serviceAccountName:\s*default\s*$'"'"' "$f" | grep -v '"'"'flight:ok'"'"'
+      grep -HnE '"'"'serviceAccountName:\s*default\s*$'"'"' "$f"
     fi
   fi
 done' _ "${FILES[@]}"
@@ -135,8 +133,7 @@ check "M1: Container Image Tag Required" \
   # Match image: without tag or with :latest
   grep -HnE '"'"'image:\s*["\x27]?[a-zA-Z0-9._/-]+(:latest)?\s*["\x27]?\s*$'"'"' "$f" 2>/dev/null | \
     grep -v '"'"':[0-9]'"'"' | \
-    grep -v '"'"'@sha256:'"'"' | \
-    grep -v '"'"'flight:ok'"'"'
+    grep -v '"'"'@sha256:'"'"'
 done' _ "${FILES[@]}"
 
 # M2: Resource Requests Required
@@ -149,7 +146,7 @@ check "M2: Resource Requests Required" \
       fi
     fi
   fi
-done | grep -v '"'"'flight:ok'"'"'' _ "${FILES[@]}"
+done' _ "${FILES[@]}"
 
 # M3: Resource Limits Required
 check "M3: Resource Limits Required" \
@@ -161,7 +158,7 @@ check "M3: Resource Limits Required" \
       fi
     fi
   fi
-done | grep -v '"'"'flight:ok'"'"'' _ "${FILES[@]}"
+done' _ "${FILES[@]}"
 
 # M4: Liveness Probe Required
 check "M4: Liveness Probe Required" \
@@ -173,7 +170,7 @@ check "M4: Liveness Probe Required" \
       fi
     fi
   fi
-done | grep -v '"'"'flight:ok'"'"'' _ "${FILES[@]}"
+done' _ "${FILES[@]}"
 
 # M5: Readiness Probe Required
 check "M5: Readiness Probe Required" \
@@ -185,14 +182,14 @@ check "M5: Readiness Probe Required" \
       fi
     fi
   fi
-done | grep -v '"'"'flight:ok'"'"'' _ "${FILES[@]}"
+done' _ "${FILES[@]}"
 
 # M6: Deployment Replicas
 check "M6: Deployment Replicas" \
     bash -c 'for f in "$@"; do
   if grep -qE '"'"'kind:\s*Deployment'"'"' "$f" 2>/dev/null; then
     if grep -qE '"'"'replicas:\s*1\s*$'"'"' "$f" 2>/dev/null; then
-      grep -HnE '"'"'replicas:\s*1\s*$'"'"' "$f" | grep -v '"'"'flight:ok'"'"'
+      grep -HnE '"'"'replicas:\s*1\s*$'"'"' "$f"
     fi
   fi
 done' _ "${FILES[@]}"
@@ -205,7 +202,7 @@ check "M7: Labels Required" \
       echo "$f: workload without labels defined"
     fi
   fi
-done | grep -v '"'"'flight:ok'"'"'' _ "${FILES[@]}"
+done' _ "${FILES[@]}"
 
 # M8: Namespace Required
 check "M8: Namespace Required" \
@@ -214,7 +211,7 @@ check "M8: Namespace Required" \
     if ! grep -qE '"'"'namespace:'"'"' "$f" 2>/dev/null; then
       echo "$f: resource without explicit namespace"
     elif grep -qE '"'"'namespace:\s*default\s*$'"'"' "$f" 2>/dev/null; then
-      grep -HnE '"'"'namespace:\s*default\s*$'"'"' "$f" | grep -v '"'"'flight:ok'"'"'
+      grep -HnE '"'"'namespace:\s*default\s*$'"'"' "$f"
     fi
   fi
 done' _ "${FILES[@]}"
@@ -229,7 +226,7 @@ warn "S1: Run as Non-Root" \
       echo "$f: securityContext.runAsNonRoot not set to true"
     fi
   fi
-done | grep -v '"'"'flight:ok'"'"'' _ "${FILES[@]}"
+done' _ "${FILES[@]}"
 
 # S2: Read-Only Root Filesystem
 warn "S2: Read-Only Root Filesystem" \
@@ -241,7 +238,7 @@ warn "S2: Read-Only Root Filesystem" \
       fi
     fi
   fi
-done | grep -v '"'"'flight:ok'"'"'' _ "${FILES[@]}"
+done' _ "${FILES[@]}"
 
 # S3: Drop All Capabilities
 warn "S3: Drop All Capabilities" \
@@ -254,7 +251,7 @@ warn "S3: Drop All Capabilities" \
       fi
     fi
   fi
-done | grep -v '"'"'flight:ok'"'"'' _ "${FILES[@]}"
+done' _ "${FILES[@]}"
 
 # S4: PodDisruptionBudget Required
 warn "S4: PodDisruptionBudget Required" \
@@ -269,7 +266,7 @@ warn "S4: PodDisruptionBudget Required" \
       fi
     fi
   fi
-done | grep -v '"'"'flight:ok'"'"'' _ "${FILES[@]}"
+done' _ "${FILES[@]}"
 
 # S5: Pod Anti-Affinity
 warn "S5: Pod Anti-Affinity" \
@@ -281,14 +278,14 @@ warn "S5: Pod Anti-Affinity" \
       fi
     fi
   fi
-done | grep -v '"'"'flight:ok'"'"'' _ "${FILES[@]}"
+done' _ "${FILES[@]}"
 
 # S6: Image Pull Policy Always
 warn "S6: Image Pull Policy Always" \
     bash -c 'for f in "$@"; do
   if grep -qE '"'"'kind:\s*(Deployment|StatefulSet|DaemonSet|Pod)'"'"' "$f" 2>/dev/null; then
     if grep -qE '"'"'imagePullPolicy:\s*(Never|IfNotPresent)'"'"' "$f" 2>/dev/null; then
-      grep -HnE '"'"'imagePullPolicy:\s*(Never|IfNotPresent)'"'"' "$f" | grep -v '"'"'flight:ok'"'"'
+      grep -HnE '"'"'imagePullPolicy:\s*(Never|IfNotPresent)'"'"' "$f"
     fi
   fi
 done' _ "${FILES[@]}"
@@ -301,7 +298,7 @@ warn "S7: Seccomp Profile" \
       echo "$f: no seccompProfile configured"
     fi
   fi
-done | grep -v '"'"'flight:ok'"'"'' _ "${FILES[@]}"
+done' _ "${FILES[@]}"
 
 # S8: Service Account Token Automount
 warn "S8: Service Account Token Automount" \
@@ -312,7 +309,7 @@ warn "S8: Service Account Token Automount" \
       echo "$f: automountServiceAccountToken not explicitly configured"
     fi
   fi
-done | grep -v '"'"'flight:ok'"'"'' _ "${FILES[@]}"
+done' _ "${FILES[@]}"
 
 # S9: Network Policy
 warn "S9: Network Policy" \
@@ -323,7 +320,7 @@ warn "S9: Network Policy" \
       echo "$f: no NetworkPolicy found in directory"
     fi
   fi
-done | grep -v '"'"'flight:ok'"'"'' _ "${FILES[@]}"
+done' _ "${FILES[@]}"
 
 # S10: Probes Must Differ
 warn "S10: Probes Must Differ" \
@@ -338,7 +335,7 @@ warn "S10: Probes Must Differ" \
       echo "$f: liveness and readiness probes appear identical"
     fi
   fi
-done | grep -v '"'"'flight:ok'"'"'' _ "${FILES[@]}"
+done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## Info"
 

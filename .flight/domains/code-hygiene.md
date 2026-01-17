@@ -5,15 +5,6 @@ Universal code quality patterns that apply to ALL languages. These are AI-genera
 
 **Validation:** `code-hygiene.validate.sh` enforces NEVER/MUST rules. SHOULD rules trigger warnings. GUIDANCE is not mechanically checked.
 
-### Suppressing Warnings
-
-
-
-```javascript
-// Legacy endpoint, scheduled for deprecation in v3
-router.get('/getUser/:id', handler)  // flight:ok
-```
-
 ---
 
 ## Invariants

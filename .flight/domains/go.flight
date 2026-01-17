@@ -10,12 +10,6 @@ exclude_patterns:
   - "**/vendor/**"
   - "**/.git/**"
 
-suppression:
-  comment: "flight:ok"
-  documentation: |
-    Add `// flight:ok` comment on the same line to suppress a specific check.
-    Use sparingly. Document why the suppression is acceptable.
-
 # ===========================================================================
 # RULES
 # ===========================================================================
@@ -44,7 +38,6 @@ rules:
       type: grep
       pattern: '[^_]\s*,\s*_\s*:?=\s*\w+\s*\([^)]*\)|_\s*=\s*\w+\.\w+\s*\('
       flags: -En
-      exclude: flight:ok
     note: |
       From Go Code Review Comments: "Do not discard errors using _ variables.
       If a function returns an error, check it to make sure the function succeeded."
@@ -73,7 +66,6 @@ rules:
       type: grep
       pattern: 'panic\s*\(\s*(err|fmt\.Errorf|errors\.New|"[^"]*error|"[^"]*fail|"[^"]*invalid)'
       flags: -Ein
-      exclude: flight:ok
     note: |
       From Effective Go: "The usual way to report an error to a caller is to
       return an error as an extra return value."
@@ -116,7 +108,6 @@ rules:
       type: grep
       pattern: 'for\s+[^{]*\{[^}]*defer\s+'
       flags: -Ezn
-      exclude: flight:ok
     note: |
       Deferred calls are executed when the surrounding function returns, not when
       the loop iteration ends. This causes resource accumulation.
@@ -191,7 +182,6 @@ rules:
       type: grep
       pattern: 'select\s*\{[^}]*case\s+[^<]*<-[^:]*:[^}]*default:'
       flags: -Ezn
-      exclude: flight:ok
     note: |
       When select has a default case and the channel isn't ready, the default
       executes immediately - the send/receive is silently skipped.
@@ -220,7 +210,6 @@ rules:
       type: grep
       pattern: 'var\s+\w+\s+map\[[^\]]+\][^\n=]*$'
       flags: -En
-      exclude: flight:ok
     note: |
       A nil map behaves like an empty map when reading, but writing to it
       causes a runtime panic.
@@ -243,7 +232,6 @@ rules:
       type: grep
       pattern: 'for\s+[^,]+,?\s*(\w+)\s*:?=\s*range[^{]*\{[^}]*go\s+func\s*\([^)]*\)\s*\{[^}]*\1'
       flags: -Ezn
-      exclude: flight:ok
     note: |
       Before Go 1.22, loop variables were reused across iterations. Capturing
       them in goroutines or closures caused race conditions.
@@ -283,7 +271,7 @@ rules:
       type: grep
       pattern: '(func|var|const|type)\s+[a-z]+_[a-z]+\s*[=(]'
       flags: -En
-      exclude: flight:ok|_test\.go
+      exclude: _test\.go
     note: |
       From Effective Go: "The convention in Go is to use MixedCaps or mixedCaps
       rather than underscores to write multiword names."
@@ -306,7 +294,6 @@ rules:
       type: grep
       pattern: '(Url|Http|Api|Sql|Json|Xml|Html|Css|Tcp|Udp|Ip|Dns|Cpu|Gpu|Ram|Ssd|Hdd|Usb|Pdf|Csv)[A-Z]|(Url|Http|Api|Sql|Json|Xml|Html|Css|Tcp|Udp|Ip|Dns|Cpu|Gpu|Ram|Ssd|Hdd|Usb|Pdf|Csv)\s*[=:(]'
       flags: -En
-      exclude: flight:ok
     note: |
       From Go Code Review Comments: Words in names that are initialisms should
       have a consistent case. "URL" should appear as "URL" or "url", never "Url".
@@ -359,7 +346,6 @@ rules:
       type: grep
       pattern: 'func\s+\w+\([^)]*,\s*ctx\s+context\.Context|func\s+\w+\([^)]*context\.Context[^)]*,[^)]+\)\s*[^{]*\{'
       flags: -En
-      exclude: flight:ok
     note: |
       From Go Code Review Comments: "Most functions that use a Context should
       accept it as their first parameter."
@@ -380,7 +366,7 @@ rules:
       type: grep
       pattern: 'var\s+[A-Z][a-z]+Error\s*='
       flags: -En
-      exclude: 'Err[A-Z]|flight:ok'
+      exclude: 'Err[A-Z]'
     note: |
       Package-level error variables should follow the pattern ErrFoo, not FooError.
     examples:
@@ -444,7 +430,6 @@ rules:
       type: grep
       pattern: 'errors\.New\s*\(\s*"[A-Z]|fmt\.Errorf\s*\(\s*"[A-Z]|errors\.New\s*\([^)]*\.\s*"\s*\)|fmt\.Errorf\s*\([^)]*\.\s*"\s*\)'
       flags: -En
-      exclude: flight:ok
     note: |
       From Go Code Review Comments: "Error strings should not be capitalized or
       end with punctuation, since they are usually printed following other context."
@@ -568,7 +553,6 @@ rules:
       type: grep
       pattern: ':=\s*\[\][a-zA-Z]+\{\s*\}|:=\s*make\s*\(\s*\[\][a-zA-Z]+\s*,\s*0\s*\)'
       flags: -En
-      exclude: flight:ok
     note: |
       From Go Code Review Comments: "The nil slice is the preferred style."
       var t []string is preferred over t := []string{}.
@@ -589,7 +573,6 @@ rules:
       type: grep
       pattern: 'func\s+\w+\([^)]*chan\s*<-[^)]*\)\s*\{[^}]*go\s+func'
       flags: -Ezn
-      exclude: flight:ok
     note: |
       From Go Code Review Comments: "Prefer synchronous functions - functions which
       return their results directly - over asynchronous ones."
@@ -709,7 +692,7 @@ rules:
       type: grep
       pattern: '^var\s+\w+\s*=\s*&?\w+\{|^var\s+\w+\s+\*\w+\s*$'
       flags: -En
-      exclude: 'Err[A-Z]|flight:ok|_test\.go'
+      exclude: 'Err[A-Z]|_test\.go'
     note: |
       Global state makes code harder to test and reason about. Pass
       dependencies explicitly instead.
@@ -742,7 +725,7 @@ rules:
       type: grep
       pattern: 'sync\.(Mutex|RWMutex)\s*$'
       flags: -En
-      exclude: 'mu\s+sync\.|flight:ok'
+      exclude: 'mu\s+sync\.'
     note: |
       Convention is to name mutex fields 'mu' and place them directly above
       the fields they protect, with a comment if the protected fields aren't obvious.
@@ -769,7 +752,6 @@ rules:
       type: grep
       pattern: '\w+,\s*_\s*:?=\s*\w+\.[^)]+\)\s*\n\s*defer'
       flags: -Ezn
-      exclude: flight:ok
     note: |
       Deferring Close() on a nil resource will panic. Always check the error
       from Open/Create before setting up the defer.
@@ -795,7 +777,6 @@ rules:
       type: grep
       pattern: 'if\s+err\s*==\s*nil\s*\{[^}]+\}\s*else\s*\{'
       flags: -Ezn
-      exclude: flight:ok
     note: |
       From Go Code Review Comments: "Try to keep the normal code path at a
       minimal indentation, and indent the error handling."
@@ -823,7 +804,7 @@ rules:
       type: grep
       pattern: '^func init\s*\(\s*\)'
       flags: -En
-      exclude: flight:ok|_test\.go
+      exclude: _test\.go
     note: |
       init() functions make testing difficult, hide dependencies, and can
       cause surprising behavior. Prefer explicit initialization.

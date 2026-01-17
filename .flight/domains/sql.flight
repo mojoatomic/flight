@@ -22,12 +22,6 @@ exclude_patterns:
   - "**/venv/**"
   - "**/.git/**"
 
-suppression:
-  comment: "flight:ok"
-  guidance: |
-    Add `-- flight:ok` (SQL) or `// flight:ok` (JS/TS) on the same line.
-    Use sparingly. Document why the suppression is acceptable.
-
 # ===========================================================================
 # RULES
 # ===========================================================================

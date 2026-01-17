@@ -46,7 +46,6 @@ class DomainSpec:
     description: str
     file_patterns: list
     api_file_detection: dict
-    suppression: dict
     rules: dict  # {id: Rule}
     patterns: dict = field(default_factory=dict)
     info: dict = field(default_factory=dict)
@@ -140,7 +139,6 @@ def parse_domain_spec(data: dict) -> DomainSpec:
         description=data.get("description", ""),
         file_patterns=data.get("file_patterns", []),
         api_file_detection=data.get("api_file_detection", {}),
-        suppression=data.get("suppression", {}),
         rules=parse_rules(data.get("rules", {})),
         patterns=data.get("patterns", {}),
         info=data.get("info", {}),
@@ -258,20 +256,6 @@ def generate_md(spec: DomainSpec) -> str:
     )
     lines.append("")
 
-    # Suppression section
-    if spec.suppression:
-        lines.append("### Suppressing Warnings")
-        lines.append("")
-        doc = spec.suppression.get("documentation", "").strip()
-        lines.append(doc)
-        lines.append("")
-        lines.append("```javascript")
-        comment = spec.suppression.get("comment", "flight:ok")
-        lines.append(f"// Legacy endpoint, scheduled for deprecation in v3")
-        lines.append(f"router.get('/getUser/:id', handler)  // {comment}")
-        lines.append("```")
-        lines.append("")
-
     lines.append("---")
     lines.append("")
     lines.append("## Invariants")
@@ -369,8 +353,7 @@ check() {{
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -385,8 +368,7 @@ warn() {{
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -533,17 +515,10 @@ def generate_check_command(rule: Rule) -> str:
         flags = check.get("flags", "-E")
         if isinstance(flags, list):
             flags = " ".join(flags)
-        exclude = check.get("exclude", "")
 
-        if exclude:
-            # Use bash -c for pipeline - escape pattern for bash -c context
-            escaped_pattern = escape_pattern_for_bash_c(pattern)
-            escaped_exclude = escape_pattern_for_bash_c(exclude)
-            return f"bash -c 'grep {flags} \"{escaped_pattern}\" \"$@\" | grep -v \"{escaped_exclude}\"' _ \"${{FILES[@]}}\""
-        else:
-            # Direct grep - escape for double quotes
-            escaped_pattern = escape_bash_pattern(pattern)
-            return f'grep {flags} "{escaped_pattern}" "${{FILES[@]}}"'
+        # Direct grep - escape for double quotes
+        escaped_pattern = escape_bash_pattern(pattern)
+        return f'grep {flags} "{escaped_pattern}" "${{FILES[@]}}"'
 
     elif check_type == "presence":
         pattern = check.get("pattern", "")

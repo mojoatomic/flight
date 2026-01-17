@@ -7,15 +7,6 @@ Norway problem, sexagesimal parsing, and other YAML surprises.
 
 **Validation:** `yaml.validate.sh` enforces NEVER/MUST rules. SHOULD rules trigger warnings. GUIDANCE is not mechanically checked.
 
-### Suppressing Warnings
-
-
-
-```javascript
-// Legacy endpoint, scheduled for deprecation in v3
-router.get('/getUser/:id', handler)  // flight:ok
-```
-
 ---
 
 ## Invariants
@@ -273,7 +264,7 @@ yes, on) work in YAML 1.1 but are less portable.
 
 5. **Quote Empty Strings** - Empty values in YAML are null, not empty strings. Use explicit quotes
 for empty strings. Note: This check may flag parent keys with nested
-content; suppress with flight:ok if intentional.
+content.
 
    ```
    // BAD

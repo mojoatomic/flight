@@ -30,12 +30,6 @@ exclude_patterns:
   - "**/dist/**"
   - "**/build/**"
 
-suppression:
-  comment: "flight:ok"
-  guidance: |
-    Add `// flight:ok` or `# flight:ok` comment on the same line to suppress.
-    Use sparingly. Document why the suppression is acceptable.
-
 # ===========================================================================
 # RULES
 # ===========================================================================
@@ -66,7 +60,6 @@ rules:
       type: grep
       pattern: '^\s*(const|let|var|)\s*(data|result|temp|tmp|info|item|value|val|obj|thing|stuff|ret|res|output|input|payload)\s*='
       flags: -En
-      exclude: flight:ok
     note: |
       Generic names force readers to trace back to understand what the variable
       contains. Domain-specific names are self-documenting.
@@ -96,7 +89,6 @@ rules:
       type: grep
       pattern: 'if\s*\([^)]+\)\s*return\s+(true|false)\s*;\s*(else\s*)?(return\s+(true|false))?'
       flags: -En
-      exclude: flight:ok
     note: |
       This pattern adds unnecessary complexity. The condition itself is the
       boolean value you want to return.
@@ -119,7 +111,6 @@ rules:
       type: grep
       pattern: '\?\s*true\s*:\s*false|\?\s*false\s*:\s*true'
       flags: -En
-      exclude: flight:ok
     note: |
       condition ? true : false is just condition with extra steps.
       condition ? false : true is just !condition with extra steps.
@@ -145,7 +136,6 @@ rules:
       type: grep
       pattern: '===?\s*true|===?\s*false|!==?\s*true|!==?\s*false'
       flags: -En
-      exclude: flight:ok
     note: |
       Boolean values are already true or false. Comparing them to literals
       is redundant and suggests the author doesn't understand booleans.
@@ -172,7 +162,7 @@ rules:
       code: |
         for f in "$@"; do
           grep -HnE '60\s*\*\s*60|24\s*\*\s*60|1000\s*\*\s*60|7\s*\*\s*24|1024\s*\*\s*1024' "$f" 2>/dev/null | \
-            grep -v '[A-Z_]\{2,\}\s*=' | grep -v "flight:ok"
+            grep -v '[A-Z_]\{2,\}\s*='
         done
     note: |
       Magic calculations are hard to understand and easy to get wrong.
@@ -208,7 +198,6 @@ rules:
       type: grep
       pattern: 'function\s+(handleData|processItem|processItems|doSomething|getData|setData|updateValue|handleEvent|processResult|transformData|handleInput|processInput)\s*\(|def\s+(handle_data|process_item|do_something|get_data|set_data|update_value|handle_event|process_result|transform_data)\s*\('
       flags: -En
-      exclude: flight:ok
     note: |
       Generic function names force readers to read the implementation to
       understand what the function does. Domain-specific names are self-documenting.
@@ -240,7 +229,7 @@ rules:
           # Find single letter assignments not in for/while lines
           # Exclude i, j for loops and x for simple lambdas
           grep -HnE '^\s*(const|let|var|)\s+[a-hk-wyz]\s*=' "$f" 2>/dev/null | \
-            grep -v 'for\s*(' | grep -v 'while\s*(' | grep -v "flight:ok"
+            grep -v 'for\s*(' | grep -v 'while\s*('
         done
     note: |
       Single-letter names provide no context. They force readers to trace
@@ -276,8 +265,7 @@ rules:
              [[ "$f" == *"_spec."* ]] || [[ "$f" == *".spec."* ]]; then
             continue
           fi
-          grep -HnE 'console\.(log|warn|error)\s*\(|print\s*\(|System\.out\.print|println!\s*\(|fmt\.Print' "$f" 2>/dev/null | \
-            grep -v "flight:ok"
+          grep -HnE 'console\.(log|warn|error)\s*\(|print\s*\(|System\.out\.print|println!\s*\(|fmt\.Print' "$f" 2>/dev/null
         done
     note: |
       Debug logging pollutes output and may leak sensitive information.
@@ -309,7 +297,6 @@ rules:
       type: grep
       pattern: '(is|has|can|should|will)(Not|No)[A-Z]'
       flags: -En
-      exclude: flight:ok
     note: |
       Negated names lead to double negatives which are hard to understand.
       Use positive names and negate when needed.
@@ -345,7 +332,7 @@ rules:
           if [ "$camel" -gt 5 ] && [ "$snake" -gt 5 ]; then
             echo "$f: mixed naming styles (camelCase: $camel, snake_case: $snake)"
           fi
-        done | grep -v "flight:ok"
+        done
     note: |
       Inconsistent naming makes code harder to read and suggests careless
       development. Follow language conventions consistently.
@@ -385,7 +372,7 @@ rules:
         for f in "$@"; do
           # Find boolean assignments without proper prefix
           grep -HnE '(const|let|var)\s+[a-z]+\s*=\s*(true|false)\s*;' "$f" 2>/dev/null | \
-            grep -vE '(is|has|can|should|will|was|did|does)[A-Z]' | grep -v "flight:ok"
+            grep -vE '(is|has|can|should|will|was|did|does)[A-Z]'
         done
     note: |
       Boolean prefixes make code self-documenting. Readers immediately know
@@ -415,8 +402,7 @@ rules:
       code: |
         for f in "$@"; do
           # Find array literals assigned to singular names
-          grep -HnE '(const|let|var)\s+(user|item|order|product|result|file|row|record|entry)\s*=\s*\[' "$f" 2>/dev/null | \
-            grep -v "flight:ok"
+          grep -HnE '(const|let|var)\s+(user|item|order|product|result|file|row|record|entry)\s*=\s*\[' "$f" 2>/dev/null
         done
     note: |
       Plural names for collections make iteration code read naturally:
@@ -444,7 +430,7 @@ rules:
         for f in "$@"; do
           # Find const with numeric value not in UPPER_CASE
           grep -HnE 'const\s+[a-z][a-zA-Z]*\s*=\s*[0-9]+\s*;' "$f" 2>/dev/null | \
-            grep -vE 'const\s+[A-Z_]+\s*=' | grep -v "flight:ok"
+            grep -vE 'const\s+[A-Z_]+\s*='
         done
     note: |
       UPPER_SNAKE_CASE immediately signals that a value is constant.
@@ -472,8 +458,7 @@ rules:
       code: |
         for f in "$@"; do
           # Find short/generic error messages (less than 15 chars)
-          grep -HnE "throw\s+new\s+Error\(['\"][^'\"]{0,15}['\"]|raise\s+.*Exception\(['\"][^'\"]{0,15}['\"]" "$f" 2>/dev/null | \
-            grep -v "flight:ok"
+          grep -HnE "throw\s+new\s+Error\(['\"][^'\"]{0,15}['\"]|raise\s+.*Exception\(['\"][^'\"]{0,15}['\"]" "$f" 2>/dev/null
         done
     note: |
       When an error occurs in production, the message is often all you have
@@ -503,8 +488,7 @@ rules:
         for f in "$@"; do
           # Find function names that don't start with common verb prefixes
           grep -HnE '^(export\s+)?(async\s+)?function\s+[a-z]+\s*\(' "$f" 2>/dev/null | \
-            grep -vE 'function\s+(get|set|fetch|load|save|send|create|update|delete|remove|add|find|check|validate|is|has|can|should|handle|process|render|init|start|stop|on|do|make|build|parse|format|convert|to|from|ensure|assert|verify|compute|calculate|generate|transform|map|filter|reduce|sort|merge|split|join|open|close|read|write|run|execute|apply|reset|clear|register|subscribe|unsubscribe|publish|emit|dispatch|trigger|mount|unmount|connect|disconnect|enable|disable|show|hide|toggle|select|deselect|activate|deactivate|delay|wait|sleep|pause|retry|poll|defer|schedule|queue|batch|throttle|debounce)([A-Z]|\s*\()' | \
-            grep -v "flight:ok"
+            grep -vE 'function\s+(get|set|fetch|load|save|send|create|update|delete|remove|add|find|check|validate|is|has|can|should|handle|process|render|init|start|stop|on|do|make|build|parse|format|convert|to|from|ensure|assert|verify|compute|calculate|generate|transform|map|filter|reduce|sort|merge|split|join|open|close|read|write|run|execute|apply|reset|clear|register|subscribe|unsubscribe|publish|emit|dispatch|trigger|mount|unmount|connect|disconnect|enable|disable|show|hide|toggle|select|deselect|activate|deactivate|delay|wait|sleep|pause|retry|poll|defer|schedule|queue|batch|throttle|debounce)([A-Z]|\s*\()'
         done
     note: |
       Functions perform actions. Their names should describe what action they

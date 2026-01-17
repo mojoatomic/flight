@@ -20,8 +20,7 @@ check() {
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -36,8 +35,7 @@ warn() {
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -92,7 +90,7 @@ check "N1: Unjustified any" \
     # Check if previous line has justification
     if (prev !~ /TODO|FIXME|any.*because|legacy|migration|third.party|lib types/) {
       # Check if current line has justification in a comment
-      if ($0 !~ /\/\/.*any|\/\*.*any|\/\/.*TODO|\/\/.*FIXME|\/\/.*legacy|\/\/.*migration|\/\/.*third.party|\/\/.*lib types|flight:ok/) {
+      if ($0 !~ /\/\/.*any|\/\*.*any|\/\/.*TODO|\/\/.*FIXME|\/\/.*legacy|\/\/.*migration|\/\/.*third.party|\/\/.*lib types/) {
         print FILENAME":"NR": "$0
       }
     }
@@ -127,8 +125,8 @@ check "N7: Exported Functions Must Have Return Type" \
 
 # N8: Implicit Any in Callbacks (JSON.parse, as any)
 check "N8: Implicit Any in Callbacks (JSON.parse, as any)" \
-    bash -c 'grep -En '"'"'JSON\.parse\([^)]*\)\.(map|filter|reduce|forEach|find|some|every)\('"'"' "$@" | grep -v '"'"'flight:ok'"'"'
-grep -En '"'"'as any\)\.(map|filter|reduce|forEach|find|some|every)\('"'"' "$@" | grep -v '"'"'flight:ok'"'"'' _ "${FILES[@]}"
+    bash -c 'grep -En '"'"'JSON\.parse\([^)]*\)\.(map|filter|reduce|forEach|find|some|every)\('"'"' "$@"
+grep -En '"'"'as any\)\.(map|filter|reduce|forEach|find|some|every)\('"'"' "$@"' _ "${FILES[@]}"
 
 printf '\n%s\n' "## MUST Rules"
 

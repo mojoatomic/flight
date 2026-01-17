@@ -20,10 +20,6 @@ exclude_patterns:
   - "build/**"
   - "*.min.yaml"
 
-suppression:
-  marker: "flight:ok"
-  scope: line
-
 rules:
   # ============================================================================
   # NEVER - Parse errors and data corruption
@@ -40,7 +36,6 @@ rules:
       type: grep
       pattern: '^\t'
       flags: -n
-      exclude: flight:ok
     note: |
       YAML spec explicitly forbids tab characters for indentation.
       Use spaces only. Configure your editor to insert spaces when Tab is pressed.
@@ -110,7 +105,6 @@ rules:
       type: grep
       pattern: 'yaml\.load\s*\([^)]*\)\s*$|yaml\.load\s*\([^,)]+\)(?!\s*,\s*Loader)'
       flags: -Pn
-      exclude: flight:ok
     note: |
       PyYAML's yaml.load() without a Loader argument is dangerous.
       Use yaml.safe_load() or yaml.load(data, Loader=yaml.SafeLoader).
@@ -134,7 +128,6 @@ rules:
       type: grep
       pattern: '&[a-zA-Z_][a-zA-Z0-9_]*\s*\[\s*\*[a-zA-Z_]'
       flags: -n
-      exclude: flight:ok
     note: |
       YAML bombs use anchors (&name) and aliases (*name) to create
       exponential expansion. A small file can expand to gigabytes.
@@ -167,7 +160,6 @@ rules:
       type: grep
       pattern: ':\s+(no|NO|No|yes|YES|Yes|on|ON|On|off|OFF|Off)\s*(#|$)'
       flags: -En
-      exclude: flight:ok
     note: |
       YAML 1.1 treats these as booleans: yes/no, on/off, true/false (various cases).
       YAML 1.2 removed this, but many parsers still use 1.1 behavior.
@@ -191,7 +183,6 @@ rules:
       type: grep
       pattern: ':\s+[0-9]+:[0-9]+(:[0-9]+)?\s*(#|$)'
       flags: -En
-      exclude: flight:ok
     note: |
       YAML 1.1 interprets colon-separated numbers as sexagesimal:
       22:22 becomes 1342 (22*60 + 22). YAML 1.2 removed this, but parsers vary.
@@ -215,7 +206,6 @@ rules:
       type: grep
       pattern: ':\s+0[0-7]{2,}\s*(#|$)'
       flags: -En
-      exclude: flight:ok
     note: |
       YAML 1.1 parses 0-prefixed numbers as octal: 0777 = 511 decimal.
       YAML 1.2 changed this (requires 0o prefix), but parsers vary.
@@ -239,7 +229,6 @@ rules:
       type: grep
       pattern: 'version:\s+[0-9]+\.[0-9]+\s*(#|$)'
       flags: -Ein
-      exclude: flight:ok
     note: |
       Unquoted version numbers are parsed as floats:
       - 1.0 stays 1.0 but loses string identity
@@ -265,7 +254,6 @@ rules:
       type: grep
       pattern: ':\s+[0-9]+[eE][0-9]+\s*(#|$)'
       flags: -En
-      exclude: flight:ok
     note: |
       YAML parses e/E notation as scientific floats: 1e10 = 10000000000.
       This can affect version numbers, identifiers, or codes.
@@ -287,7 +275,6 @@ rules:
       type: grep
       pattern: ':\s+(null|Null|NULL|~|true|True|TRUE|false|False|FALSE|\.inf|\.Inf|\.INF|\.nan|\.NaN|\.NAN)\s*(#|$)'
       flags: -En
-      exclude: flight:ok
     note: |
       These are YAML special values, not strings:
       - null, Null, NULL, ~ = null/nil
@@ -360,7 +347,6 @@ rules:
       type: grep
       pattern: '[[:space:]]+$'
       flags: -n
-      exclude: flight:ok
     note: |
       Trailing whitespace in YAML can:
       - Be silently preserved in literal blocks (|)
@@ -425,7 +411,6 @@ rules:
       type: grep
       pattern: ':\s+[@`*&!|>{[%][^[:space:]]'
       flags: -En
-      exclude: flight:ok
     note: |
       These characters have special meaning in YAML:
       - @ reserved, ` reserved
@@ -453,7 +438,6 @@ rules:
       type: grep
       pattern: '&[a-zA-Z_][a-zA-Z0-9_]*\s+[^[{]'
       flags: -n
-      exclude: flight:ok
     note: |
       Anchors (&name) and aliases (*name) reduce repetition but:
       - Make YAML harder to understand
@@ -485,7 +469,6 @@ rules:
       type: grep
       pattern: ':\s+(True|TRUE|False|FALSE)\s*(#|$)'
       flags: -En
-      exclude: flight:ok
     note: |
       While YAML accepts various boolean spellings, lowercase true/false:
       - Work in both YAML 1.1 and 1.2
@@ -508,20 +491,18 @@ rules:
     description: |
       Empty values in YAML are null, not empty strings. Use explicit quotes
       for empty strings. Note: This check may flag parent keys with nested
-      content; suppress with flight:ok if intentional.
+      content.
     check:
       type: grep
       pattern: '^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_-]*:\s*$'
       flags: -n
-      exclude: flight:ok
     note: |
       In YAML, a key with no value is null:
         key:      # This is null, not ""
       To specify an empty string:
         key: ""   # Explicit empty string
         key: ''   # Also works
-      Note: Parent keys with nested content will also match. Add flight:ok
-      comment if the structure is intentional.
+      Note: Parent keys with nested content will also match.
     examples:
       bad:
         - "name:  # This is null!"
@@ -540,7 +521,6 @@ rules:
       type: grep
       pattern: '\{[^}]*\{|\[[^\]]*\['
       flags: -n
-      exclude: flight:ok
     note: |
       Flow style is JSON-like: {key: value} or [item1, item2]
       It's concise but:

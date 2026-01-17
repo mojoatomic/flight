@@ -5,15 +5,6 @@ Production Python patterns for clean, maintainable, type-safe code. Prevents com
 
 **Validation:** `python.validate.sh` enforces NEVER/MUST rules. SHOULD rules trigger warnings. GUIDANCE is not mechanically checked.
 
-### Suppressing Warnings
-
-
-
-```javascript
-// Legacy endpoint, scheduled for deprecation in v3
-router.get('/getUser/:id', handler)  // # noqa
-```
-
 ---
 
 ## Invariants

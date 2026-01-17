@@ -16,16 +16,6 @@ Version Context (January 2026):
 
 **Validation:** `powershell.validate.sh` enforces NEVER/MUST rules. SHOULD rules trigger warnings. GUIDANCE is not mechanically checked.
 
-### Suppressing Warnings
-
-Use PSScriptAnalyzer's SuppressMessageAttribute for targeted suppression:
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSRule', 'Justification')]
-
-```javascript
-// Legacy endpoint, scheduled for deprecation in v3
-router.get('/getUser/:id', handler)  // flight:ok
-```
-
 ---
 
 ## Invariants

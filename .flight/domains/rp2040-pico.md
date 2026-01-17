@@ -5,15 +5,6 @@ Raspberry Pi Pico (RP2040) dual-core embedded development with Pico SDK. Extends
 
 **Validation:** `rp2040-pico.validate.sh` enforces NEVER/MUST rules. SHOULD rules trigger warnings. GUIDANCE is not mechanically checked.
 
-### Suppressing Warnings
-
-
-
-```javascript
-// Legacy endpoint, scheduled for deprecation in v3
-router.get('/getUser/:id', handler)  // flight:ok
-```
-
 ---
 
 ## Invariants
@@ -95,7 +86,7 @@ router.get('/getUser/:id', handler)  // flight:ok
    // GOOD
    i2c_write_timeout_us(i2c0, addr, data, len, false, I2C_TIMEOUT_US);
    // GOOD
-   spi_write_read_blocking(spi0, tx, rx, len);  // flight:ok - bounded by len
+   spi_write_read_blocking(spi0, tx, rx, len);  // bounded by len
    ```
 
 6. **Arrays Must Have Named Size Constants** - Array sizes must use #define constants, not magic numbers. This ensures buffer sizes are documented and can be changed in one place.

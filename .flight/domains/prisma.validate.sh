@@ -20,8 +20,7 @@ check() {
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -36,8 +35,7 @@ warn() {
     local name="$1"
     shift
     local result
-    # Run check and filter out flight:ok suppression comments
-    result=$("$@" 2>/dev/null | grep -v "flight:ok") || true
+    result=$("$@" 2>/dev/null) || true
     if [[ -z "$result" ]]; then
         green "✅ $name"
         ((PASS++)) || true
@@ -97,9 +95,7 @@ check "N1: Queries Without orgId (Multi-tenant)" \
     if grep -qE "prisma\.[a-z]+\.(findMany|findFirst|findUnique|create|update|delete|upsert)" "$f" 2>/dev/null; then
       # Should have orgId in the file
       if ! grep -qE "orgId|organization_id|organizationId" "$f" 2>/dev/null; then
-        if ! grep -q "flight:ok" "$f" 2>/dev/null; then
-          echo "$f: Prisma query without orgId filter"
-        fi
+        echo "$f: Prisma query without orgId filter"
       fi
     fi
   fi
@@ -131,7 +127,7 @@ check "N3: N+1 Query Pattern" \
   /^\s*\}/ && in_loop {
     in_loop = 0
   }
-  '"'"' "$f" 2>/dev/null | grep -v '"'"'flight:ok'"'"'
+  '"'"' "$f" 2>/dev/null
 done' _ "${FILES[@]}"
 
 # N4: Unhandled Prisma Errors
@@ -146,9 +142,7 @@ check "N4: Unhandled Prisma Errors" \
     # Should have PrismaClientKnownRequestError or error code handling
     if grep -qE "catch\s*\(" "$f" 2>/dev/null; then
       if ! grep -qE "PrismaClientKnownRequestError|e\.code|error\.code|P2002|P2025|P2003|P2014" "$f" 2>/dev/null; then
-        if ! grep -q "flight:ok" "$f" 2>/dev/null; then
-          echo "$f: Prisma mutation with generic error handling"
-        fi
+        echo "$f: Prisma mutation with generic error handling"
       fi
     fi
   fi
@@ -164,9 +158,7 @@ check "N5: New PrismaClient Per Request" \
   # Check for new PrismaClient() in request handlers
   if [[ "$f" == *"/api/"* ]] || [[ "$f" == *"/actions/"* ]] || [[ "$f" == *"route.ts"* ]]; then
     if grep -qE "new PrismaClient\(\)" "$f" 2>/dev/null; then
-      if ! grep -q "flight:ok" "$f" 2>/dev/null; then
-        grep -Hn "new PrismaClient()" "$f"
-      fi
+      grep -Hn "new PrismaClient()" "$f"
     fi
   fi
 done' _ "${FILES[@]}"
@@ -182,9 +174,7 @@ check "N7: Missing Unique Constraint Handling" \
   if grep -qE "prisma\.[a-z]+\.create\s*\(" "$f" 2>/dev/null; then
     # Should have upsert, P2002 handling, or try-catch
     if ! grep -qE "upsert|P2002|catch|try" "$f" 2>/dev/null; then
-      if ! grep -q "flight:ok" "$f" 2>/dev/null; then
-        grep -Hn "\.create\s*(" "$f" | head -3
-      fi
+      grep -Hn "\.create\s*(" "$f" | head -3
     fi
   fi
 done' _ "${FILES[@]}"
@@ -238,7 +228,7 @@ check "M6: Include orgId in Schema" \
       }
       in_model = 0
     }
-    '"'"' "$f" 2>/dev/null | grep -v '"'"'flight:ok'"'"'
+    '"'"' "$f" 2>/dev/null
   fi
 done' _ "${FILES[@]}"
 

@@ -26,13 +26,6 @@ exclude_patterns:
   - "**/venv/**"
   - "**/.git/**"
 
-suppression:
-  comment: "flight:ok"
-  guidance: |
-    Add `// flight:ok` (JS/TS) or `# flight:ok` (Python) on the same line.
-    Use sparingly. Document why the suppression is acceptable.
-    SMS compliance rules should rarely be suppressed.
-
 # ===========================================================================
 # RULES
 # ===========================================================================
