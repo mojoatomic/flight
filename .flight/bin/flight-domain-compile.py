@@ -13,6 +13,7 @@ Single source of truth: .flight YAML generates both spec and validator.
 """
 
 import argparse
+import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -127,6 +128,34 @@ def validate_spec(data: dict, domain: str) -> list:
                 errors.append(
                     f"{domain}.flight: Rule {rule_id} has unknown check type '{check_type}'"
                 )
+
+            # Validate regex patterns for grep and presence checks
+            if check_type in ("grep", "presence"):
+                pattern = check.get("pattern", "")
+                if pattern and not validate_regex_pattern(pattern, rule_id, domain):
+                    errors.append(
+                        f"{domain}.flight: Rule {rule_id} has invalid regex pattern"
+                    )
+
+            # Validate regex patterns in multi-condition checks
+            if check_type == "multi-condition":
+                for i, cond in enumerate(check.get("conditions", [])):
+                    pattern = cond.get("pattern", "")
+                    if pattern and not validate_regex_pattern(pattern, f"{rule_id}.conditions[{i}]", domain):
+                        errors.append(
+                            f"{domain}.flight: Rule {rule_id} condition {i} has invalid regex pattern"
+                        )
+
+    # Validate info section patterns
+    info = data.get("info", {})
+    for info_id, info_config in info.items():
+        if not isinstance(info_config, dict):
+            continue
+        pattern = info_config.get("pattern", "")
+        if pattern and not validate_regex_pattern(pattern, f"info.{info_id}", domain):
+            errors.append(
+                f"{domain}.flight: Info {info_id} has invalid regex pattern"
+            )
 
     return errors
 
@@ -759,6 +788,25 @@ def validate_yaml_syntax(flight_path: Path) -> bool:
     except FileNotFoundError:
         # bash not found
         return True
+
+
+def validate_regex_pattern(pattern: str, rule_id: str, domain: str) -> bool:
+    """Validate a regex pattern using Python's re module.
+
+    Returns True if valid, False if syntax errors found.
+
+    Note: Python's re uses PCRE-style regex which is stricter than POSIX ERE
+    (used by grep -E). This catches errors like unbalanced parentheses that
+    BSD grep may not report.
+    """
+    try:
+        re.compile(pattern)
+        return True
+    except re.error as e:
+        print(f"ERROR: {domain}.flight: Rule {rule_id} has invalid regex pattern:", file=sys.stderr)
+        print(f"  Pattern: {pattern}", file=sys.stderr)
+        print(f"  Error: {e}", file=sys.stderr)
+        return False
 
 
 def validate_shell_script(sh_path: Path) -> bool:

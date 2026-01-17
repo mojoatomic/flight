@@ -110,12 +110,22 @@ fi
 printf '\n%s\n' "## NEVER Rules"
 
 # N1: Verbs in URIs
-check "N1: Verbs in URIs" \
-    grep -En "['\"]/?)(create|delete|remove|update|get|fetch|add|edit|modify)([A-Z]|[_-][a-z])" "${FILES[@]}"
+if [[ ${#API_ENDPOINT_FILES[@]} -gt 0 ]]; then
+    check "N1: Verbs in URIs" \
+        grep -En "['\"]/?(create|delete|remove|update|get|fetch|add|edit|modify)([A-Z]|[_-][a-z])" "${API_ENDPOINT_FILES[@]}"
+else
+    green "✅ N1: Verbs in URIs (skipped - no API endpoint files)"
+    ((PASS++)) || true
+fi
 
 # N2: 200 OK with Error Body
-check "N2: 200 OK with Error Body" \
-    grep -Ein "status\\(200\\).*['\"]?error['\"]?\\s*:|\\.ok\\(.*['\"]?error['\"]?\\s*:|status.*200.*success.*false" "${FILES[@]}"
+if [[ ${#API_ENDPOINT_FILES[@]} -gt 0 ]]; then
+    check "N2: 200 OK with Error Body" \
+        grep -Ein "status\\(200\\).*['\"]?error['\"]?\\s*:|\\.ok\\(.*['\"]?error['\"]?\\s*:|status.*200.*success.*false" "${API_ENDPOINT_FILES[@]}"
+else
+    green "✅ N2: 200 OK with Error Body (skipped - no API endpoint files)"
+    ((PASS++)) || true
+fi
 
 # N3: Exposing Internal IDs in Pagination
 check "N3: Exposing Internal IDs in Pagination" \
@@ -126,12 +136,22 @@ check "N5: Sensitive Data in Query Strings" \
     grep -Ein "req\\.(query|params)(\\.(password|secret|api_key|token|auth)|\\[['\"]?(password|secret|api_key|token|auth))|(\\{[^}]*(password|secret|api_key|token|auth)[^}]*\\})\\s*=\\s*req\\.(query|params)" "${FILES[@]}"
 
 # N6: Offset Pagination for Large Datasets
-check "N6: Offset Pagination for Large Datasets" \
-    grep -Ein "offset.*limit|page.*per_page|skip.*take" "${FILES[@]}"
+if [[ ${#API_ENDPOINT_FILES[@]} -gt 0 ]]; then
+    check "N6: Offset Pagination for Large Datasets" \
+        grep -Ein "offset.*limit|page.*per_page|skip.*take" "${API_ENDPOINT_FILES[@]}"
+else
+    green "✅ N6: Offset Pagination for Large Datasets (skipped - no API endpoint files)"
+    ((PASS++)) || true
+fi
 
 # N7: 500 for Client Errors
-check "N7: 500 for Client Errors" \
-    grep -Ein "catch.*\\{[^}]*(status\\(500\\)|res\\.status\\s*=\\s*500)|(ValidationError|validate|invalid).*500|500.*(validation|invalid)" "${FILES[@]}"
+if [[ ${#API_ENDPOINT_FILES[@]} -gt 0 ]]; then
+    check "N7: 500 for Client Errors" \
+        grep -Ein "catch.*\\{[^}]*(status\\(500\\)|res\\.status\\s*=\\s*500)|(ValidationError|validate|invalid).*500|500.*(validation|invalid)" "${API_ENDPOINT_FILES[@]}"
+else
+    green "✅ N7: 500 for Client Errors (skipped - no API endpoint files)"
+    ((PASS++)) || true
+fi
 
 # N8: CORS Wildcard with Credentials
 check "N8: CORS Wildcard with Credentials" \
@@ -145,12 +165,12 @@ check "N8: CORS Wildcard with Credentials" \
 
 printf '\n%s\n' "## MUST Rules"
 
-# M3: Consistent Error Response Format (RFC 7807)
+# M3: Consistent Error Response Format (RFC 9457)
 if [[ ${#API_ENDPOINT_FILES[@]} -gt 0 ]]; then
-    check "M3: Consistent Error Response Format (RFC 7807)" \
-        bash -c 'grep -ql "application/problem\\+json|type.*title.*status|ProblemDetails" "$@" || echo "No RFC 7807 Problem Details pattern found"' _ "${API_ENDPOINT_FILES[@]}"
+    check "M3: Consistent Error Response Format (RFC 9457)" \
+        bash -c 'grep -ql "application/problem\\+json|type.*title.*status|ProblemDetails" "$@" || echo "No RFC 9457 Problem Details pattern found"' _ "${API_ENDPOINT_FILES[@]}"
 else
-    green "✅ M3: Consistent Error Response Format (RFC 7807) (skipped - no API endpoint files)"
+    green "✅ M3: Consistent Error Response Format (RFC 9457) (skipped - no API endpoint files)"
     ((PASS++)) || true
 fi
 
@@ -161,7 +181,8 @@ check "M4: Plural Nouns for Collection URIs" \
 # M5: Include Pagination Metadata in Response
 check "M5: Include Pagination Metadata in Response" \
     bash -c 'for f in "$@"; do
-  if grep -qEi "cursor|offset.*limit|page.*per_page|after_id|before_id" "$f" 2>/dev/null; then
+  # Note: after_id|before_id excluded - N3 forbids exposing internal IDs
+  if grep -qEi "cursor|next_cursor|page_token|offset.*limit|page.*per_page" "$f" 2>/dev/null; then
     if ! grep -qEi "has_more|next_cursor|prev_cursor|total_pages|total_count|page_info" "$f" 2>/dev/null; then
       echo "$f: pagination patterns found but no response metadata"
     fi

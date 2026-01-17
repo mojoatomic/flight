@@ -50,10 +50,11 @@ rules:
     title: Verbs in URIs
     severity: NEVER
     mechanical: true
+    api_files_only: true
     description: URIs identify resources, HTTP methods define actions
     check:
       type: grep
-      pattern: '[''"]/?)(create|delete|remove|update|get|fetch|add|edit|modify)([A-Z]|[_-][a-z])'
+      pattern: '[''"]/?(create|delete|remove|update|get|fetch|add|edit|modify)([A-Z]|[_-][a-z])'
       flags: -En
     examples:
       bad:
@@ -69,6 +70,7 @@ rules:
     title: 200 OK with Error Body
     severity: NEVER
     mechanical: true
+    api_files_only: true
     description: Status code must reflect outcome
     check:
       type: grep
@@ -134,6 +136,7 @@ rules:
     title: Offset Pagination for Large Datasets
     severity: NEVER
     mechanical: true
+    api_files_only: true
     description: Performance degrades at scale (database scans and discards rows)
     check:
       type: grep
@@ -150,6 +153,7 @@ rules:
     title: 500 for Client Errors
     severity: NEVER
     mechanical: true
+    api_files_only: true
     description: Server errors mask validation failures
     check:
       type: grep
@@ -224,17 +228,17 @@ rules:
         - "504 Timeout - Upstream timeout"
 
   M3:
-    title: Consistent Error Response Format (RFC 7807)
+    title: Consistent Error Response Format (RFC 9457)
     severity: MUST
     mechanical: true
     api_files_only: true
-    description: Use Problem Details for HTTP APIs
+    description: Use Problem Details for HTTP APIs (RFC 9457 supersedes RFC 7807)
     check:
       type: presence
       pattern: 'application/problem\+json|type.*title.*status|ProblemDetails'
       flags: -l
       invert: true
-      message: "No RFC 7807 Problem Details pattern found"
+      message: "No RFC 9457 Problem Details pattern found"
     examples:
       good:
         - |
@@ -273,7 +277,8 @@ rules:
       type: script
       code: |
         for f in "$@"; do
-          if grep -qEi "cursor|offset.*limit|page.*per_page|after_id|before_id" "$f" 2>/dev/null; then
+          # Note: after_id|before_id excluded - N3 forbids exposing internal IDs
+          if grep -qEi "cursor|next_cursor|page_token|offset.*limit|page.*per_page" "$f" 2>/dev/null; then
             if ! grep -qEi "has_more|next_cursor|prev_cursor|total_pages|total_count|page_info" "$f" 2>/dev/null; then
               echo "$f: pagination patterns found but no response metadata"
             fi
@@ -787,10 +792,15 @@ anti_patterns:
 # ===========================================================================
 
 sources:
-  - title: "RFC 7807 - Problem Details for HTTP APIs"
+  - title: "RFC 9457 - Problem Details for HTTP APIs"
+    url: "https://www.rfc-editor.org/rfc/rfc9457.html"
+    note: "Current standard (supersedes RFC 7807)"
+  - title: "RFC 7807 - Problem Details for HTTP APIs (Obsoleted)"
     url: "https://datatracker.ietf.org/doc/html/rfc7807"
-  - title: "RFC 7231 - HTTP Semantics and Content"
-    url: "https://datatracker.ietf.org/doc/html/rfc7231"
+    note: "Obsoleted by RFC 9457 - kept for historical reference"
+  - title: "RFC 9110 - HTTP Semantics"
+    url: "https://www.rfc-editor.org/rfc/rfc9110.html"
+    note: "Current standard (supersedes RFC 7231)"
   - title: "Microsoft REST API Guidelines"
     url: "https://github.com/microsoft/api-guidelines"
   - title: "Google API Design Guide"
@@ -798,5 +808,8 @@ sources:
   - title: "Stripe API Reference"
     url: "https://stripe.com/docs/api"
     note: "Gold standard"
+  - title: "OWASP API Security Project"
+    url: "https://owasp.org/www-project-api-security/"
+    note: "API Security Top 10"
   - title: "Richardson Maturity Model"
     url: "https://martinfowler.com/articles/richardsonMaturityModel.html"
