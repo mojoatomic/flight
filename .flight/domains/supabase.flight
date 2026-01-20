@@ -2,11 +2,42 @@
 # Source: Official Supabase docs, migration guides, community best practices
 
 domain: supabase
-version: 1.0.0
+version: 1.1.0
+schema_version: 2
 description: >
   Supabase patterns for TypeScript/Next.js applications. Covers client
   instantiation with @supabase/ssr, auth patterns (getSession vs getUser),
   RLS security, query error handling, and realtime subscriptions.
+
+provenance:
+  last_full_audit: "2026-01-20"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-20"
+
+  sources_consulted:
+    - url: "https://supabase.com/docs/guides/auth/server-side/creating-a-client"
+      accessed: "2026-01-20"
+      note: "Supabase SSR Auth Guide"
+    - url: "https://supabase.com/docs/guides/auth/server-side/migrating-to-ssr-from-auth-helpers"
+      accessed: "2026-01-20"
+      note: "Migration from Auth Helpers to SSR"
+    - url: "https://supabase.com/docs/guides/database/postgres/row-level-security"
+      accessed: "2026-01-20"
+      note: "Supabase Row Level Security"
+    - url: "https://supabase.com/docs/reference/javascript/introduction"
+      accessed: "2026-01-20"
+      note: "Supabase JavaScript Reference"
+
+  coverage:
+    apis_covered:
+      - "@supabase/ssr"
+      - "Supabase Auth"
+      - "Supabase Realtime"
+      - "Row Level Security"
+    known_gaps:
+      - "Supabase Storage"
+      - "Edge Functions"
+      - "Database Functions"
 
 file_patterns:
   - "**/*.ts"
@@ -45,6 +76,14 @@ rules:
     description: >
       The service_role key bypasses RLS. NEVER use it in browser-accessible
       code. Only use in server-side code that is never bundled to client.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://supabase.com/docs/guides/api/api-keys"
+          accessed: "2026-01-20"
+          quote: "service_role key bypasses Row Level Security"
     check:
       type: script
       code: |
@@ -78,6 +117,14 @@ rules:
     description: >
       @supabase/auth-helpers-nextjs is deprecated. Use @supabase/ssr instead.
       The auth-helpers package has known issues with Next.js 13+ App Router.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://supabase.com/docs/guides/auth/server-side/migrating-to-ssr-from-auth-helpers"
+          accessed: "2026-01-20"
+          quote: "Auth Helpers package is deprecated, migrate to @supabase/ssr"
     check:
       type: grep
       pattern: '@supabase/auth-helpers-nextjs|@supabase/auth-helpers-react|@supabase/auth-helpers-shared'
@@ -103,6 +150,14 @@ rules:
     description: >
       In Next.js App Router, use @supabase/ssr for proper cookie handling.
       Raw @supabase/supabase-js doesn't handle SSR cookies correctly.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://supabase.com/docs/guides/auth/server-side/creating-a-client"
+          accessed: "2026-01-20"
+          quote: "Use @supabase/ssr for proper cookie handling in Next.js"
     check:
       type: script
       code: |
@@ -137,6 +192,14 @@ rules:
     description: >
       Never hardcode Supabase URLs or keys. Use environment variables.
       Hardcoded credentials get committed and leaked.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://supabase.com/docs/guides/api/api-keys"
+          accessed: "2026-01-20"
+          quote: "Store API keys in environment variables"
     check:
       type: grep
       pattern: "createClient\\(['\"][^'\"]*supabase[^'\"]*['\"]\\s*,\\s*['\"]ey"
@@ -164,6 +227,14 @@ rules:
     description: >
       .single() throws PGRST116 error if zero rows OR if multiple rows.
       Always handle the error or use .maybeSingle() for optional data.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://supabase.com/docs/reference/javascript/select"
+          accessed: "2026-01-20"
+          quote: ".single() returns error if not exactly one row"
     check:
       type: script
       code: |
@@ -219,6 +290,14 @@ rules:
     description: >
       Realtime subscriptions must be cleaned up on component unmount.
       Leaked subscriptions cause memory leaks and stale callbacks.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://supabase.com/docs/guides/realtime"
+          accessed: "2026-01-20"
+          quote: "Unsubscribe from channels when no longer needed"
     check:
       type: script
       code: |
@@ -262,6 +341,14 @@ rules:
     description: >
       Never trust getSession() in server code for authentication. It reads
       from cookies which can be spoofed. Use getClaims() or getUser() instead.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://supabase.com/docs/guides/auth/server-side/creating-a-client"
+          accessed: "2026-01-20"
+          quote: "Use getUser() or getClaims() for server-side auth validation"
     check:
       type: script
       code: |
@@ -304,6 +391,14 @@ rules:
     description: >
       Use generated types for type-safe Supabase queries.
       Without types, query results are `any`.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://supabase.com/docs/reference/javascript/typescript-support"
+          accessed: "2026-01-20"
+          quote: "Generate types with supabase gen types typescript"
     check:
       type: script
       code: |
@@ -331,6 +426,14 @@ rules:
     description: >
       Client components using auth should listen for auth state changes.
       Without this, the UI won't update when user signs in/out.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://supabase.com/docs/reference/javascript/auth-onauthstatechange"
+          accessed: "2026-01-20"
+          quote: "Listen to auth events with onAuthStateChange"
     check:
       type: script
       code: |
@@ -591,22 +694,3 @@ anti_patterns:
     description: "Over-fetching data"
     fix: "Select specific columns"
 
-# ===========================================================================
-# SOURCES
-# ===========================================================================
-
-sources:
-  - title: "Supabase SSR Auth Guide"
-    url: "https://supabase.com/docs/guides/auth/server-side/creating-a-client"
-
-  - title: "Migration from Auth Helpers to SSR"
-    url: "https://supabase.com/docs/guides/auth/server-side/migrating-to-ssr-from-auth-helpers"
-
-  - title: "Supabase Row Level Security"
-    url: "https://supabase.com/docs/guides/database/postgres/row-level-security"
-
-  - title: "Supabase JavaScript Reference"
-    url: "https://supabase.com/docs/reference/javascript/introduction"
-
-  - title: "Understanding API Keys"
-    url: "https://supabase.com/docs/guides/api/api-keys"
