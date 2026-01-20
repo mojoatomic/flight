@@ -1,9 +1,9 @@
 # powershell.flight - PowerShell Best Practices and Footguns
 # For scripts, modules, and automation. Covers security, cross-platform, error handling.
-# Researched: January 2026 | Re-verify: July 2026
 
 domain: powershell
-version: 1.0.0
+version: 1.1.0
+schema_version: 2
 description: |
   PowerShell scripting best practices for automation, DevOps, and system administration.
   Covers security, cross-platform compatibility (Windows/Linux/macOS), error handling,
@@ -17,6 +17,37 @@ description: |
   - PSScriptAnalyzer 1.24.0: Requires PS 5.1+ or PS 7.4.6+ (won't load on 7.4.5)
   - CVE-2025-54100: Invoke-WebRequest DOM parsing vulnerability (December 2025)
   - CVE-2025-25004: PowerShell 7.5.3 vulnerability (fixed in 7.5.4)
+
+provenance:
+  last_full_audit: "2026-01-20"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-20"
+
+  sources_consulted:
+    - url: "https://learn.microsoft.com/en-us/powershell/"
+      accessed: "2026-01-20"
+      note: "PowerShell official documentation"
+    - url: "https://learn.microsoft.com/en-us/powershell/utility-modules/psscriptanalyzer/rules/readme"
+      accessed: "2026-01-20"
+      note: "PSScriptAnalyzer rules documentation"
+    - url: "https://github.com/PoshCode/PowerShellPracticeAndStyle"
+      accessed: "2026-01-20"
+      note: "PowerShell Best Practices and Style Guide"
+    - url: "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-54100"
+      accessed: "2026-01-20"
+      note: "CVE-2025-54100 Invoke-WebRequest DOM parsing vulnerability"
+
+  coverage:
+    apis_covered:
+      - "Security (Invoke-Expression, credentials, web requests)"
+      - "Cross-platform compatibility"
+      - "Error handling patterns"
+      - "Script structure and best practices"
+      - "PSScriptAnalyzer integration"
+    known_gaps:
+      - "DSC (Desired State Configuration) patterns"
+      - "Remoting and PSSession patterns"
+      - "Advanced module development"
 
 file_patterns:
   - "*.ps1"
@@ -61,6 +92,14 @@ rules:
     severity: NEVER
     mechanical: true
     pssa_rule: PSAvoidUsingInvokeExpression
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://learn.microsoft.com/en-us/powershell/utility-modules/psscriptanalyzer/rules/avoidusinginvokeexpression"
+          accessed: "2026-01-20"
+          quote: "The use of Invoke-Expression is discouraged because it poses security risks"
     description: |
       Invoke-Expression executes arbitrary strings as code. With any external input,
       this creates command injection vulnerabilities. The "iex" alias is equally dangerous.
@@ -88,6 +127,14 @@ rules:
     severity: NEVER
     mechanical: true
     pssa_rule: PSAvoidUsingPlainTextForPassword
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://learn.microsoft.com/en-us/powershell/utility-modules/psscriptanalyzer/rules/avoidusingplaintextforpassword"
+          accessed: "2026-01-20"
+          quote: "Password parameters should take SecureString, not String"
     description: |
       Never store passwords, API keys, or secrets as plain text in scripts.
       Use SecureString, the SecretManagement module, or environment variables.
@@ -112,6 +159,14 @@ rules:
     title: Invoke-WebRequest Without -UseBasicParsing
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2026-07-20"
+      sources:
+        - url: "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-54100"
+          accessed: "2026-01-20"
+          quote: "DOM parsing in Invoke-WebRequest can execute embedded scripts"
     description: |
       Invoke-WebRequest without -UseBasicParsing uses DOM parsing which can execute
       embedded scripts. CVE-2025-54100 exploits this for RCE. Windows PowerShell 5.1
@@ -142,6 +197,14 @@ rules:
     severity: NEVER
     mechanical: true
     pssa_rule: PSAvoidUsingConvertToSecureStringWithPlainText
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://learn.microsoft.com/en-us/powershell/utility-modules/psscriptanalyzer/rules/avoidusingconverttosecurestringwithplaintext"
+          accessed: "2026-01-20"
+          quote: "Using ConvertTo-SecureString with a plain text string defeats the security protection"
     description: |
       Using ConvertTo-SecureString -AsPlainText with a literal string defeats the purpose
       of SecureString. The secret is still in plain text in your source code.
@@ -161,6 +224,14 @@ rules:
     severity: NEVER
     mechanical: true
     pssa_rule: PSAvoidUsingCmdletAliases
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://learn.microsoft.com/en-us/powershell/utility-modules/psscriptanalyzer/rules/avoidusingcmdletaliases"
+          accessed: "2026-01-20"
+          quote: "An alias is a shorter name for a cmdlet which may not be available in all environments"
     description: |
       Aliases like %, ?, foreach, where, ls, cat, curl vary by platform and session.
       Scripts using aliases may fail on Linux/macOS or in constrained environments.
@@ -187,6 +258,14 @@ rules:
     severity: NEVER
     mechanical: true
     pssa_rule: PSAvoidUsingWriteHost
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://learn.microsoft.com/en-us/powershell/utility-modules/psscriptanalyzer/rules/avoidusingwritehost"
+          accessed: "2026-01-20"
+          quote: "Write-Host sends output to the host, not the pipeline, and cannot be captured"
     description: |
       Write-Host writes to the console, not the pipeline. Output cannot be captured,
       redirected, or used by other commands. Use Write-Output for data.
@@ -212,6 +291,14 @@ rules:
     severity: NEVER
     mechanical: true
     pssa_rule: PSAvoidUsingPositionalParameters
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://learn.microsoft.com/en-us/powershell/utility-modules/psscriptanalyzer/rules/avoidusingpositionalparameters"
+          accessed: "2026-01-20"
+          quote: "Positional parameters make code harder to maintain and can cause unintended results"
     description: |
       Positional parameters make code harder to read and prone to errors when
       cmdlet signatures change. Always use named parameters in scripts.
@@ -261,6 +348,14 @@ rules:
     title: Hardcoded Paths
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://learn.microsoft.com/en-us/powershell/scripting/whats-new/differences-from-windows-powershell"
+          accessed: "2026-01-20"
+          quote: "PowerShell runs on Windows, Linux, and macOS with different path conventions"
     description: |
       Hardcoded paths like C:\Temp or /tmp break cross-platform scripts.
       Use environment variables and Join-Path for portability.
@@ -310,6 +405,14 @@ rules:
     title: Set-StrictMode Required
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/set-strictmode"
+          accessed: "2026-01-20"
+          quote: "Set-StrictMode establishes coding rules that generate errors for certain scripting elements"
     description: |
       Scripts must enable strict mode to catch undefined variables and other
       common mistakes early. Use Set-StrictMode -Version Latest.
@@ -335,6 +438,14 @@ rules:
     title: ErrorActionPreference Stop for Critical Scripts
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_preference_variables"
+          accessed: "2026-01-20"
+          quote: "$ErrorActionPreference determines how PowerShell responds to non-terminating errors"
     description: |
       Production scripts should set $ErrorActionPreference = 'Stop' or use
       -ErrorAction Stop on critical commands to catch failures.
@@ -386,6 +497,14 @@ rules:
     severity: MUST
     mechanical: true
     pssa_rule: PSUseCmdletBinding
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_functions_cmdletbindingattribute"
+          accessed: "2026-01-20"
+          quote: "The CmdletBinding attribute enables access to common parameters and features"
     description: |
       Functions should use [CmdletBinding()] to enable common parameters like
       -Verbose, -Debug, -ErrorAction, and -WhatIf support.
@@ -417,6 +536,14 @@ rules:
     severity: MUST
     mechanical: true
     pssa_rule: PSUseApprovedVerbs
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://learn.microsoft.com/en-us/powershell/scripting/developer/cmdlet/approved-verbs-for-windows-powershell-commands"
+          accessed: "2026-01-20"
+          quote: "PowerShell uses a verb-noun pair for the names of cmdlets and modules"
     description: |
       Function names must use approved PowerShell verbs (Get, Set, New, Remove, etc.)
       to maintain consistency with the PowerShell ecosystem.
@@ -446,6 +573,14 @@ rules:
     title: Parameter Validation
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_functions_advanced_parameters"
+          accessed: "2026-01-20"
+          quote: "Validation attributes test the values that users submit with a parameter"
     description: |
       Parameters must have type constraints and validation attributes.
       Use [Parameter(Mandatory)] for required parameters.
@@ -480,6 +615,14 @@ rules:
     title: Use #Requires Statements
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_requires"
+          accessed: "2026-01-20"
+          quote: "#Requires prevents a script from running without required elements"
     description: |
       Scripts should declare their requirements with #Requires statements
       to fail fast if prerequisites aren't met.
@@ -504,6 +647,14 @@ rules:
     severity: SHOULD
     mechanical: true
     pssa_rule: PSProvideCommentHelp
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_comment_based_help"
+          accessed: "2026-01-20"
+          quote: "Comment-based help for a function can include .SYNOPSIS and .PARAMETER"
     description: |
       Functions should include comment-based help with at minimum .SYNOPSIS
       and .PARAMETER documentation for discoverability via Get-Help.
@@ -539,6 +690,14 @@ rules:
     severity: SHOULD
     mechanical: true
     pssa_rule: PSUseShouldProcessForStateChangingFunctions
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_functions_cmdletbindingattribute"
+          accessed: "2026-01-20"
+          quote: "SupportsShouldProcess adds -WhatIf and -Confirm parameters automatically"
     description: |
       Functions that modify state (files, registry, AD, etc.) should support
       -WhatIf and -Confirm via SupportsShouldProcess.
@@ -607,6 +766,14 @@ rules:
     severity: SHOULD
     mechanical: true
     pssa_rule: PSPossibleIncorrectComparisonWithNull
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://learn.microsoft.com/en-us/powershell/utility-modules/psscriptanalyzer/rules/possibleincorrectcomparisonwithnull"
+          accessed: "2026-01-20"
+          quote: "If $null is on the right side, arrays will be filtered instead of compared"
     description: |
       Always put $null on the left side of comparisons. When on the right,
       arrays are filtered instead of compared.
@@ -629,6 +796,14 @@ rules:
     severity: SHOULD
     mechanical: true
     pssa_rule: PSAvoidGlobalVars
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://learn.microsoft.com/en-us/powershell/utility-modules/psscriptanalyzer/rules/avoidglobalvars"
+          accessed: "2026-01-20"
+          quote: "Global variables pollute the global namespace and make scripts unpredictable"
     description: |
       Avoid using $global: scope. It pollutes the session and creates hidden
       dependencies. Use parameters or script scope instead.
@@ -649,6 +824,14 @@ rules:
     severity: SHOULD
     mechanical: true
     pssa_rule: PSAvoidEmptyCatchBlock
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://learn.microsoft.com/en-us/powershell/utility-modules/psscriptanalyzer/rules/avoidemptycatchblock"
+          accessed: "2026-01-20"
+          quote: "Empty catch blocks hide errors and make troubleshooting difficult"
     description: |
       Empty catch blocks silently swallow errors, making debugging impossible.
       At minimum, log the error.
@@ -702,6 +885,14 @@ rules:
     title: Use Join-Path for Path Construction
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/join-path"
+          accessed: "2026-01-20"
+          quote: "Join-Path combines a path and a child path into a single path"
     description: |
       Never concatenate paths with string operations. Use Join-Path for
       cross-platform compatibility (handles / vs \).
@@ -1073,26 +1264,3 @@ pssa_integration:
   run_command: |
     Invoke-ScriptAnalyzer -Path . -Recurse -Settings PSScriptAnalyzerSettings.psd1
 
-# ===========================================================================
-# SOURCES
-# ===========================================================================
-
-sources:
-  - title: "PowerShell Documentation"
-    url: "https://learn.microsoft.com/en-us/powershell/"
-  
-  - title: "PSScriptAnalyzer Rules"
-    url: "https://learn.microsoft.com/en-us/powershell/utility-modules/psscriptanalyzer/rules/readme"
-  
-  - title: "PowerShell Best Practices and Style Guide"
-    url: "https://github.com/PoshCode/PowerShellPracticeAndStyle"
-  
-  - title: "Preventing Script Injection Attacks"
-    url: "https://learn.microsoft.com/en-us/powershell/scripting/security/preventing-script-injection"
-  
-  - title: "CVE-2025-54100 (Invoke-WebRequest)"
-    url: "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-54100"
-    note: "December 2025 - DOM parsing vulnerability"
-  
-  - title: "Differences from Windows PowerShell"
-    url: "https://learn.microsoft.com/en-us/powershell/scripting/whats-new/differences-from-windows-powershell"
