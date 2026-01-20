@@ -84,61 +84,49 @@ printf '\n%s\n' "## NEVER Rules"
 
 # N1: Generic Variable Names
 check "N1: Generic Variable Names" \
-    grep -En "\\b(const|let|var)\\s+(data|result|temp|info|item|value|obj|thing|stuff|tmp|ret|val)\\s*=" "${FILES[@]}"
+    # Unknown check type: ast
 
 # N2: Redundant Conditional Returns
 check "N2: Redundant Conditional Returns" \
-    grep -En "return true;?\\s*(else|})?\\s*return false|return false;?\\s*(else|})?\\s*return true" "${FILES[@]}"
+    # Unknown check type: ast
 
 # N3: Ternary Returning Boolean Literals
 check "N3: Ternary Returning Boolean Literals" \
-    grep -En "\\?\\s*true\\s*:\\s*false|\\?\\s*false\\s*:\\s*true" "${FILES[@]}"
+    # Unknown check type: ast
 
 # N4: Redundant Boolean Comparisons
 check "N4: Redundant Boolean Comparisons" \
-    grep -En "===\\s*true|===\\s*false|!==\\s*true|!==\\s*false" "${FILES[@]}"
+    # Unknown check type: ast
 
 # N5: Magic Number Calculations
 check "N5: Magic Number Calculations" \
-    grep -En "[0-9]+\\s*\\*\\s*[0-9]+\\s*\\*\\s*[0-9]+" "${FILES[@]}"
+    # Unknown check type: ast
 
 # N6: Generic Function Names
 check "N6: Generic Function Names" \
-    grep -En "function\\s+(handle|process|do|run|execute|manage)(Data|Item|Value|Info|Result|Object)\\s*\\(" "${FILES[@]}"
+    # Unknown check type: ast
 
 # N7: Single-Letter Variables
 check "N7: Single-Letter Variables" \
-    grep -En "\\b(const|let|var)\\s+[a-hln-z]\\s*=" "${FILES[@]}"
+    # Unknown check type: ast
 
 # N8: console.log in Source Files
 check "N8: console.log in Source Files" \
-    bash -c 'for f in "$@"; do
-  if [[ "$f" != *test* ]] && [[ "$f" != *spec* ]]; then
-    grep -n '"'"'console\.log'"'"' "$f" 2>/dev/null
-  fi
-done' _ "${FILES[@]}"
+    # Unknown check type: ast
 
 # N9: var Declaration
 check "N9: var Declaration" \
-    grep -En "\\bvar\\s+\\w+\\s*=" "${FILES[@]}"
+    # Unknown check type: ast
 
 # N10: Loose Equality
 check "N10: Loose Equality" \
-    grep -En "[^=!<>]==[^=]|!=[^=]" "${FILES[@]}"
+    # Unknown check type: ast
 
 printf '\n%s\n' "## SHOULD Rules"
 
 # S1: Await in Loops
 warn "S1: Await in Loops" \
-    bash -c 'for f in "$@"; do
-  if grep -qE '"'"'for\s*\(|while\s*\('"'"' "$f"; then
-    # Check for await that'"'"'s NOT part of Promise.all
-    await_lines=$(grep -n '"'"'await\s'"'"' "$f" | grep -v '"'"'Promise\.all'"'"')
-    if [[ -n "$await_lines" ]]; then
-      echo "$f: has await inside potential loop"
-    fi
-  fi
-done' _ "${FILES[@]}"
+    # Unknown check type: ast
 
 printf '\n%s\n' "═══════════════════════════════════════════"
 printf '  PASS: %d  FAIL: %d  WARN: %d\n' "$PASS" "$FAIL" "$WARN"

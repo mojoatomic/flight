@@ -48,6 +48,9 @@ FLIGHT_EXCLUDE_DIRS=(
     ".tox"
     ".nox"
 
+    # Test fixtures (intentionally contain violations for testing)
+    "fixtures"
+
     # Cache directories
     ".cache"
     ".parcel-cache"

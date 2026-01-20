@@ -2,8 +2,9 @@
 # Source: Migrated from javascript.md and javascript.validate.sh
 
 domain: javascript
-version: 1.1.0
+version: 1.2.0
 schema_version: 2
+language: javascript
 description: >
   Code quality patterns that prevent common mistakes in JavaScript/Node.js projects.
   JavaScript-specific patterns while code-hygiene covers universal patterns.
@@ -87,9 +88,11 @@ rules:
       Never use generic names like data, result, temp, info, item, value, obj, thing,
       stuff, foo, bar, baz, tmp, ret, val. Use domain-specific names instead.
     check:
-      type: grep
-      pattern: '\b(const|let|var)\s+(data|result|temp|info|item|value|obj|thing|stuff|tmp|ret|val)\s*='
-      flags: -En
+      type: ast
+      query: |
+        (variable_declarator
+          name: (identifier) @violation
+          (#match? @violation "^(data|result|temp|info|item|value|obj|thing|stuff|tmp|ret|val)$"))
     note: |
       Generic names provide no context about what the variable holds. Domain-specific
       names make code self-documenting and easier to understand.
@@ -119,9 +122,14 @@ rules:
       Never write 'if (condition) return true; else return false' or equivalent.
       Return the condition directly.
     check:
-      type: grep
-      pattern: 'return true;?\s*(else|})?\s*return false|return false;?\s*(else|})?\s*return true'
-      flags: -En
+      type: ast
+      query: |
+        (if_statement
+          consequence: [(statement_block (return_statement (true))) (return_statement (true))]
+          alternative: [(else_clause [(statement_block (return_statement (false))) (return_statement (false))])] @violation)
+        (if_statement
+          consequence: [(statement_block (return_statement (false))) (return_statement (false))]
+          alternative: [(else_clause [(statement_block (return_statement (true))) (return_statement (true))])] @violation)
     note: |
       Redundant conditionals add unnecessary code. The condition itself is already
       a boolean expression that can be returned directly.
@@ -147,9 +155,11 @@ rules:
     description: >
       Never write 'condition ? true : false'. The condition is already boolean.
     check:
-      type: grep
-      pattern: '\?\s*true\s*:\s*false|\?\s*false\s*:\s*true'
-      flags: -En
+      type: ast
+      query: |
+        (ternary_expression
+          consequence: [(true) (false)]
+          alternative: [(true) (false)]) @violation
     note: |
       A ternary that returns true/false is redundant. Use ternaries for non-boolean
       value selection, not boolean coercion.
@@ -178,9 +188,11 @@ rules:
       Never write '=== true', '=== false', '!== true', or '!== false'.
       Use the boolean directly.
     check:
-      type: grep
-      pattern: '===\s*true|===\s*false|!==\s*true|!==\s*false'
-      flags: -En
+      type: ast
+      query: |
+        (binary_expression
+          operator: ["===" "!=="]
+          right: [(true) (false)]) @violation
     note: |
       Comparing to boolean literals is redundant. Use the variable directly
       or with ! for negation.
@@ -210,9 +222,13 @@ rules:
       Never compute at runtime what can be a constant. Pre-calculate time values
       and other derived constants.
     check:
-      type: grep
-      pattern: '[0-9]+\s*\*\s*[0-9]+\s*\*\s*[0-9]+'
-      flags: -En
+      type: ast
+      query: |
+        (binary_expression
+          left: (binary_expression
+            left: (number)
+            right: (number))
+          right: (number)) @violation
     note: |
       Runtime calculations like 60 * 60 * 1000 are harder to read than named constants.
       Pre-calculate and use descriptive constant names like MS_PER_HOUR = 3600000.
@@ -242,9 +258,11 @@ rules:
       Never use generic verbs like handle, process, do, run, execute, manage
       combined with generic nouns without specific context.
     check:
-      type: grep
-      pattern: 'function\s+(handle|process|do|run|execute|manage)(Data|Item|Value|Info|Result|Object)\s*\('
-      flags: -En
+      type: ast
+      query: |
+        (function_declaration
+          name: (identifier) @violation
+          (#match? @violation "^(handle|process|do|run|execute|manage)(Data|Item|Value|Info|Result|Object)$"))
     note: |
       Function names should describe what they do specifically. 'handleData' tells
       nothing about what handling occurs. 'validateUserInput' is clear.
@@ -273,9 +291,11 @@ rules:
     description: >
       Never use single-letter variables except i, j, k as loop counters.
     check:
-      type: grep
-      pattern: '\b(const|let|var)\s+[a-hln-z]\s*='
-      flags: -En
+      type: ast
+      query: |
+        (variable_declarator
+          name: (identifier) @violation
+          (#match? @violation "^[a-hln-z]$"))
     note: |
       Single-letter variables provide no context. Even short loops benefit from
       descriptive names like 'index' or 'user'.
@@ -306,16 +326,18 @@ rules:
       Never leave console.log statements in production source files.
       Test files are excluded from this rule.
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if [[ "$f" != *test* ]] && [[ "$f" != *spec* ]]; then
-            grep -n 'console\.log' "$f" 2>/dev/null
-          fi
-        done
+      type: ast
+      query: |
+        (call_expression
+          function: (member_expression
+            object: (identifier) @obj
+            property: (property_identifier) @prop)
+          (#eq? @obj "console")
+          (#eq? @prop "log")) @violation
     note: |
       console.log is for debugging. Production code should use proper logging
       infrastructure. Test files may use console.log for debugging.
+      Note: Test file exclusion should be handled at file discovery level.
     examples:
       bad:
         - "// src/user.js"
@@ -341,9 +363,9 @@ rules:
       Never use var. Use const for values that won't be reassigned, let for values
       that will. Block scoping and temporal dead zone prevent common bugs.
     check:
-      type: grep
-      pattern: '\bvar\s+\w+\s*='
-      flags: -En
+      type: ast
+      query: |
+        (variable_declaration) @violation
     note: |
       var is function-scoped and hoisted, leading to confusing behavior.
       let and const are block-scoped with temporal dead zone, catching errors earlier.
@@ -373,9 +395,10 @@ rules:
       Never use == or !=. Use === and !== to avoid type coercion bugs.
       Type coercion rules are complex and lead to unexpected behavior.
     check:
-      type: grep
-      pattern: '[^=!<>]==[^=]|!=[^=]'
-      flags: -En
+      type: ast
+      query: |
+        (binary_expression
+          operator: ["==" "!="]) @violation
     note: |
       == performs type coercion with surprising rules: "0" == false is true,
       null == undefined is true. Use === for predictable comparisons.
@@ -409,20 +432,24 @@ rules:
       Avoid await inside loops. Sequential awaits are slow when operations
       are independent. Use Promise.all() for parallel execution.
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qE 'for\s*\(|while\s*\(' "$f"; then
-            # Check for await that's NOT part of Promise.all
-            await_lines=$(grep -n 'await\s' "$f" | grep -v 'Promise\.all')
-            if [[ -n "$await_lines" ]]; then
-              echo "$f: has await inside potential loop"
-            fi
-          fi
-        done
+      type: ast
+      query: |
+        (for_statement
+          body: (statement_block
+            (expression_statement
+              (await_expression) @violation)))
+        (for_in_statement
+          body: (statement_block
+            (expression_statement
+              (await_expression) @violation)))
+        (while_statement
+          body: (statement_block
+            (expression_statement
+              (await_expression) @violation)))
     note: |
       Each await in a loop waits for completion before the next iteration.
       If operations are independent, Promise.all() runs them in parallel.
+      Note: This AST query catches direct await in loops but may miss deeply nested cases.
     examples:
       bad:
         - |
