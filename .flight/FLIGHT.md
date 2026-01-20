@@ -341,6 +341,64 @@ The compiler emits warnings (not errors) for provenance issues:
 
 ---
 
+## AST-Based Validation (flight-lint)
+
+Flight now supports AST-based validation using tree-sitter. This eliminates false positives from code in comments and strings.
+
+### Quick Start
+
+```bash
+# Build flight-lint
+cd flight-lint && npm install && npm run build && cd ..
+
+# Run validation
+./flight-lint/bin/flight-lint --auto .
+```
+
+### How It Works
+
+1. `.flight` files define rules (grep or AST)
+2. `flight-domain-compile` generates `.rules.json` files
+3. `flight-lint` runs tree-sitter queries against source code
+4. Results include file, line, column for each violation
+
+### Rule Types
+
+| Type | Syntax | False Positives | Use When |
+|------|--------|-----------------|----------|
+| `grep` | Regex pattern | Possible | Simple text patterns |
+| `ast` | S-expression query | None | Code structure patterns |
+
+### AST Check Format
+
+```yaml
+rules:
+  N1:
+    title: No eval()
+    severity: NEVER
+    mechanical: true
+    check:
+      type: ast
+      query: |
+        (call_expression
+          function: (identifier) @violation
+          (#eq? @violation "eval"))
+```
+
+### Output Formats
+
+- `--format pretty` - Colored terminal output (default)
+- `--format json` - Machine-readable JSON
+- `--format sarif` - GitHub/VS Code integration
+
+### Documentation
+
+For detailed guides, see:
+- `.flight/docs/query-authoring.md` - tree-sitter query syntax
+- `.flight/docs/migration-guide.md` - Converting grep rules to AST
+
+---
+
 ## Research Tools
 
 Use these during `/flight-prime` and `/flight-prd`:
@@ -520,3 +578,31 @@ Run `npm run preflight` before every commit. If it passes locally, CI will pass.
 | Context lost | Re-run `/flight-prime` |
 | Rules unclear | Check domain file examples |
 | Bash syntax errors | Run `bash -n file.validate.sh` to find issues |
+
+---
+
+## Troubleshooting
+
+### Query Not Matching Expected Code
+
+1. **Verify AST structure**: Use `npx tree-sitter parse file.js`
+2. **Check node types**: Names are case-sensitive and grammar-specific
+3. **Test in playground**: https://tree-sitter.github.io/tree-sitter/playground
+
+### Too Many Matches
+
+1. **Add predicates**: Use `#eq?` or `#match?` to filter
+2. **Check capture name**: Only `@violation` and `@match` are reported
+3. **Narrow the pattern**: Be more specific about context
+
+### Performance Issues
+
+1. **Avoid broad patterns**: `(identifier)` matches everything
+2. **Use specific starting nodes**: Start from the most specific node
+3. **Limit file scope**: Use file_patterns in .flight
+
+### JSON Parse Errors
+
+1. **Check YAML syntax**: Multi-line queries need `|`
+2. **Escape special characters**: Use YAML escaping rules
+3. **Validate JSON**: `cat rules.json | python3 -m json.tool`
