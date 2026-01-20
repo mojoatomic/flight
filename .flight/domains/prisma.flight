@@ -2,7 +2,8 @@
 # Source: Official Prisma docs, multi-tenant best practices, error handling patterns
 
 domain: prisma
-version: 1.0.0
+version: 1.1.0
+schema_version: 2
 description: >
   Prisma ORM patterns for TypeScript/Next.js applications with multi-tenant SaaS focus.
   Covers schema design, query patterns, N+1 prevention, error handling, connection management,
@@ -20,6 +21,47 @@ exclude_patterns:
   - "**/.git/**"
   - "**/*.d.ts"
   - "**/prisma/migrations/**"
+
+provenance:
+  last_full_audit: "2026-01-20"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-20"
+
+  sources_consulted:
+    - url: "https://www.prisma.io/docs/orm/prisma-client/queries"
+      accessed: "2026-01-20"
+      note: "Prisma Client query documentation"
+    - url: "https://www.prisma.io/docs/orm/reference/error-reference"
+      accessed: "2026-01-20"
+      note: "Prisma error codes reference"
+    - url: "https://www.prisma.io/docs/orm/prisma-client/debugging-and-troubleshooting/handling-exceptions-and-errors"
+      accessed: "2026-01-20"
+      note: "Exception handling patterns"
+    - url: "https://www.prisma.io/docs/orm/prisma-client/using-raw-sql/raw-queries"
+      accessed: "2026-01-20"
+      note: "Raw SQL and injection prevention"
+    - url: "https://www.prisma.io/docs/orm/prisma-client/queries/query-optimization-performance"
+      accessed: "2026-01-20"
+      note: "Query optimization and N+1 prevention"
+    - url: "https://www.prisma.io/docs/orm/prisma-client/setup-and-configuration/databases-connections"
+      accessed: "2026-01-20"
+      note: "Connection management and pooling"
+
+  coverage:
+    apis_covered:
+      - "Query methods (findMany, findFirst, findUnique, create, update, delete)"
+      - "Error handling (P2002, P2003, P2025, P2014)"
+      - "Raw SQL ($queryRaw, $executeRaw)"
+      - "Transactions ($transaction)"
+      - "Relation loading (include, select)"
+      - "Multi-tenant patterns (orgId scoping)"
+      - "Connection pooling and singleton pattern"
+    known_gaps:
+      - "Prisma Accelerate configuration"
+      - "Prisma Pulse (real-time subscriptions)"
+      - "Prisma Migrate vs db push workflows"
+      - "Complex aggregation queries"
+      - "Middleware patterns"
 
 # ===========================================================================
 # RULES
@@ -45,6 +87,14 @@ rules:
     title: Queries Without orgId (Multi-tenant)
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.prisma.io/docs/orm/prisma-client/queries/filtering-and-sorting"
+          accessed: "2026-01-20"
+          quote: "Use where to filter records based on field values"
     description: >
       All data queries must include orgId for tenant isolation. Queries without
       orgId can leak data between tenants in multi-tenant applications.
@@ -89,6 +139,14 @@ rules:
     title: $queryRawUnsafe with User Input
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.prisma.io/docs/orm/prisma-client/using-raw-sql/raw-queries"
+          accessed: "2026-01-20"
+          quote: "Using $queryRawUnsafe with user input is vulnerable to SQL injection"
     description: >
       $queryRawUnsafe bypasses parameterization. Using it with user input
       creates SQL injection vulnerabilities. Use $queryRaw with tagged
@@ -118,6 +176,14 @@ rules:
     title: N+1 Query Pattern
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.prisma.io/docs/orm/prisma-client/queries/query-optimization-performance"
+          accessed: "2026-01-20"
+          quote: "Solving the n+1 problem: Use include to return all relations"
     description: >
       Fetching related data in loops instead of using include creates N+1 queries.
       This causes severe performance issues as the number of records grows.
@@ -179,6 +245,14 @@ rules:
     title: Unhandled Prisma Errors
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.prisma.io/docs/orm/prisma-client/debugging-and-troubleshooting/handling-exceptions-and-errors"
+          accessed: "2026-01-20"
+          quote: "Prisma Client throws a PrismaClientKnownRequestError exception if the query engine returns a known error"
     description: >
       Prisma throws specific error codes (P2002, P2025, etc.) that need handling.
       Generic catch blocks hide the actual error and provide poor user experience.
@@ -246,6 +320,14 @@ rules:
     title: New PrismaClient Per Request
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.prisma.io/docs/orm/prisma-client/setup-and-configuration/databases-connections"
+          accessed: "2026-01-20"
+          quote: "Creating too many instances of PrismaClient can exhaust your database connections"
     description: >
       Creating PrismaClient instances per request exhausts database connections.
       Use a singleton pattern to reuse the client across requests.
@@ -322,6 +404,14 @@ rules:
     title: Missing Unique Constraint Handling
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.prisma.io/docs/orm/reference/error-reference#p2002"
+          accessed: "2026-01-20"
+          quote: "Unique constraint failed on the {constraint}"
     description: >
       create() without handling unique violations crashes on duplicate data.
       Either use upsert or catch P2002 errors.
@@ -464,6 +554,14 @@ rules:
     title: Singleton Client Pattern
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.prisma.io/docs/orm/more/help-and-troubleshooting/help-articles/nextjs-prisma-client-dev-practices"
+          accessed: "2026-01-20"
+          quote: "Use a single instance of PrismaClient and store it on the globalThis object"
     description: >
       Use the global singleton pattern for PrismaClient, not per-request
       instantiation. This is critical for connection pool management.
@@ -530,6 +628,14 @@ rules:
     title: Include orgId in Schema
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.prisma.io/docs/orm/prisma-schema/data-model/relations"
+          accessed: "2026-01-20"
+          quote: "Define relations between models using relation fields"
     description: >
       All tenant-scoped models must have an orgId field for multi-tenant
       data isolation. This is the foundation of tenant security.
@@ -895,25 +1001,3 @@ anti_patterns:
     description: "Crashes on duplicate data"
     fix: "Use upsert or catch P2002"
 
-# ===========================================================================
-# SOURCES
-# ===========================================================================
-
-sources:
-  - title: "Prisma Client Queries"
-    url: "https://www.prisma.io/docs/orm/prisma-client/queries"
-
-  - title: "Prisma Error Reference"
-    url: "https://www.prisma.io/docs/orm/reference/error-reference"
-
-  - title: "Handling Exceptions and Errors"
-    url: "https://www.prisma.io/docs/orm/prisma-client/debugging-and-troubleshooting/handling-exceptions-and-errors"
-
-  - title: "Raw Queries and SQL Injection"
-    url: "https://www.prisma.io/docs/orm/prisma-client/using-raw-sql/raw-queries"
-
-  - title: "Query Optimization"
-    url: "https://www.prisma.io/docs/orm/prisma-client/queries/query-optimization-performance"
-
-  - title: "Database Connections"
-    url: "https://www.prisma.io/docs/orm/prisma-client/setup-and-configuration/databases-connections"

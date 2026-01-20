@@ -2,11 +2,42 @@
 # Source: Migrated from embedded-c-p10.md and embedded-c-p10.validate.sh
 
 domain: embedded-c-p10
-version: 1.0.0
+version: 1.1.0
+schema_version: 2
 description: >
   Safety-critical embedded C following NASA JPL's "Power of 10" rules for
   reliable software. Reference: Gerard J. Holzmann, "The Power of 10: Rules
   for Developing Safety-Critical Code", IEEE Computer, 2006.
+
+provenance:
+  last_full_audit: "2026-01-16"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-16"
+
+  sources_consulted:
+    - url: "https://spinroot.com/gerard/pdf/P10.pdf"
+      accessed: "2026-01-16"
+      note: "Original Power of 10 paper by Gerard J. Holzmann, IEEE Computer 2006"
+    - url: "https://www.state-machine.com/doc/AN_QL_Coding_Standard.pdf"
+      accessed: "2026-01-16"
+      note: "JPL Institutional Coding Standard for C - based on Power of 10"
+    - url: "https://misra.org.uk/misra-c/"
+      accessed: "2026-01-16"
+      note: "MISRA C Guidelines - related automotive/safety-critical C standard"
+    - url: "https://www.sei.cmu.edu/our-work/publications/cert-c-coding-standard/"
+      accessed: "2026-01-16"
+      note: "CERT C Coding Standard - secure coding guidelines"
+
+  coverage:
+    apis_covered:
+      - "C11 language constructs"
+      - "Memory allocation"
+      - "Control flow"
+      - "Preprocessor usage"
+      - "Static analysis compatibility"
+    known_gaps:
+      - "Toolchain-specific warnings may vary"
+      - "Embedded-specific runtime checks not covered"
 
 file_patterns:
   - "**/*.c"
@@ -38,6 +69,14 @@ rules:
     title: No goto
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://spinroot.com/gerard/pdf/P10.pdf"
+          accessed: "2026-01-16"
+          quote: "Rule 1: Restrict all code to very simple control flow constructs – do not use goto statements"
     description: >
       Never use goto. It creates unstructured control flow that is difficult
       to analyze and verify. Use structured control flow (if, while, for,
@@ -58,6 +97,14 @@ rules:
     title: No setjmp/longjmp
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://spinroot.com/gerard/pdf/P10.pdf"
+          accessed: "2026-01-16"
+          quote: "Rule 1: do not use setjmp or longjmp constructs"
     description: >
       Never use setjmp or longjmp. They create non-local jumps that bypass
       normal control flow and make code impossible to analyze statically.
@@ -77,6 +124,14 @@ rules:
     title: No Dynamic Memory Allocation
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://spinroot.com/gerard/pdf/P10.pdf"
+          accessed: "2026-01-16"
+          quote: "Rule 3: Do not use dynamic memory allocation after initialization"
     description: >
       Never use malloc, free, calloc, or realloc. Dynamic memory allocation
       introduces unpredictable behavior, fragmentation, and potential for
@@ -98,6 +153,14 @@ rules:
     title: No Conditional Compilation
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://spinroot.com/gerard/pdf/P10.pdf"
+          accessed: "2026-01-16"
+          quote: "Rule 8: The use of the preprocessor must be limited to the inclusion of header files and simple macro definitions"
     description: >
       Never use #ifdef or #if. Conditional compilation creates multiple
       code paths that may not all be tested. Use runtime configuration
@@ -119,6 +182,14 @@ rules:
     title: No Double Pointer Dereference
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://spinroot.com/gerard/pdf/P10.pdf"
+          accessed: "2026-01-16"
+          quote: "Rule 9: The use of pointers must be restricted. Specifically, no more than one level of dereferencing should be used"
     description: >
       Never use double pointer dereference (**ptr). It indicates overly
       complex data structures. Flatten data structures or use single
@@ -139,6 +210,14 @@ rules:
     title: No Chained Pointer Access
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://spinroot.com/gerard/pdf/P10.pdf"
+          accessed: "2026-01-16"
+          quote: "Rule 9: no more than one level of dereferencing should be used"
     description: >
       Never chain pointer dereferences (->field->field). It indicates
       overly coupled data structures. Use local variables to break
@@ -160,6 +239,14 @@ rules:
     title: No Unbounded Loops
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://spinroot.com/gerard/pdf/P10.pdf"
+          accessed: "2026-01-16"
+          quote: "Rule 2: All loops must have a fixed upper-bound"
     description: >
       Never use unbounded loops (while(1), while(true), for(;;)). All
       loops must have a fixed upper bound that can be statically verified.
@@ -184,6 +271,14 @@ rules:
     title: Compile Clean with Strict Warnings
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://spinroot.com/gerard/pdf/P10.pdf"
+          accessed: "2026-01-16"
+          quote: "Rule 10: All code must be compiled, from the first day of development, with all compiler warnings enabled at the highest warning level available"
     description: >
       Code must compile without warnings using strict compiler flags:
       -Wall -Wextra -Werror -pedantic -std=c11. Any warning is an error.
@@ -202,6 +297,14 @@ rules:
     title: Functions Must Be 60 Lines or Less
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://spinroot.com/gerard/pdf/P10.pdf"
+          accessed: "2026-01-16"
+          quote: "Rule 4: No function should be longer than what can be printed on a single sheet of paper"
     description: >
       Every function must be 60 lines or less. This ensures functions
       fit on one screen and are easier to understand, test, and verify.
@@ -231,6 +334,14 @@ rules:
     title: Minimum 2 Assertions Per Function
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://spinroot.com/gerard/pdf/P10.pdf"
+          accessed: "2026-01-16"
+          quote: "Rule 5: The code's assertion density should average to minimally two assertions per function"
     description: >
       Every function must have at least 2 ASSERT() calls - typically
       one for preconditions (input validation) and one for postconditions
@@ -271,6 +382,17 @@ rules:
     title: Check or Cast All Return Values
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://spinroot.com/gerard/pdf/P10.pdf"
+          accessed: "2026-01-16"
+          quote: "Rule 6: Data objects must be declared at the smallest possible level of scope"
+        - url: "https://www.sei.cmu.edu/our-work/publications/cert-c-coding-standard/"
+          accessed: "2026-01-16"
+          quote: "ERR33-C: Detect and handle standard library errors"
     description: >
       All function return values must be checked or explicitly cast to
       (void) if intentionally ignored. This applies especially to printf

@@ -118,6 +118,28 @@ check "N8: console.log in Source Files" \
   fi
 done' _ "${FILES[@]}"
 
+# N9: var Declaration
+check "N9: var Declaration" \
+    grep -En "\\bvar\\s+\\w+\\s*=" "${FILES[@]}"
+
+# N10: Loose Equality
+check "N10: Loose Equality" \
+    grep -En "[^=!<>]==[^=]|!=[^=]" "${FILES[@]}"
+
+printf '\n%s\n' "## SHOULD Rules"
+
+# S1: Await in Loops
+warn "S1: Await in Loops" \
+    bash -c 'for f in "$@"; do
+  if grep -qE '"'"'for\s*\(|while\s*\('"'"' "$f"; then
+    # Check for await that'"'"'s NOT part of Promise.all
+    await_lines=$(grep -n '"'"'await\s'"'"' "$f" | grep -v '"'"'Promise\.all'"'"')
+    if [[ -n "$await_lines" ]]; then
+      echo "$f: has await inside potential loop"
+    fi
+  fi
+done' _ "${FILES[@]}"
+
 printf '\n%s\n' "═══════════════════════════════════════════"
 printf '  PASS: %d  FAIL: %d  WARN: %d\n' "$PASS" "$FAIL" "$WARN"
 if [[ $FAIL -eq 0 ]]; then

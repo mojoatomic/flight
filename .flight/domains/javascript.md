@@ -147,6 +147,58 @@ Code quality patterns that prevent common mistakes in JavaScript/Node.js project
    logger.debug('Processing order', { orderId });
    ```
 
+9. **var Declaration** - Never use var. Use const for values that won't be reassigned, let for values that will. Block scoping and temporal dead zone prevent common bugs.
+
+   ```
+   // BAD
+   var count = 0;
+   // BAD
+   var user = getUser();
+   // BAD
+   for (var i = 0; i < 10; i++) { ... }
+
+   // GOOD
+   const user = getUser();
+   // GOOD
+   let count = 0;
+   // GOOD
+   for (let i = 0; i < 10; i++) { ... }
+   ```
+
+10. **Loose Equality** - Never use == or !=. Use === and !== to avoid type coercion bugs. Type coercion rules are complex and lead to unexpected behavior.
+
+   ```
+   // BAD
+   if (x == null) { ... }
+   // BAD
+   if (count != 0) { ... }
+   // BAD
+   if (status == 'active') { ... }
+
+   // GOOD
+   if (x === null || x === undefined) { ... }
+   // GOOD
+   if (count !== 0) { ... }
+   // GOOD
+   if (status === 'active') { ... }
+   ```
+
+### SHOULD (validator warns)
+
+1. **Await in Loops** - Avoid await inside loops. Sequential awaits are slow when operations are independent. Use Promise.all() for parallel execution.
+
+   ```
+   // BAD
+   for (const user of users) {
+     await sendEmail(user);  // Sequential - slow!
+   }
+   
+
+   // GOOD
+   await Promise.all(users.map(user => sendEmail(user)));
+   
+   ```
+
 ### GUIDANCE (not mechanically checked)
 
 1. **Domain-Specific Names** - Use vocabulary from the problem domain. Names should reflect business concepts, not implementation details.
@@ -180,3 +232,6 @@ Code quality patterns that prevent common mistakes in JavaScript/Node.js project
 | x === true |  | x |
 | items.map(i => ...) |  | items.map(item => ...) |
 | const temp = ... |  | Name by purpose |
+| var x = ... |  | Use const or let |
+| x == y |  | Use === or !== |
+| for (...) { await ... } |  | Use Promise.all() |

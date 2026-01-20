@@ -13,15 +13,58 @@ Single source of truth: .flight YAML generates both spec and validator.
 """
 
 import argparse
+import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
+from datetime import date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 
 # Severity levels in order
 SEVERITIES = ["NEVER", "MUST", "SHOULD", "GUIDANCE"]
+
+# Schema versions
+SCHEMA_V1 = 1  # Original format, no provenance
+SCHEMA_V2 = 2  # Provenance metadata (domain + rule level)
+
+
+@dataclass
+class SourceReference:
+    """A source reference with optional quote."""
+    url: str
+    accessed: Optional[str] = None
+    quote: Optional[str] = None
+
+
+@dataclass
+class SupersededBy:
+    """Tracks what replaced a deprecated pattern."""
+    replacement: str
+    version: str
+    date: Optional[str] = None
+    note: Optional[str] = None
+
+
+@dataclass
+class RuleProvenance:
+    """Provenance metadata for a single rule."""
+    last_verified: Optional[str] = None
+    confidence: str = "high"  # high, medium, low
+    re_verify_after: Optional[str] = None
+    sources: list = field(default_factory=list)  # List of SourceReference
+    superseded_by: Optional[SupersededBy] = None
+
+
+@dataclass
+class DomainProvenance:
+    """Provenance metadata for the entire domain."""
+    last_full_audit: Optional[str] = None
+    audited_by: Optional[str] = None
+    next_audit_due: Optional[str] = None
+    sources_consulted: list = field(default_factory=list)
+    coverage: dict = field(default_factory=dict)  # apis_covered, known_gaps
 
 
 @dataclass
@@ -36,6 +79,7 @@ class Rule:
     check: dict = field(default_factory=dict)
     examples: dict = field(default_factory=dict)
     api_files_only: bool = False
+    provenance: Optional[RuleProvenance] = None
 
 
 @dataclass
@@ -47,9 +91,12 @@ class DomainSpec:
     file_patterns: list
     api_file_detection: dict
     rules: dict  # {id: Rule}
+    schema_version: int = SCHEMA_V1
+    provenance: Optional[DomainProvenance] = None
     patterns: dict = field(default_factory=dict)
     info: dict = field(default_factory=dict)
     anti_patterns: list = field(default_factory=list)
+    sources: list = field(default_factory=list)
 
     def rules_by_severity(self, severity: str) -> list:
         """Get rules filtered by severity, sorted by ID."""
@@ -60,6 +107,71 @@ class DomainSpec:
         """Get all rules with mechanical=true."""
         return [r for r in self.rules.values() if r.mechanical]
 
+    def stale_rules(self) -> list:
+        """Get rules past their re_verify_after date."""
+        today = date.today().isoformat()
+        stale = []
+        for r in self.rules.values():
+            if r.provenance and r.provenance.re_verify_after:
+                if r.provenance.re_verify_after < today:
+                    stale.append(r)
+        return stale
+
+    def unverified_rules(self) -> list:
+        """Get mechanical rules without provenance sources."""
+        return [r for r in self.rules.values()
+                if r.mechanical and (not r.provenance or not r.provenance.sources)]
+
+
+def parse_rule_provenance(prov_data: dict) -> RuleProvenance:
+    """Parse rule-level provenance data."""
+    sources = []
+    for src in prov_data.get("sources", []):
+        if isinstance(src, dict):
+            sources.append(SourceReference(
+                url=src.get("url", ""),
+                accessed=src.get("accessed"),
+                quote=src.get("quote"),
+            ))
+        elif isinstance(src, str):
+            sources.append(SourceReference(url=src))
+
+    superseded_by = None
+    sup_data = prov_data.get("superseded_by")
+    if sup_data and isinstance(sup_data, dict):
+        superseded_by = SupersededBy(
+            replacement=sup_data.get("replacement", ""),
+            version=sup_data.get("version", ""),
+            date=sup_data.get("date"),
+            note=sup_data.get("note"),
+        )
+
+    return RuleProvenance(
+        last_verified=prov_data.get("last_verified"),
+        confidence=prov_data.get("confidence", "high"),
+        re_verify_after=prov_data.get("re_verify_after"),
+        sources=sources,
+        superseded_by=superseded_by,
+    )
+
+
+def parse_domain_provenance(prov_data: dict) -> DomainProvenance:
+    """Parse domain-level provenance data."""
+    sources_consulted = []
+    for src in prov_data.get("sources_consulted", []):
+        if isinstance(src, dict):
+            sources_consulted.append(src)
+        elif isinstance(src, str):
+            sources_consulted.append({"url": src})
+
+    return DomainProvenance(
+        last_full_audit=prov_data.get("last_full_audit"),
+        audited_by=prov_data.get("audited_by"),
+        next_audit_due=prov_data.get("next_audit_due"),
+        sources_consulted=sources_consulted,
+        coverage=prov_data.get("coverage", {}),
+    )
+
 
 def parse_rules(rules_data: dict) -> dict:
     """Parse rules dictionary into Rule objects."""
@@ -67,6 +179,11 @@ def parse_rules(rules_data: dict) -> dict:
     for rule_id, rule_data in rules_data.items():
         if not isinstance(rule_data, dict):
             continue
+
+        # Parse provenance if present
+        provenance = None
+        if "provenance" in rule_data:
+            provenance = parse_rule_provenance(rule_data["provenance"])
 
         rules[rule_id] = Rule(
             id=rule_id,
@@ -78,14 +195,16 @@ def parse_rules(rules_data: dict) -> dict:
             check=rule_data.get("check", {}),
             examples=rule_data.get("examples", {}),
             api_files_only=rule_data.get("api_files_only", False),
+            provenance=provenance,
         )
 
     return rules
 
 
-def validate_spec(data: dict, domain: str) -> list:
-    """Validate the parsed YAML structure. Returns list of errors."""
+def validate_spec(data: dict, domain: str) -> tuple[list, list]:
+    """Validate the parsed YAML structure. Returns (errors, warnings)."""
     errors = []
+    warnings = []
 
     # Required top-level fields
     if "domain" not in data:
@@ -93,8 +212,13 @@ def validate_spec(data: dict, domain: str) -> list:
     if "rules" not in data:
         errors.append(f"{domain}.flight: Missing required field 'rules'")
 
+    # Check schema version
+    schema_version = data.get("schema_version", SCHEMA_V1)
+
     # Validate rules
     rules = data.get("rules", {})
+    today = date.today().isoformat()
+
     for rule_id, rule_data in rules.items():
         if not isinstance(rule_data, dict):
             continue
@@ -128,11 +252,71 @@ def validate_spec(data: dict, domain: str) -> list:
                     f"{domain}.flight: Rule {rule_id} has unknown check type '{check_type}'"
                 )
 
-    return errors
+            # Validate regex patterns for grep and presence checks
+            if check_type in ("grep", "presence"):
+                pattern = check.get("pattern", "")
+                if pattern and not validate_regex_pattern(pattern, rule_id, domain):
+                    errors.append(
+                        f"{domain}.flight: Rule {rule_id} has invalid regex pattern"
+                    )
+
+            # Validate regex patterns in multi-condition checks
+            if check_type == "multi-condition":
+                for i, cond in enumerate(check.get("conditions", [])):
+                    pattern = cond.get("pattern", "")
+                    if pattern and not validate_regex_pattern(pattern, f"{rule_id}.conditions[{i}]", domain):
+                        errors.append(
+                            f"{domain}.flight: Rule {rule_id} condition {i} has invalid regex pattern"
+                        )
+
+        # Provenance warnings (schema v2)
+        provenance = rule_data.get("provenance", {})
+        if rule_data.get("mechanical"):
+            if not provenance.get("sources"):
+                warnings.append(
+                    f"{domain}.flight: Rule {rule_id} has no sources (unverifiable)"
+                )
+            re_verify = provenance.get("re_verify_after")
+            if re_verify and re_verify < today:
+                warnings.append(
+                    f"{domain}.flight: Rule {rule_id} is stale (due {re_verify})"
+                )
+            confidence = provenance.get("confidence", "high")
+            if confidence == "low":
+                warnings.append(
+                    f"{domain}.flight: Rule {rule_id} has low confidence"
+                )
+
+    # Validate info section patterns
+    info = data.get("info", {})
+    for info_id, info_config in info.items():
+        if not isinstance(info_config, dict):
+            continue
+        pattern = info_config.get("pattern", "")
+        if pattern and not validate_regex_pattern(pattern, f"info.{info_id}", domain):
+            errors.append(
+                f"{domain}.flight: Info {info_id} has invalid regex pattern"
+            )
+
+    # Domain-level provenance warnings
+    domain_prov = data.get("provenance", {})
+    if domain_prov:
+        next_audit = domain_prov.get("next_audit_due")
+        if next_audit and next_audit < today:
+            warnings.append(
+                f"{domain}.flight: Domain audit overdue (due {next_audit})"
+            )
+
+    return errors, warnings
 
 
 def parse_domain_spec(data: dict) -> DomainSpec:
     """Parse raw YAML data into a DomainSpec object."""
+    # Parse domain-level provenance if present
+    provenance = None
+    if "provenance" in data:
+        provenance = parse_domain_provenance(data["provenance"])
+
     return DomainSpec(
         domain=data.get("domain", ""),
         version=data.get("version", "1.0.0"),
@@ -140,9 +324,12 @@ def parse_domain_spec(data: dict) -> DomainSpec:
         file_patterns=data.get("file_patterns", []),
         api_file_detection=data.get("api_file_detection", {}),
         rules=parse_rules(data.get("rules", {})),
+        schema_version=data.get("schema_version", SCHEMA_V1),
+        provenance=provenance,
         patterns=data.get("patterns", {}),
         info=data.get("info", {}),
         anti_patterns=data.get("anti_patterns", []),
+        sources=data.get("sources", []),
     )
 
 
@@ -761,6 +948,25 @@ def validate_yaml_syntax(flight_path: Path) -> bool:
         return True
 
 
+def validate_regex_pattern(pattern: str, rule_id: str, domain: str) -> bool:
+    """Validate a regex pattern using Python's re module.
+
+    Returns True if valid, False if syntax errors found.
+
+    Note: Python's re uses PCRE-style regex which is stricter than POSIX ERE
+    (used by grep -E). This catches errors like unbalanced parentheses that
+    BSD grep may not report.
+    """
+    try:
+        re.compile(pattern)
+        return True
+    except re.error as e:
+        print(f"ERROR: {domain}.flight: Rule {rule_id} has invalid regex pattern:", file=sys.stderr)
+        print(f"  Pattern: {pattern}", file=sys.stderr)
+        print(f"  Error: {e}", file=sys.stderr)
+        return False
+
+
 def validate_shell_script(sh_path: Path) -> bool:
     """Validate generated shell script using bash -n (syntax check).
 
@@ -878,11 +1084,16 @@ def compile_domain(domain: str, args) -> int:
         return 0
 
     # Validate the YAML structure
-    errors = validate_spec(data, domain)
+    errors, warnings = validate_spec(data, domain)
     if errors:
         for error in errors:
             print(f"ERROR: {error}", file=sys.stderr)
         return 1
+
+    # Show warnings (don't fail, just inform)
+    if warnings:
+        for warning in warnings:
+            print(f"WARNING: {warning}", file=sys.stderr)
 
     # Parse into structured object
     spec = parse_domain_spec(data)

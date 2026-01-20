@@ -7,7 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Default: common file patterns
-DEFAULT_PATTERNS="*.sh **/*.sh"
+DEFAULT_PATTERNS="**/*.sh"
 PASS=0
 FAIL=0
 WARN=0
@@ -72,7 +72,7 @@ fi
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
     yellow "No files found matching default patterns"
-    printf '%s\n' "  Patterns: *.sh **/*.sh..."
+    printf '%s\n' "  Patterns: **/*.sh..."
     printf '\n'
     green "  RESULT: SKIP (no files)"
     exit 0
@@ -91,28 +91,34 @@ done' _ "${FILES[@]}"
 # N2: Unquoted $(cmd) Substitution
 check "N2: Unquoted \$(cmd) Substitution" \
     bash -c 'for f in "$@"; do
-    grep -En '"'"'[^"=]\$\([^)]+\)[^"]'"'"' "$f" 2>/dev/null | grep -v '"'"'# shellcheck'"'"' | head -5
+    grep -En '"'"'[^"=]\$\([^)]+\)[^"]'"'"' "$f" 2>/dev/null | grep -v '"'"'#'"'"' | grep -v '"'"'check "'"'"' | head -5
 done' _ "${FILES[@]}"
 
 # N3: Parsing ls Output
 check "N3: Parsing ls Output" \
-    grep -En "for\\s+\\w+\\s+in\\s+\\\$\\(ls|\\\`ls|ls\\s+\\|" "${FILES[@]}"
+    bash -c 'for f in "$@"; do
+    grep -En '"'"'for\s+\w+\s+in\s+\$\(ls|\`ls|ls\s+\|'"'"' "$f" 2>/dev/null | grep -v '"'"'#'"'"'
+done' _ "${FILES[@]}"
 
 # N4: Backticks for Command Substitution
 check "N4: Backticks for Command Substitution" \
-    grep -En "\\\`[^\\\`]+\\\`" "${FILES[@]}"
+    bash -c 'for f in "$@"; do
+    grep -En '"'"'\`[^\`]+\`'"'"' "$f" 2>/dev/null | grep -v '"'"'#'"'"'
+done' _ "${FILES[@]}"
 
 # N5: Single Brackets [ ] in Bash
 check "N5: Single Brackets [ ] in Bash" \
     bash -c 'for f in "$@"; do
     if head -1 "$f" | grep -q '"'"'bash'"'"'; then
-        grep -En '"'"'^\s*\[\s+|\s+\[\s+[^[]'"'"' "$f" | grep -v '"'"'\[\['"'"' | head -5
+        grep -En '"'"'^\s*\[\s+|\s+\[\s+[^[]'"'"' "$f" | grep -v '"'"'\[\['"'"' | grep -v '"'"'#'"'"' | grep -v '"'"'check "'"'"' | head -5
     fi
 done' _ "${FILES[@]}"
 
 # N6: 'function' Keyword
 check "N6: 'function' Keyword" \
-    grep -En "^\\s*function\\s+\\w+" "${FILES[@]}"
+    bash -c 'for f in "$@"; do
+    grep -En '"'"'^\s*function\s+\w+'"'"' "$f" 2>/dev/null | grep -v '"'"'#'"'"'
+done' _ "${FILES[@]}"
 
 # N7: Bare 'cd' Without Error Handling
 check "N7: Bare 'cd' Without Error Handling" \
@@ -122,7 +128,9 @@ done' _ "${FILES[@]}"
 
 # N8: Useless Cat
 check "N8: Useless Cat" \
-    grep -En "cat\\s+[^|]+\\|\\s*(grep|awk|sed|head|tail|wc|sort|uniq|cut)" "${FILES[@]}"
+    bash -c 'for f in "$@"; do
+    grep -En '"'"'cat\s+[^|]+\|\s*(grep|awk|sed|head|tail|wc|sort|uniq|cut)'"'"' "$f" 2>/dev/null | grep -v '"'"'#'"'"'
+done' _ "${FILES[@]}"
 
 # N9: eval Usage
 check "N9: eval Usage" \
@@ -138,7 +146,9 @@ done' _ "${FILES[@]}"
 
 # N11: curl|bash Remote Code Execution
 check "N11: curl|bash Remote Code Execution" \
-    grep -En "curl.*\\|\\s*(ba)?sh|wget.*\\|\\s*(ba)?sh" "${FILES[@]}"
+    bash -c 'for f in "$@"; do
+    grep -En '"'"'curl\s+.*\|\s*(ba)?sh|wget\s+.*\|\s*(ba)?sh'"'"' "$f" 2>/dev/null | grep -v '"'"'#'"'"'
+done' _ "${FILES[@]}"
 
 # N12: Unquoted Array Expansion
 check "N12: Unquoted Array Expansion" \

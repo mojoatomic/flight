@@ -2,11 +2,40 @@
 # Source: Migrated from typescript.md and typescript.validate.sh
 
 domain: typescript
-version: 1.0.0
+version: 1.1.0
+schema_version: 2
 description: >
   Type-safe TypeScript patterns that catch errors at compile time.
   Don't lie to the compiler. Use unknown for external data, validate
   before asserting, and let the type system work for you.
+
+provenance:
+  last_full_audit: "2026-01-20"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-20"
+  sources_consulted:
+    - url: "https://www.typescriptlang.org/docs/handbook/"
+      accessed: "2026-01-20"
+      note: "Official TypeScript Handbook"
+    - url: "https://effectivetypescript.com/"
+      accessed: "2026-01-20"
+      note: "Effective TypeScript by Dan Vanderkam"
+    - url: "https://basarat.gitbook.io/typescript/"
+      accessed: "2026-01-20"
+      note: "TypeScript Deep Dive"
+    - url: "https://www.typescriptlang.org/tsconfig/"
+      accessed: "2026-01-20"
+      note: "tsconfig.json reference"
+  coverage:
+    apis_covered:
+      - "TypeScript compiler options"
+      - "Type system fundamentals"
+      - "Type guards and narrowing"
+      - "Utility types"
+    known_gaps:
+      - "Decorators (stage 3)"
+      - "Module resolution details"
+      - "Project references"
 
 file_patterns:
   - "**/*.ts"
@@ -45,6 +74,14 @@ rules:
     description: >
       Every `any` needs a comment explaining why it's necessary.
       Prefer `unknown` with type guards for external data.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.typescriptlang.org/docs/handbook/2/types-from-types.html"
+          accessed: "2026-01-20"
+          quote: "TypeScript also has a special type, any, that you can use whenever you don't want a particular value to cause typechecking errors"
     check:
       type: script
       code: |
@@ -81,6 +118,14 @@ rules:
     description: >
       @ts-ignore suppresses all type errors. If you must use it,
       explain why and reference an issue number if possible.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.typescriptlang.org/docs/handbook/release-notes/typescript-3-9.html"
+          accessed: "2026-01-20"
+          quote: "@ts-expect-error is a new directive... it will error if there's no error to suppress"
     check:
       type: grep
       pattern: '@ts-ignore\s*$'
@@ -108,6 +153,14 @@ rules:
     description: >
       Multiple `!` assertions in one expression (x!.y!.z!) hide real bugs.
       Handle null cases explicitly or use optional chaining with fallbacks.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.typescriptlang.org/docs/handbook/2/everyday-types.html#non-null-assertion-operator-postfix-"
+          accessed: "2026-01-20"
+          quote: "Using ! when you know that the value can't be null or undefined"
     check:
       type: grep
       pattern: '\w+!\.\w+!\.'
@@ -132,6 +185,14 @@ rules:
     description: >
       Don't use `as Type` on JSON.parse or fetch responses.
       External data is unknown until validated.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.typescriptlang.org/docs/handbook/2/narrowing.html#using-type-predicates"
+          accessed: "2026-01-20"
+          quote: "To define a user-defined type guard, we simply need to define a function whose return type is a type predicate"
     check:
       type: grep
       pattern: 'JSON\.parse\([^)]+\)\s+as\s+|\.json\(\)\s+as\s+'
@@ -158,6 +219,14 @@ rules:
     description: >
       Don't use `: object` or `: {}` as parameter types.
       They accept anything and provide no type safety.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.typescriptlang.org/docs/handbook/2/functions.html#object"
+          accessed: "2026-01-20"
+          quote: "The special type object refers to any value that isn't a primitive"
     check:
       type: grep
       pattern: ':\s*object\s*[;,)=\{]|:\s*\{\s*\}\s*[;,)=]'
@@ -182,6 +251,14 @@ rules:
     description: >
       Don't use `string` for fields named status, type, kind, state, or mode.
       Use union types to catch typos at compile time.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions"
+          accessed: "2026-01-20"
+          quote: "When every type in a union contains a common property with literal types, TypeScript considers that to be a discriminated union"
     check:
       type: grep
       pattern: '(status|type|kind|state|mode):\s*string\s*[;,)]'
@@ -206,6 +283,14 @@ rules:
     description: >
       Exported functions must have explicit return types.
       Inferred types can change unexpectedly and break consumers.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.typescriptlang.org/docs/handbook/2/functions.html#return-type-annotations"
+          accessed: "2026-01-20"
+          quote: "Return type annotations appear after the parameter list"
     check:
       type: script
       code: |
@@ -232,6 +317,14 @@ rules:
     description: >
       Don't iterate over JSON.parse() or `as any` results without typing.
       The callback parameters will be implicit any.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.typescriptlang.org/tsconfig/#noImplicitAny"
+          accessed: "2026-01-20"
+          quote: "In some cases where no type annotations are present, TypeScript will fall back to a type of any"
     check:
       type: script
       code: |
@@ -264,6 +357,14 @@ rules:
     description: >
       Enable `strict: true` in tsconfig.json or tsconfig.app.json.
       This enables all strict type-checking options.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.typescriptlang.org/tsconfig/#strict"
+          accessed: "2026-01-20"
+          quote: "The strict flag enables a wide range of type checking behavior that results in stronger guarantees of program correctness"
     check:
       type: script
       code: |
@@ -302,6 +403,14 @@ rules:
     description: >
       Files using `unknown` type should have type guards nearby
       to narrow the type safely.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.typescriptlang.org/docs/handbook/2/narrowing.html#using-type-predicates"
+          accessed: "2026-01-20"
+          quote: "To define a user-defined type guard, we simply need to define a function whose return type is a type predicate"
     check:
       type: script
       code: |
@@ -334,6 +443,14 @@ rules:
     description: >
       Prefer `interface` for object shapes. Use `type` for unions,
       intersections, and computed types.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.typescriptlang.org/docs/handbook/2/everyday-types.html#differences-between-type-aliases-and-interfaces"
+          accessed: "2026-01-20"
+          quote: "If you would like a heuristic, use interface until you need to use features from type"
     check:
       type: script
       code: |
@@ -368,6 +485,14 @@ rules:
     description: >
       Function parameters that receive arrays but don't mutate them
       should use `readonly` to prevent accidental mutation.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.typescriptlang.org/docs/handbook/2/objects.html#readonly-properties"
+          accessed: "2026-01-20"
+          quote: "readonly properties can also change via aliasing... TypeScript doesn't factor in whether properties on two types are readonly"
     check:
       type: script
       code: |
@@ -589,17 +714,3 @@ anti_patterns:
   - pattern: "JSON.parse().map(x =>"
     description: "Implicit any in callback"
     fix: "Type the parsed result first"
-
-# ===========================================================================
-# SOURCES
-# ===========================================================================
-
-sources:
-  - title: "TypeScript Handbook"
-    url: "https://www.typescriptlang.org/docs/handbook/"
-
-  - title: "TypeScript Deep Dive"
-    url: "https://basarat.gitbook.io/typescript/"
-
-  - title: "Effective TypeScript by Dan Vanderkam"
-    url: "https://effectivetypescript.com/"

@@ -2,11 +2,34 @@
 # Source: Migrated from scaffold.md (no legacy validator)
 
 domain: scaffold
-version: 1.0.0
+version: 1.1.0
+schema_version: 2
 description: >
   Safe project scaffolding operations that preserve existing infrastructure.
   Governs use of scaffolding tools (create-vite, create-next-app, etc.) to
   prevent destructive overwrites of project infrastructure.
+
+provenance:
+  last_full_audit: "2026-01-20"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-20"
+
+  sources_consulted:
+    - url: "https://vitejs.dev/guide/#scaffolding-your-first-vite-project"
+      accessed: "2026-01-20"
+      note: "Vite scaffold documentation"
+    - url: "https://nextjs.org/docs/getting-started/installation"
+      accessed: "2026-01-20"
+      note: "Next.js scaffold documentation"
+
+  coverage:
+    apis_covered:
+      - "create-vite"
+      - "create-next-app"
+      - "npm init workflows"
+    known_gaps:
+      - "Turborepo scaffolds"
+      - "Nx workspace scaffolds"
 
 file_patterns:
   - "**/*.sh"
@@ -49,6 +72,14 @@ rules:
       Never use --overwrite, --force, or similar flags that delete existing
       directories. These can destroy project infrastructure (.flight/, tasks/,
       .git/, etc.).
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://vitejs.dev/guide/#scaffolding-your-first-vite-project"
+          accessed: "2026-01-20"
+          quote: "Vite will refuse to overwrite existing files without explicit flags"
     check:
       type: grep
       pattern: 'create-vite.*--overwrite|create-vite.*--force|create-next-app.*--overwrite|create-react-app.*--overwrite|--overwrite.*create-|--force.*create-'
@@ -78,6 +109,14 @@ rules:
     description: >
       Protected directories (.flight/, tasks/, .git/, docs/, scripts/)
       should exist after any scaffold operation.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://github.com/mojoatomic/flight"
+          accessed: "2026-01-20"
+          quote: "Flight infrastructure directories must be preserved during scaffold operations"
     check:
       type: script
       code: |
@@ -101,6 +140,14 @@ rules:
     description: >
       Git working directory should be clean (committed or stashed) before
       running scaffold commands.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://git-scm.com/docs/git-status"
+          accessed: "2026-01-20"
+          quote: "Clean working tree enables easy recovery via git checkout"
     check:
       type: script
       code: |

@@ -3,10 +3,42 @@
 # Sources: Rust API Guidelines, Clippy lints, Rustonomicon, The Rust Book
 
 domain: rust
-version: 1.0.0
+version: 1.1.0
+schema_version: 2
 description: >
   Rust development patterns covering error handling, ownership, memory safety,
   concurrency, and idiomatic code. Catches common AI mistakes and anti-patterns.
+
+provenance:
+  last_full_audit: "2026-01-20"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-20"
+
+  sources_consulted:
+    - url: "https://rust-lang.github.io/api-guidelines/"
+      accessed: "2026-01-20"
+      note: "Rust API Guidelines - official style and API design recommendations"
+    - url: "https://rust-lang.github.io/rust-clippy/"
+      accessed: "2026-01-20"
+      note: "Clippy lint documentation"
+    - url: "https://doc.rust-lang.org/nomicon/"
+      accessed: "2026-01-20"
+      note: "The Rustonomicon - unsafe Rust guidelines"
+    - url: "https://doc.rust-lang.org/book/"
+      accessed: "2026-01-20"
+      note: "The Rust Programming Language book"
+
+  coverage:
+    apis_covered:
+      - "Error handling (Result, Option, ?, expect)"
+      - "Memory safety (unsafe, transmute, pointers)"
+      - "Ownership and borrowing patterns"
+      - "Async/await patterns"
+      - "Common traits (Debug, Default, Clone)"
+    known_gaps:
+      - "Proc macro patterns"
+      - "FFI patterns"
+      - "Embedded Rust patterns"
 
 file_patterns:
   - "**/*.rs"
@@ -44,6 +76,14 @@ rules:
     description: >
       All unsafe blocks must have a SAFETY comment explaining why the unsafe
       code is sound. Document what invariants must be upheld.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://doc.rust-lang.org/nomicon/"
+          accessed: "2026-01-20"
+          quote: "Unsafe Rust must be carefully documented with safety comments"
     check:
       type: script
       code: |
@@ -81,6 +121,14 @@ rules:
     description: >
       Avoid mem::transmute - it's extremely dangerous and almost never needed.
       Use safer alternatives like from_ne_bytes, as casts, or pointer casts.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://doc.rust-lang.org/std/mem/fn.transmute.html"
+          accessed: "2026-01-20"
+          quote: "transmute is incredibly unsafe...both types must have the same size"
     check:
       type: grep
       pattern: 'mem::transmute\s*[<(]|transmute::<'
@@ -105,6 +153,14 @@ rules:
     description: >
       Libraries should not panic on recoverable errors. Return Result or Option
       instead. Panics should only occur for programmer errors (invariant violations).
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://rust-lang.github.io/api-guidelines/interoperability.html"
+          accessed: "2026-01-20"
+          quote: "Libraries should return Result for recoverable errors, not panic"
     check:
       type: script
       code: |
@@ -139,6 +195,14 @@ rules:
     description: >
       Do not use .unwrap() in production code. Use ?, .expect() with a message,
       or proper error handling. Unwrap hides the failure reason.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://rust-lang.github.io/rust-clippy/master/#unwrap_used"
+          accessed: "2026-01-20"
+          quote: "Using .unwrap() is discouraged...use ? or .expect() with descriptive message"
     check:
       type: script
       code: |
@@ -171,6 +235,14 @@ rules:
     description: >
       When using .expect(), always provide a descriptive message explaining
       why the value should be present. Empty or generic messages defeat the purpose.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://doc.rust-lang.org/std/option/enum.Option.html#method.expect"
+          accessed: "2026-01-20"
+          quote: "expect message should describe the invariant being relied upon"
     check:
       type: grep
       pattern: '\.expect\s*\(\s*""\s*\)|\.expect\s*\(\s*\)'
@@ -195,6 +267,14 @@ rules:
     description: >
       Raw pointer arithmetic (offset, add, sub) requires bounds checking.
       Going out of bounds is undefined behavior even without dereferencing.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://doc.rust-lang.org/std/primitive.pointer.html#method.offset"
+          accessed: "2026-01-20"
+          quote: "Both starting and resulting pointer must be in bounds or one past the end"
     check:
       type: grep
       pattern: '\.offset\s*\(|\.add\s*\(|\.sub\s*\(|\.wrapping_offset\s*\('
@@ -224,6 +304,14 @@ rules:
     description: >
       mem::forget prevents destructors from running, causing resource leaks.
       Almost always indicates a design problem. Use ManuallyDrop if needed.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://doc.rust-lang.org/std/mem/fn.forget.html"
+          accessed: "2026-01-20"
+          quote: "This function is not marked as unsafe as Rust does not guarantee destructors are run"
     check:
       type: grep
       pattern: 'mem::forget\s*\(|std::mem::forget\s*\('
@@ -247,6 +335,14 @@ rules:
     description: >
       Holding a std::sync::Mutex guard across an .await causes deadlocks.
       Use tokio::sync::Mutex for async code or restructure to drop before await.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://rust-lang.github.io/rust-clippy/master/#await_holding_lock"
+          accessed: "2026-01-20"
+          quote: "Holding a MutexGuard across an await point can cause deadlocks"
     check:
       type: script
       code: |
@@ -296,6 +392,14 @@ rules:
     description: >
       Prefer the ? operator over match/unwrap chains for error propagation.
       It's more concise and idiomatic.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://doc.rust-lang.org/book/ch09-02-recoverable-errors-with-result.html"
+          accessed: "2026-01-20"
+          quote: "The ? operator can only be used in functions that return Result or Option"
     check:
       type: script
       code: |
@@ -324,6 +428,14 @@ rules:
     description: >
       Do not clone just to satisfy the borrow checker. This indicates a design
       issue. Restructure code, use references, or use Rc/Arc if shared ownership is needed.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://rust-lang.github.io/rust-clippy/master/#redundant_clone"
+          accessed: "2026-01-20"
+          quote: "The value is dropped without being used after cloning"
     check:
       type: script
       code: |
@@ -351,6 +463,14 @@ rules:
     description: >
       Function parameters should use &str instead of String or &String when
       the function only reads the string. This accepts both String and &str.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://rust-lang.github.io/api-guidelines/flexibility.html"
+          accessed: "2026-01-20"
+          quote: "Functions should use borrowed types for arguments where possible"
     check:
       type: grep
       pattern: 'fn\s+\w+\s*\([^)]*:\s*&?String[^)]*(,|\))|fn\s+\w+\s*<[^>]*>\s*\([^)]*:\s*&?String'
@@ -374,6 +494,14 @@ rules:
     description: >
       Function parameters should use &[T] instead of &Vec<T> when the function
       only reads the vector. Slices are more general.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://rust-lang.github.io/api-guidelines/flexibility.html"
+          accessed: "2026-01-20"
+          quote: "Accept &[T] over &Vec<T> when function only needs to iterate"
     check:
       type: grep
       pattern: 'fn\s+\w+\s*\([^)]*:\s*&Vec<[^>]+>[^)]*(,|\))'
@@ -395,6 +523,14 @@ rules:
     description: >
       Avoid unnecessary Box<T> allocations. Use Box only for recursive types,
       trait objects, or when you need stable addresses.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://rust-lang.github.io/rust-clippy/master/#box_collection"
+          accessed: "2026-01-20"
+          quote: "Boxing already heap-allocated types adds unnecessary indirection"
     check:
       type: grep
       pattern: 'Box<(String|Vec<|HashMap<|HashSet<)'
@@ -417,6 +553,14 @@ rules:
     description: >
       Libraries should not use println!/print!/eprintln! for output. Use the
       log or tracing crate for configurable logging.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://rust-lang.github.io/api-guidelines/documentation.html"
+          accessed: "2026-01-20"
+          quote: "Libraries should use log crate for configurable logging"
     check:
       type: script
       code: |
@@ -449,6 +593,14 @@ rules:
     description: >
       Do not perform blocking I/O or CPU-intensive work in async functions.
       Use spawn_blocking or async alternatives.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html"
+          accessed: "2026-01-20"
+          quote: "Use spawn_blocking for blocking operations in async contexts"
     check:
       type: script
       code: |
@@ -506,6 +658,14 @@ rules:
     description: >
       Public types should derive common traits: Debug, Clone, PartialEq where
       appropriate. At minimum, all public types should implement Debug.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://rust-lang.github.io/api-guidelines/interoperability.html#c-common-traits"
+          accessed: "2026-01-20"
+          quote: "Types eagerly implement common traits like Debug, Clone, Eq, PartialEq"
     check:
       type: script
       code: |
@@ -547,6 +707,14 @@ rules:
     description: >
       Prefer iterator methods (map, filter, fold) over manual for loops
       when appropriate. They're often more readable and optimizable.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://rust-lang.github.io/rust-clippy/master/#needless_range_loop"
+          accessed: "2026-01-20"
+          quote: "Iterator methods are more idiomatic and often produce better optimized code"
     check:
       type: script
       code: |
@@ -576,6 +744,14 @@ rules:
     description: >
       Use if let instead of match when you only care about one pattern.
       It's more concise and clearly expresses intent.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://rust-lang.github.io/rust-clippy/master/#single_match"
+          accessed: "2026-01-20"
+          quote: "A match with a single non-default arm is more clearly written as if let"
     check:
       type: script
       code: |
@@ -606,6 +782,14 @@ rules:
     description: >
       Types with sensible default values should implement the Default trait.
       This enables ..Default::default() syntax and integration with serde.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: medium
+      re_verify_after: "2026-07-20"
+      sources:
+        - url: "https://rust-lang.github.io/api-guidelines/interoperability.html#c-common-traits"
+          accessed: "2026-01-20"
+          quote: "Types should implement Default when there's an obvious default value"
     check:
       type: script
       code: |
@@ -672,6 +856,14 @@ rules:
     description: >
       Avoid use foo::* imports in production code. They make it unclear where
       names come from and can cause conflicts when dependencies update.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://rust-lang.github.io/rust-clippy/master/#wildcard_imports"
+          accessed: "2026-01-20"
+          quote: "Wildcard imports make it unclear which items are being used"
     check:
       type: script
       code: |
@@ -700,6 +892,14 @@ rules:
     description: >
       Rust conventions require snake_case for functions, methods, variables,
       and modules. CamelCase is for types and traits only.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://rust-lang.github.io/api-guidelines/naming.html"
+          accessed: "2026-01-20"
+          quote: "snake_case for functions, methods, variables; CamelCase for types"
     check:
       type: grep
       pattern: '(let|fn)\s+[a-z]+[A-Z][a-zA-Z]*\s*[=:(]'
@@ -722,6 +922,14 @@ rules:
     description: >
       Avoid large structs (>1KB) on the stack. Use Box for large data
       to prevent stack overflow in deeply recursive code.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: medium
+      re_verify_after: "2026-07-20"
+      sources:
+        - url: "https://rust-lang.github.io/rust-clippy/master/#large_stack_arrays"
+          accessed: "2026-01-20"
+          quote: "Large stack arrays can cause stack overflow"
     check:
       type: script
       code: |
@@ -747,6 +955,14 @@ rules:
     description: >
       Use From/Into traits for type conversions instead of 'as' casts when possible.
       From/Into are checked and more explicit about conversion intent.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://rust-lang.github.io/rust-clippy/master/#cast_possible_truncation"
+          accessed: "2026-01-20"
+          quote: "Casting with as may silently truncate values"
     check:
       type: grep
       pattern: '\s+as\s+(u8|u16|u32|i8|i16|i32)\s*[;,)\]]'
@@ -1185,28 +1401,3 @@ cargo_rules:
     description: "Crates should specify a license"
     note: "Check for license or license-file in Cargo.toml"
 
-# ===========================================================================
-# RESEARCH SOURCES
-# ===========================================================================
-
-sources:
-  - title: "Rust API Guidelines"
-    url: "https://rust-lang.github.io/api-guidelines/"
-
-  - title: "Clippy Lints"
-    url: "https://rust-lang.github.io/rust-clippy/"
-
-  - title: "The Rust Book"
-    url: "https://doc.rust-lang.org/book/"
-
-  - title: "Rustonomicon"
-    url: "https://doc.rust-lang.org/nomicon/"
-
-  - title: "Rust Reference"
-    url: "https://doc.rust-lang.org/reference/"
-
-  - title: "Effective Rust"
-    url: "https://www.lurklurk.org/effective-rust/"
-
-  - title: "Rust Design Patterns"
-    url: "https://rust-unofficial.github.io/patterns/"

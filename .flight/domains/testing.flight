@@ -2,10 +2,42 @@
 # Source: Migrated from testing.md and testing.validate.sh
 
 domain: testing
-version: 1.0.0
+version: 1.1.0
+schema_version: 2
 description: >
   Universal unit test patterns. Language-agnostic, framework-agnostic.
   Prevents weak tests across JavaScript, Python, Go, and Java.
+
+provenance:
+  last_full_audit: "2026-01-20"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-20"
+  sources_consulted:
+    - url: "https://martinfowler.com/articles/practical-test-pyramid.html"
+      accessed: "2026-01-20"
+      note: "Test pyramid and testing best practices"
+    - url: "https://testing-library.com/docs/guiding-principles"
+      accessed: "2026-01-20"
+      note: "Testing Library guiding principles"
+    - url: "https://jestjs.io/docs/getting-started"
+      accessed: "2026-01-20"
+      note: "Jest testing framework documentation"
+    - url: "https://docs.pytest.org/en/stable/goodpractices.html"
+      accessed: "2026-01-20"
+      note: "pytest good practices"
+    - url: "https://go.dev/doc/tutorial/add-a-test"
+      accessed: "2026-01-20"
+      note: "Go testing tutorial"
+  coverage:
+    apis_covered:
+      - "Jest/Vitest"
+      - "pytest"
+      - "Go testing"
+      - "JUnit"
+    known_gaps:
+      - "Playwright-specific patterns"
+      - "Cypress-specific patterns"
+      - "Property-based testing"
 
 file_patterns:
   - "**/*test*.js"
@@ -46,6 +78,14 @@ rules:
       Never use enumerated test names (test1, test2, testA). They provide
       no information about what the test verifies. Use descriptive names
       that describe the behavior being tested.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://martinfowler.com/bliki/GivenWhenThen.html"
+          accessed: "2026-01-20"
+          quote: "The essential idea is to break down writing a scenario into three sections... this helps understand what behavior the test is verifying"
     check:
       type: grep
       pattern: "test\\(['\"]test[0-9]|it\\(['\"][0-9]|def test[0-9]+|func Test[0-9]+\\("
@@ -67,6 +107,14 @@ rules:
     description: >
       Never write tests without assertions. Empty tests pass but prove
       nothing. Every test must have at least one assertion.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://jestjs.io/docs/expect"
+          accessed: "2026-01-20"
+          quote: "When you're writing tests, you often need to check that values meet certain conditions. expect gives you access to a number of 'matchers'"
     check:
       type: grep
       pattern: "it\\([^)]+,\\s*\\(\\)\\s*=>\\s*\\{\\s*\\}\\)|it\\(['\"]['\"],|def test[^:]+:\\s*pass$|func Test[^{]+\\{\\s*\\}|@Test[^{]+\\{\\s*\\}"
@@ -87,6 +135,14 @@ rules:
     description: >
       Never use hardcoded sleep/delays in tests. They make tests slow and
       flaky. Use waitFor, mock timers, or event-based waiting instead.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://testing-library.com/docs/dom-testing-library/api-async"
+          accessed: "2026-01-20"
+          quote: "Several utilities are provided for dealing with asynchronous code. These utilities allow you to wait for some element or condition to appear"
     check:
       type: grep
       pattern: "sleep\\s*\\(|time\\.sleep|Thread\\.sleep|\\.sleep\\(|usleep|nanosleep|await\\s+new\\s+Promise.*setTimeout"
@@ -109,6 +165,14 @@ rules:
     description: >
       Never test private methods directly. It breaks encapsulation and
       couples tests to implementation. Test through the public interface.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://martinfowler.com/articles/practical-test-pyramid.html"
+          accessed: "2026-01-20"
+          quote: "Test the observable behavior of your code. Don't test implementation details"
     check:
       type: grep
       pattern: "expect\\([^)]*\\._[a-z]|assert.*\\._[a-z]|expect\\([^)]*\\.__"
@@ -130,6 +194,14 @@ rules:
       Never leave async assertions unawaited. The promise is never awaited
       and the test passes even if the assertion fails. Always await or
       return the promise.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://jestjs.io/docs/asynchronous"
+          accessed: "2026-01-20"
+          quote: "Be sure to return (or await) the promise - if you omit the return/await statement, your test will complete before the promise returned"
     check:
       type: grep
       pattern: "\\.then\\s*\\(\\s*[^)]*expect|\\.then\\s*\\(\\s*[^)]*assert"
@@ -163,6 +235,14 @@ rules:
       Avoid shared mutable state between tests. Tests that modify shared
       state can cause order-dependent failures. Each test should own its
       state.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://docs.pytest.org/en/stable/explanation/fixtures.html"
+          accessed: "2026-01-20"
+          quote: "Fixtures are created when first requested by a test, and are destroyed based on their scope"
     check:
       type: script
       code: |
@@ -191,6 +271,14 @@ rules:
       Avoid try-catch blocks that can swallow test failures. If no error
       is thrown, the catch never runs and the test passes incorrectly.
       Use expect().toThrow() or expect().rejects instead.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://jestjs.io/docs/expect#tothrowerror"
+          accessed: "2026-01-20"
+          quote: "Use .toThrow to test that a function throws when it is called"
     check:
       type: script
       code: |
@@ -229,6 +317,14 @@ rules:
     description: >
       Test names should describe the behavior being tested. Names like
       'test', 'works', or 'it' provide no useful information.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://testing-library.com/docs/guiding-principles"
+          accessed: "2026-01-20"
+          quote: "Tests should resemble the way your software is used"
     check:
       type: grep
       pattern: "test\\(['\"]test['\"]|test\\(['\"]works['\"]|it\\(['\"]it['\"]|it\\(['\"]test['\"]"
@@ -250,6 +346,14 @@ rules:
       Avoid if/for/while logic in test bodies. Logic obscures what's being
       tested and can hide bugs. Use explicit test cases or parameterized
       tests instead.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://jestjs.io/docs/api#testeachtablename-fn-timeout"
+          accessed: "2026-01-20"
+          quote: "Use test.each if you keep duplicating the same test with different data"
     check:
       type: script
       code: |

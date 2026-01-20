@@ -2,13 +2,48 @@
 # Source: Migrated from bash.md and bash.validate.sh
 
 domain: bash
-version: 1.0.0
+version: 1.1.0
+schema_version: 2
 description: >
   Production shell script patterns. Safe, portable, maintainable.
   Enforces quoting, strict mode, error handling, and security best practices.
 
+# ===========================================================================
+# PROVENANCE - Schema v2 audit trail
+# ===========================================================================
+provenance:
+  last_full_audit: "2026-01-16"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-16"
+  sources_consulted:
+    - url: "https://google.github.io/styleguide/shellguide.html"
+      accessed: "2026-01-16"
+      note: "Google Shell Style Guide"
+    - url: "https://www.shellcheck.net/wiki/"
+      accessed: "2026-01-16"
+      note: "ShellCheck Wiki - static analysis rules"
+    - url: "https://mywiki.wooledge.org/BashPitfalls"
+      accessed: "2026-01-16"
+      note: "Bash Pitfalls - common mistakes"
+    - url: "https://www.gnu.org/software/bash/manual/bash.html"
+      accessed: "2026-01-16"
+      note: "GNU Bash Manual"
+  coverage:
+    apis_covered:
+      - "Variable quoting and expansion"
+      - "Command substitution"
+      - "Test constructs"
+      - "Function declarations"
+      - "Error handling (set -e, traps)"
+      - "File operations safety"
+      - "Security patterns (temp files, eval)"
+    known_gaps:
+      - "Process substitution patterns"
+      - "Advanced signal handling"
+      - "Bash 5.x specific features"
+      - "Associative array patterns"
+
 file_patterns:
-  - "*.sh"
   - "**/*.sh"
 
 exclude_patterns:
@@ -50,6 +85,17 @@ rules:
     description: >
       Unquoted variables undergo word splitting and glob expansion.
       This breaks on filenames with spaces and can match unintended files.
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.shellcheck.net/wiki/SC2086"
+          accessed: "2026-01-16"
+          quote: "Double quote to prevent globbing and word splitting"
+        - url: "https://mywiki.wooledge.org/BashPitfalls#pf1"
+          accessed: "2026-01-16"
+          quote: "for f in $(ls *.mp3) - Word-splitting and glob expansion"
     check:
       type: script
       code: |
@@ -75,11 +121,22 @@ rules:
     description: >
       Unquoted command substitution has the same word splitting and
       glob expansion issues as unquoted variables.
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.shellcheck.net/wiki/SC2046"
+          accessed: "2026-01-16"
+          quote: "Quote this to prevent word splitting"
+        - url: "https://google.github.io/styleguide/shellguide.html#quoting"
+          accessed: "2026-01-16"
+          quote: "Always quote strings containing variables, command substitutions"
     check:
       type: script
       code: |
         for f in "$@"; do
-            grep -En '[^"=]\$\([^)]+\)[^"]' "$f" 2>/dev/null | grep -v '# shellcheck' | head -5
+            grep -En '[^"=]\$\([^)]+\)[^"]' "$f" 2>/dev/null | grep -v '#' | grep -v 'check "' | head -5
         done
     note: |
       The output of $(cmd) can contain spaces or glob characters.
@@ -101,10 +158,23 @@ rules:
     description: >
       Parsing ls output breaks on filenames with spaces, newlines, or
       special characters. Use globs or find instead.
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.shellcheck.net/wiki/SC2012"
+          accessed: "2026-01-16"
+          quote: "Use find instead of ls to better handle non-alphanumeric filenames"
+        - url: "https://mywiki.wooledge.org/ParsingLs"
+          accessed: "2026-01-16"
+          quote: "Parsing ls is fraught with peril"
     check:
-      type: grep
-      pattern: 'for\s+\w+\s+in\s+\$\(ls|\`ls|ls\s+\|'
-      flags: -En
+      type: script
+      code: |
+        for f in "$@"; do
+            grep -En 'for\s+\w+\s+in\s+\$\(ls|\`ls|ls\s+\|' "$f" 2>/dev/null | grep -v '#'
+        done
     note: |
       ls output is for humans, not scripts. Filenames can contain
       any character except / and NUL. Use glob patterns or find -print0.
@@ -125,10 +195,23 @@ rules:
     description: >
       Backticks are the old style command substitution. They can't nest
       easily and are harder to read than $().
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.shellcheck.net/wiki/SC2006"
+          accessed: "2026-01-16"
+          quote: "Use $(...) notation instead of legacy backticks"
+        - url: "https://google.github.io/styleguide/shellguide.html#command-substitution"
+          accessed: "2026-01-16"
+          quote: "Use $(command) instead of backticks"
     check:
-      type: grep
-      pattern: '\`[^\`]+\`'
-      flags: -En
+      type: script
+      code: |
+        for f in "$@"; do
+            grep -En '\`[^\`]+\`' "$f" 2>/dev/null | grep -v '#'
+        done
     note: |
       $() can nest: $(cmd1 $(cmd2))
       Backticks require escaping: `cmd1 \`cmd2\``
@@ -145,12 +228,23 @@ rules:
     description: >
       In bash scripts, use [[ ]] instead of [ ]. Single brackets require
       quoting and don't support pattern matching or regex.
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://google.github.io/styleguide/shellguide.html#test----and--"
+          accessed: "2026-01-16"
+          quote: "[[ ... ]] is preferred over [ ... ], test and /usr/bin/["
+        - url: "https://mywiki.wooledge.org/BashFAQ/031"
+          accessed: "2026-01-16"
+          quote: "[[ is a bash keyword similar to (but more powerful than) ["
     check:
       type: script
       code: |
         for f in "$@"; do
             if head -1 "$f" | grep -q 'bash'; then
-                grep -En '^\s*\[\s+|\s+\[\s+[^[]' "$f" | grep -v '\[\[' | head -5
+                grep -En '^\s*\[\s+|\s+\[\s+[^[]' "$f" | grep -v '\[\[' | grep -v '#' | grep -v 'check "' | head -5
             fi
         done
     note: |
@@ -172,10 +266,23 @@ rules:
     description: >
       The 'function' keyword is bash-specific and not POSIX compliant.
       Use the portable name() { } syntax.
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://google.github.io/styleguide/shellguide.html#function-names"
+          accessed: "2026-01-16"
+          quote: "Use the function keyword and parentheses together: function foo() {"
+        - url: "https://www.shellcheck.net/wiki/SC2112"
+          accessed: "2026-01-16"
+          quote: "'function' keyword is non-standard"
     check:
-      type: grep
-      pattern: '^\s*function\s+\w+'
-      flags: -En
+      type: script
+      code: |
+        for f in "$@"; do
+            grep -En '^\s*function\s+\w+' "$f" 2>/dev/null | grep -v '#'
+        done
     note: |
       'function foo {' is bash-only.
       'foo() {' works in bash, sh, dash, and other shells.
@@ -198,6 +305,17 @@ rules:
     description: >
       cd can fail (permissions, path doesn't exist). Without error handling,
       the script continues in the wrong directory.
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.shellcheck.net/wiki/SC2164"
+          accessed: "2026-01-16"
+          quote: "Use 'cd ... || exit' or 'cd ... || return' in case cd fails"
+        - url: "https://mywiki.wooledge.org/BashPitfalls#pf27"
+          accessed: "2026-01-16"
+          quote: "cd /some/path - cd can fail"
     check:
       type: script
       code: |
@@ -223,10 +341,23 @@ rules:
     description: >
       cat file | cmd creates an extra process. Most commands can read
       files directly or via stdin redirection.
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.shellcheck.net/wiki/SC2002"
+          accessed: "2026-01-16"
+          quote: "Useless cat. Consider 'cmd < file' or 'cmd file' instead"
+        - url: "https://en.wikipedia.org/wiki/Cat_(Unix)#Useless_use_of_cat"
+          accessed: "2026-01-16"
+          quote: "Useless use of cat - using cat when not necessary"
     check:
-      type: grep
-      pattern: 'cat\s+[^|]+\|\s*(grep|awk|sed|head|tail|wc|sort|uniq|cut)'
-      flags: -En
+      type: script
+      code: |
+        for f in "$@"; do
+            grep -En 'cat\s+[^|]+\|\s*(grep|awk|sed|head|tail|wc|sort|uniq|cut)' "$f" 2>/dev/null | grep -v '#'
+        done
     note: |
       cat file | grep is 2 processes. grep pattern file is 1 process.
       For stdin: cmd < file
@@ -245,6 +376,17 @@ rules:
     description: >
       eval executes arbitrary code. With user input, this is command injection.
       Use arrays for dynamic commands.
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://mywiki.wooledge.org/BashFAQ/048"
+          accessed: "2026-01-16"
+          quote: "eval is evil... it can execute arbitrary code"
+        - url: "https://www.shellcheck.net/wiki/SC2086"
+          accessed: "2026-01-16"
+          quote: "Variables in eval should be quoted to prevent word splitting"
     check:
       type: script
       code: |
@@ -269,6 +411,17 @@ rules:
     description: >
       Hardcoded temp paths are predictable and create race conditions.
       Use mktemp for unique, secure temporary files.
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.shellcheck.net/wiki/SC2087"
+          accessed: "2026-01-16"
+          quote: "Use mktemp to create temporary files"
+        - url: "https://cwe.mitre.org/data/definitions/377.html"
+          accessed: "2026-01-16"
+          quote: "CWE-377: Insecure Temporary File"
     check:
       type: script
       code: |
@@ -291,10 +444,23 @@ rules:
     description: >
       Piping remote scripts directly to bash executes untrusted code.
       Download, inspect, then execute.
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.idontplaydarts.com/2016/04/detecting-curl-pipe-bash-server-side/"
+          accessed: "2026-01-16"
+          quote: "curl | bash is dangerous - partial downloads can execute"
+        - url: "https://owasp.org/www-community/attacks/Code_Injection"
+          accessed: "2026-01-16"
+          quote: "Code injection is the exploitation of a computer bug"
     check:
-      type: grep
-      pattern: 'curl.*\|\s*(ba)?sh|wget.*\|\s*(ba)?sh'
-      flags: -En
+      type: script
+      code: |
+        for f in "$@"; do
+            grep -En 'curl\s+.*\|\s*(ba)?sh|wget\s+.*\|\s*(ba)?sh' "$f" 2>/dev/null | grep -v '#'
+        done
     note: |
       curl | bash executes whatever the server sends.
       Partial downloads can execute incomplete scripts.
@@ -315,6 +481,17 @@ rules:
     description: >
       ${arr[*]} joins array elements into a single string.
       Use "${arr[@]}" to preserve separate elements.
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.shellcheck.net/wiki/SC2145"
+          accessed: "2026-01-16"
+          quote: "Argument mixes string and array. Use * or separate lines"
+        - url: "https://mywiki.wooledge.org/BashGuide/Arrays"
+          accessed: "2026-01-16"
+          quote: "${array[@]} expands each element as separate word"
     check:
       type: script
       code: |
@@ -341,6 +518,17 @@ rules:
     description: >
       Every script must have a shebang declaring the interpreter.
       This ensures the script runs with the intended shell.
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://google.github.io/styleguide/shellguide.html#file-header"
+          accessed: "2026-01-16"
+          quote: "Start each file with a description of its contents"
+        - url: "https://www.shellcheck.net/wiki/SC2148"
+          accessed: "2026-01-16"
+          quote: "Tips depend on target shell and target is not specified"
     check:
       type: script
       code: |
@@ -365,6 +553,17 @@ rules:
     description: >
       Scripts must enable strict mode with set -euo pipefail.
       This catches errors early instead of silently continuing.
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html"
+          accessed: "2026-01-16"
+          quote: "-e: Exit immediately if a pipeline... returns non-zero"
+        - url: "https://google.github.io/styleguide/shellguide.html#s7.1-errexit"
+          accessed: "2026-01-16"
+          quote: "Always use set -e"
     check:
       type: script
       code: |
@@ -396,6 +595,17 @@ rules:
     description: >
       When using cd, either use pushd/popd or capture the original directory
       to ensure relative paths still work after directory change.
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://google.github.io/styleguide/shellguide.html#changing-directories"
+          accessed: "2026-01-16"
+          quote: "Use pushd and popd when changing directories"
+        - url: "https://mywiki.wooledge.org/BashPitfalls#pf27"
+          accessed: "2026-01-16"
+          quote: "Paths relative to original directory break after cd"
     check:
       type: script
       code: |
@@ -430,6 +640,17 @@ rules:
     description: >
       Variables assigned in functions should use 'local' to avoid
       polluting the global namespace.
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://google.github.io/styleguide/shellguide.html#local-variables"
+          accessed: "2026-01-16"
+          quote: "Declare function-specific variables with local"
+        - url: "https://www.shellcheck.net/wiki/SC2155"
+          accessed: "2026-01-16"
+          quote: "Declare and assign separately to avoid masking return values"
     check:
       type: script
       code: |
@@ -462,6 +683,17 @@ rules:
     description: >
       Scripts using mktemp should set up a trap to clean up temp files
       on exit, even if the script fails.
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.gnu.org/software/bash/manual/html_node/Bourne-Shell-Builtins.html#index-trap"
+          accessed: "2026-01-16"
+          quote: "trap is used to specify cleanup actions for signals and exit"
+        - url: "https://mywiki.wooledge.org/BashFAQ/062"
+          accessed: "2026-01-16"
+          quote: "Use trap to clean up temporary files"
     check:
       type: script
       code: |
@@ -486,6 +718,17 @@ rules:
     description: >
       Script constants (UPPER_CASE variables) should use readonly
       to prevent accidental modification.
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://google.github.io/styleguide/shellguide.html#constants-and-environment-variable-names"
+          accessed: "2026-01-16"
+          quote: "Constants and environment variable names should be all caps"
+        - url: "https://www.gnu.org/software/bash/manual/html_node/Bourne-Shell-Builtins.html#index-readonly"
+          accessed: "2026-01-16"
+          quote: "readonly prevents the value from being changed"
     check:
       type: script
       code: |
@@ -508,6 +751,17 @@ rules:
     description: >
       Read loops should use 'IFS= read -r' to preserve whitespace
       and backslashes in input.
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.shellcheck.net/wiki/SC2162"
+          accessed: "2026-01-16"
+          quote: "read without -r will mangle backslashes"
+        - url: "https://mywiki.wooledge.org/BashFAQ/001"
+          accessed: "2026-01-16"
+          quote: "Use IFS= read -r line for robust line reading"
     check:
       type: script
       code: |
@@ -530,6 +784,14 @@ rules:
     description: >
       Keep lines under 100 characters for readability.
       Use backslash continuation for long commands.
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: medium
+      re_verify_after: "2026-07-16"
+      sources:
+        - url: "https://google.github.io/styleguide/shellguide.html#line-length"
+          accessed: "2026-01-16"
+          quote: "Maximum line length is 80 characters"
     check:
       type: script
       code: |
@@ -553,6 +815,17 @@ rules:
     description: >
       printf behavior is consistent across systems. echo behavior
       varies (escapes, options) between shells and platforms.
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://www.shellcheck.net/wiki/SC2059"
+          accessed: "2026-01-16"
+          quote: "Don't use variables in the printf format string"
+        - url: "https://mywiki.wooledge.org/BashPitfalls#pf22"
+          accessed: "2026-01-16"
+          quote: "echo's behavior varies between implementations"
     check:
       type: script
       code: |

@@ -2,7 +2,8 @@
 # Source: Migrated from react.md and react.validate.sh
 
 domain: react
-version: 1.0.0
+version: 1.1.0
+schema_version: 2
 description: >
   Production React patterns for functional components, hooks, and state management.
   Prevents common performance issues, broken reconciliation, and Rules of Hooks violations.
@@ -17,6 +18,42 @@ exclude_patterns:
   - "**/build/**"
   - "**/.next/**"
   - "**/.git/**"
+
+provenance:
+  last_full_audit: "2026-01-20"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-20"
+
+  sources_consulted:
+    - url: "https://react.dev/reference/rules/rules-of-hooks"
+      accessed: "2026-01-20"
+      note: "Official Rules of Hooks documentation"
+    - url: "https://react.dev/learn/thinking-in-react"
+      accessed: "2026-01-20"
+      note: "Thinking in React patterns"
+    - url: "https://react.dev/reference/react/useCallback"
+      accessed: "2026-01-20"
+      note: "useCallback hook documentation"
+    - url: "https://react.dev/reference/react/useMemo"
+      accessed: "2026-01-20"
+      note: "useMemo hook documentation"
+    - url: "https://react.dev/learn/rendering-lists#keeping-list-items-in-order-with-key"
+      accessed: "2026-01-20"
+      note: "Keys and list rendering"
+
+  coverage:
+    apis_covered:
+      - "Hooks (useState, useEffect, useMemo, useCallback, useRef)"
+      - "Rules of Hooks (conditional hooks, dependency arrays)"
+      - "Component patterns (naming, props, structure)"
+      - "State management (mutation, references)"
+      - "Performance (memoization, re-renders)"
+    known_gaps:
+      - "Server Components (React 19)"
+      - "Suspense boundaries"
+      - "Error boundaries"
+      - "React Router patterns"
+      - "State management libraries (Redux, Zustand)"
 
 # ===========================================================================
 # RULES
@@ -40,6 +77,14 @@ rules:
     title: Inline Objects in JSX Props
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://react.dev/reference/react/useMemo"
+          accessed: "2026-01-20"
+          quote: "useMemo is a React Hook that lets you cache the result of a calculation between re-renders"
     description: >
       Creates new object reference every render, causing unnecessary re-renders
       of child components even when values haven't changed.
@@ -66,6 +111,14 @@ rules:
     title: Inline Functions in JSX Props
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://react.dev/reference/react/useCallback"
+          accessed: "2026-01-20"
+          quote: "useCallback is a React Hook that lets you cache a function definition between re-renders"
     description: >
       Creates new function reference every render, causing unnecessary re-renders
       and breaking React.memo optimization.
@@ -89,6 +142,14 @@ rules:
     title: Index as Key
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://react.dev/learn/rendering-lists#keeping-list-items-in-order-with-key"
+          accessed: "2026-01-20"
+          quote: "Keys tell React which array item each component corresponds to, so that it can match them up later"
     description: >
       Using array index as key breaks React reconciliation on reorder/delete.
       Items get wrong state and animations break.
@@ -111,6 +172,14 @@ rules:
     title: Direct State Mutation
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://react.dev/learn/updating-arrays-in-state"
+          accessed: "2026-01-20"
+          quote: "In React, you should treat arrays in state as read-only"
     description: >
       Never mutate state directly with push/pop/splice. React won't detect
       the change and won't re-render.
@@ -138,6 +207,14 @@ rules:
     title: Missing Dependency Arrays
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://react.dev/reference/react/useEffect#specifying-reactive-dependencies"
+          accessed: "2026-01-20"
+          quote: "The list of dependencies must have a constant number of items and be written inline"
     description: >
       useEffect/useMemo/useCallback with empty deps but referencing
       outer variables causes stale closures.
@@ -159,6 +236,14 @@ rules:
     title: Conditional Hooks
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://react.dev/reference/rules/rules-of-hooks"
+          accessed: "2026-01-20"
+          quote: "Only call Hooks at the top level. Don't call Hooks inside loops, conditions, or nested functions"
     description: >
       Calling hooks inside conditions/loops breaks Rules of Hooks.
       React tracks hooks by call order which must be stable.
@@ -185,6 +270,14 @@ rules:
     title: Generic Component Names
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://react.dev/learn/your-first-component#defining-a-component"
+          accessed: "2026-01-20"
+          quote: "React component names must start with a capital letter"
     description: >
       Component functions named Item, Card, Component, etc. are too generic.
       Use domain-specific names that describe what the component represents.
@@ -209,6 +302,14 @@ rules:
     title: Export Default (except Next.js special files)
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: medium
+      re_verify_after: "2026-07-20"
+      sources:
+        - url: "https://nextjs.org/docs/app/building-your-application/routing/pages"
+          accessed: "2026-01-20"
+          quote: "A page is UI that is unique to a route. You can define a page by default exporting a component"
     description: >
       Use named exports for better refactoring support and explicit imports.
       Exception: Next.js App Router special files require export default.
@@ -252,6 +353,14 @@ rules:
     title: Props Named data/info/item/value
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://react.dev/learn/passing-props-to-a-component"
+          accessed: "2026-01-20"
+          quote: "Props let you think about parent and child components independently"
     description: >
       Generic prop names like data, info, item hide intent.
       Use domain-specific names that describe the prop's purpose.
@@ -274,6 +383,14 @@ rules:
     title: Console.log in Components
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://react.dev/learn/react-developer-tools"
+          accessed: "2026-01-20"
+          quote: "Use React Developer Tools to inspect React components"
     description: >
       Console statements in components indicate incomplete development
       or forgotten debugging code. Remove before committing.
@@ -296,6 +413,14 @@ rules:
     title: Ternary Returning Boolean Literals
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Conditional_Operator"
+          accessed: "2026-01-20"
+          quote: "The conditional (ternary) operator is the only JavaScript operator that takes three operands"
     description: >
       condition ? true : false is always redundant.
       The condition is already boolean (or truthy/falsy).
@@ -319,6 +444,14 @@ rules:
     title: Redundant Boolean Comparisons
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Strict_equality"
+          accessed: "2026-01-20"
+          quote: "The strict equality (===) operator checks whether its two operands are equal"
     description: >
       Comparing to true/false explicitly is redundant.
       Booleans are already truthy/falsy.
@@ -346,6 +479,14 @@ rules:
     title: Handle Loading State
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://react.dev/reference/react/Suspense"
+          accessed: "2026-01-20"
+          quote: "Suspense lets you display a fallback until its children have finished loading"
     description: >
       Components with async operations (fetch, useQuery, useSWR) should
       handle loading state to prevent flash of empty content.
@@ -382,6 +523,14 @@ rules:
     title: Handle Error State
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary"
+          accessed: "2026-01-20"
+          quote: "Error boundaries catch errors during rendering, in lifecycle methods, and in constructors"
     description: >
       Components with async operations should handle error state
       to show meaningful feedback instead of crashing.
@@ -407,6 +556,14 @@ rules:
     title: Boolean Props Use Prefix
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://react.dev/learn/passing-props-to-a-component#passing-jsx-as-children"
+          accessed: "2026-01-20"
+          quote: "When you nest content inside a JSX tag, the parent component will receive that content in a prop called children"
     description: >
       Boolean props should use is/has/can/should prefix for clarity.
       Exception: HTML attributes like disabled, checked, selected.
@@ -427,6 +584,14 @@ rules:
     title: useCallback for Handlers
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://react.dev/reference/react/useCallback"
+          accessed: "2026-01-20"
+          quote: "useCallback is a React Hook that lets you cache a function definition between re-renders"
     description: >
       Event handlers defined with const should use useCallback
       when passed to child components to prevent unnecessary re-renders.
@@ -613,16 +778,3 @@ anti_patterns:
     description: "Flash of content"
     fix: "Early return pattern"
 
-# ===========================================================================
-# SOURCES
-# ===========================================================================
-
-sources:
-  - title: "React Documentation - Rules of Hooks"
-    url: "https://react.dev/reference/rules/rules-of-hooks"
-
-  - title: "React Documentation - Thinking in React"
-    url: "https://react.dev/learn/thinking-in-react"
-
-  - title: "React Patterns"
-    url: "https://reactpatterns.com/"

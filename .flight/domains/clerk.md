@@ -237,14 +237,23 @@ Clerk authentication and multi-tenant organization patterns for SaaS application
    db.select().from(posts).where(eq(posts.orgId, orgId))
    ```
 
-6. **Handle Organization Switching** - When a user switches organizations, the app must handle the context change - clearing cached data and updating UI.
+6. **Handle Organization Switching** - When a user switches organizations, the app must handle the context change. Use afterSelectOrganizationUrl for navigation or build a custom flow with clerk.setActive() for programmatic control.
 
    ```
+   // URL-based navigation (recommended)
    <OrganizationSwitcher
-     afterSelectOrganization={() => {
-       router.refresh()
-     }}
+     afterSelectOrganizationUrl="/dashboard/:slug"
+     afterCreateOrganizationUrl="/onboarding/:slug"
    />
+   // Custom flow with programmatic control
+   import { useClerk } from '@clerk/nextjs'
+   
+   const { setActive } = useClerk()
+   
+   async function switchOrg(orgId: string) {
+     await setActive({ organization: orgId })
+     router.refresh()
+   }
    ```
 
 ### SHOULD (validator warns)
@@ -262,18 +271,24 @@ Clerk authentication and multi-tenant organization patterns for SaaS application
 import { OrganizationSwitcher } from '@clerk/nextjs'
 
 <OrganizationSwitcher
-  afterSelectOrganization={() => router.refresh()}
+  afterSelectOrganizationUrl="/dashboard/:slug"
   appearance={{...}}
 />
+
+Available URL props (all accept dynamic segments :id, :slug):
+- afterSelectOrganizationUrl
+- afterCreateOrganizationUrl
+- afterLeaveOrganizationUrl
 
    ```
    import { OrganizationSwitcher } from '@clerk/nextjs'
    
    export function OrgSwitcher() {
-     const router = useRouter()
      return (
        <OrganizationSwitcher
-         afterSelectOrganization={() => router.refresh()}
+         afterSelectOrganizationUrl="/dashboard/:slug"
+         afterCreateOrganizationUrl="/onboarding/:slug"
+         hidePersonal={true}
        />
      )
    }

@@ -1,6 +1,40 @@
 domain: go
-version: 1.0.0
+version: 1.1.0
+schema_version: 2
 description: Go (Golang) development patterns. Covers error handling, naming, concurrency, and common footguns.
+
+provenance:
+  last_full_audit: "2026-01-16"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-16"
+
+  sources_consulted:
+    - url: "https://go.dev/doc/effective_go"
+      accessed: "2026-01-16"
+      note: "Effective Go - official guide to writing clear, idiomatic Go code"
+    - url: "https://go.dev/wiki/CodeReviewComments"
+      accessed: "2026-01-16"
+      note: "Go Code Review Comments - common mistakes during code reviews"
+    - url: "https://github.com/uber-go/guide"
+      accessed: "2026-01-16"
+      note: "Uber Go Style Guide - production-tested Go patterns"
+    - url: "https://google.github.io/styleguide/go/"
+      accessed: "2026-01-16"
+      note: "Google Go Style Guide - Google's internal Go standards"
+    - url: "https://go.dev/wiki/TestComments"
+      accessed: "2026-01-16"
+      note: "Go Test Comments - testing best practices"
+
+  coverage:
+    apis_covered:
+      - "Error handling patterns"
+      - "Naming conventions"
+      - "Concurrency (goroutines, channels)"
+      - "Package structure"
+      - "Testing patterns"
+    known_gaps:
+      - "Generics patterns (Go 1.18+) not fully covered"
+      - "Module versioning not covered"
 
 file_patterns:
   - "**/*.go"
@@ -33,6 +67,14 @@ rules:
     title: Ignored Errors
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://go.dev/wiki/CodeReviewComments#handle-errors"
+          accessed: "2026-01-16"
+          quote: "Do not discard errors using _ variables. If a function returns an error, check it to make sure the function succeeded."
     description: Do not discard errors using _ variables. Handle, return, or log them.
     check:
       type: grep
@@ -61,6 +103,14 @@ rules:
     title: Panic for Normal Error Handling
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://go.dev/doc/effective_go#errors"
+          accessed: "2026-01-16"
+          quote: "The usual way to report an error to a caller is to return an error as an extra return value."
     description: Don't use panic for normal error handling. Use error returns.
     check:
       type: grep
@@ -82,6 +132,14 @@ rules:
     title: math/rand for Security
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://go.dev/wiki/CodeReviewComments#crypto-rand"
+          accessed: "2026-01-16"
+          quote: "Do not use package math/rand to generate keys, even throwaway ones. Use crypto/rand.Reader instead."
     description: Do not use math/rand for cryptographic purposes. Use crypto/rand.
     check:
       type: grep
@@ -103,6 +161,14 @@ rules:
     title: Defer in Loop
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://go.dev/doc/effective_go#defer"
+          accessed: "2026-01-16"
+          quote: "The deferred call's arguments are evaluated immediately, but the function call is not executed until the surrounding function returns."
     description: Defer in loops can cause resource leaks - defers don't run until function returns
     check:
       type: grep
@@ -137,6 +203,14 @@ rules:
     title: Goroutine without Lifetime Management
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://go.dev/wiki/CodeReviewComments#goroutine-lifetimes"
+          accessed: "2026-01-16"
+          quote: "When you spawn goroutines, make it clear when - or whether - they exit."
     description: Goroutines must have clear termination conditions to prevent leaks
     check:
       type: script
@@ -177,6 +251,14 @@ rules:
     title: Unbuffered Channel in Select with Default
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://go.dev/doc/effective_go#channels"
+          accessed: "2026-01-16"
+          quote: "A send on an unbuffered channel blocks until another goroutine is ready to receive."
     description: Sending to unbuffered channel in select with default may silently drop messages
     check:
       type: grep
@@ -205,6 +287,14 @@ rules:
     title: Nil Map Write
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://go.dev/doc/effective_go#maps"
+          accessed: "2026-01-16"
+          quote: "An attempt to fetch a map value with a key that is not present in the map will return the zero value... but a nil map behaves differently when you try to store into it."
     description: Writing to a nil map causes a panic
     check:
       type: grep
@@ -227,6 +317,14 @@ rules:
     title: Range Loop Variable Capture (Pre-Go 1.22)
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://go.dev/wiki/CommonMistakes#using-goroutines-on-loop-iterator-variables"
+          accessed: "2026-01-16"
+          quote: "Using goroutines on loop iterator variables: In Go, the loop variable is reused for each iteration, so the goroutine may see the same value."
     description: Loop variable capture in goroutines/closures - all share the same variable
     check:
       type: grep
@@ -266,6 +364,14 @@ rules:
     title: MixedCaps Naming
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://go.dev/doc/effective_go#mixed-caps"
+          accessed: "2026-01-16"
+          quote: "The convention in Go is to use MixedCaps or mixedCaps rather than underscores to write multiword names."
     description: Go uses MixedCaps or mixedCaps, not underscores
     check:
       type: grep
@@ -289,6 +395,14 @@ rules:
     title: Initialisms Must Be Consistent Case
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://go.dev/wiki/CodeReviewComments#initialisms"
+          accessed: "2026-01-16"
+          quote: "Words in names that are initialisms or acronyms should have a consistent case. URL should appear as URL or url, never Url."
     description: Initialisms like URL, HTTP, ID should be all caps or all lower
     check:
       type: grep
@@ -311,6 +425,14 @@ rules:
     title: Exported Names Must Have Doc Comments
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://go.dev/wiki/CodeReviewComments#doc-comments"
+          accessed: "2026-01-16"
+          quote: "All top-level, exported names should have doc comments, as should non-trivial unexported type or function declarations."
     description: All exported names should have doc comments
     check:
       type: script
@@ -341,6 +463,14 @@ rules:
     title: Context as First Parameter
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://go.dev/wiki/CodeReviewComments#contexts"
+          accessed: "2026-01-16"
+          quote: "Most functions that use a Context should accept it as their first parameter."
     description: Functions using Context should accept it as their first parameter
     check:
       type: grep
@@ -361,6 +491,14 @@ rules:
     title: Error Variable Naming
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://go.dev/wiki/CodeReviewComments#error-strings"
+          accessed: "2026-01-16"
+          quote: "Error types should be of the form FooError and error values should be of the form ErrFoo."
     description: Error variables should be named err or have Err prefix for package-level
     check:
       type: grep
@@ -381,6 +519,14 @@ rules:
     title: Package Names Must Be Lowercase
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://go.dev/doc/effective_go#package-names"
+          accessed: "2026-01-16"
+          quote: "By convention, packages are given lower case, single-word names; there should be no need for underscores or mixedCaps."
     description: Package names should be lowercase, single words without underscores
     check:
       type: grep
@@ -403,6 +549,14 @@ rules:
     title: Receiver Name Consistency
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://go.dev/wiki/CodeReviewComments#receiver-names"
+          accessed: "2026-01-16"
+          quote: "Don't use generic names such as 'me', 'this' or 'self', identifiers typical of object-oriented languages."
     description: Receiver names should be short and consistent across methods
     check:
       type: grep
@@ -425,6 +579,14 @@ rules:
     title: Error Strings Lowercase
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://go.dev/wiki/CodeReviewComments#error-strings"
+          accessed: "2026-01-16"
+          quote: "Error strings should not be capitalized (unless beginning with proper nouns or acronyms) or end with punctuation."
     description: Error strings should not be capitalized or end with punctuation
     check:
       type: grep
@@ -473,6 +635,14 @@ rules:
     title: Wrap Errors with Context
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://go.dev/blog/go1.13-errors"
+          accessed: "2026-01-16"
+          quote: "The %w verb is used to wrap an error, and the unwrap interface allows examining wrapped errors."
     description: Errors should be wrapped with context using fmt.Errorf and %w
     check:
       type: script
@@ -504,6 +674,14 @@ rules:
     title: Table-Driven Tests
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://go.dev/wiki/TableDrivenTests"
+          accessed: "2026-01-16"
+          quote: "Writing good tests is not trivial, but in many situations a lot of ground can be covered with table-driven tests."
     description: Use table-driven tests for multiple test cases
     check:
       type: script
@@ -548,6 +726,14 @@ rules:
     title: Prefer var for Zero Values
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://go.dev/wiki/CodeReviewComments#declaring-empty-slices"
+          accessed: "2026-01-16"
+          quote: "The nil slice is the preferred style... var t []string is preferred over t := []string{}."
     description: Use var declaration for zero-value slices and maps
     check:
       type: grep
@@ -568,6 +754,14 @@ rules:
     title: Synchronous Functions Preferred
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://go.dev/wiki/CodeReviewComments#synchronous-functions"
+          accessed: "2026-01-16"
+          quote: "Prefer synchronous functions - functions which return their results directly or finish any callbacks or channel ops before returning."
     description: Prefer synchronous functions over asynchronous ones
     check:
       type: grep
@@ -598,6 +792,14 @@ rules:
     title: Project Structure
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: medium
+      re_verify_after: "2026-07-16"
+      sources:
+        - url: "https://github.com/golang-standards/project-layout"
+          accessed: "2026-01-16"
+          quote: "This is a basic layout for Go application projects. It's not an official standard."
     description: Follow standard Go project layout conventions
     check:
       type: script
@@ -641,6 +843,14 @@ rules:
     title: Use t.Helper in Test Helpers
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://go.dev/wiki/TestComments#test-helpers"
+          accessed: "2026-01-16"
+          quote: "Helper functions that are called from tests should call t.Helper() to ensure that stack traces point to the test, not the helper."
     description: Test helper functions should call t.Helper()
     check:
       type: script
@@ -687,6 +897,14 @@ rules:
     title: Avoid Global State
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://github.com/uber-go/guide/blob/master/style.md#avoid-mutable-globals"
+          accessed: "2026-01-16"
+          quote: "Avoid mutating global variables, instead opting for dependency injection."
     description: Avoid package-level variables; pass dependencies explicitly
     check:
       type: grep
@@ -720,6 +938,14 @@ rules:
     title: Mutex Field Naming
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://github.com/uber-go/guide/blob/master/style.md#mutex-zero-value-is-valid"
+          accessed: "2026-01-16"
+          quote: "Name the mutex mu and place it above the fields it protects."
     description: Mutex fields should be named mu and placed above the fields they protect
     check:
       type: grep
@@ -747,6 +973,14 @@ rules:
     title: Check Errors Before Using Defer
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://go.dev/doc/effective_go#defer"
+          accessed: "2026-01-16"
+          quote: "Deferring a call to a function such as Close has two advantages... the error handling is clearer."
     description: Check resource creation errors before deferring cleanup
     check:
       type: grep
@@ -772,6 +1006,14 @@ rules:
     title: Indent Error Flow
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://go.dev/wiki/CodeReviewComments#indent-error-flow"
+          accessed: "2026-01-16"
+          quote: "Try to keep the normal code path at a minimal indentation, and indent the error handling, dealing with it first."
     description: Keep normal code path at minimal indentation, handle errors first
     check:
       type: grep
@@ -799,6 +1041,14 @@ rules:
     title: Avoid Init Functions
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://github.com/uber-go/guide/blob/master/style.md#avoid-init"
+          accessed: "2026-01-16"
+          quote: "Avoid init() where possible. When init() is unavoidable or desirable... init() should not depend on the order of other init() functions."
     description: Prefer explicit initialization over init() functions
     check:
       type: grep
@@ -826,6 +1076,14 @@ rules:
     title: Use Meaningful Test Names
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-16"
+      confidence: high
+      re_verify_after: "2027-01-16"
+      sources:
+        - url: "https://go.dev/wiki/TestComments#test-function-names"
+          accessed: "2026-01-16"
+          quote: "A test function name should describe what the test does... the name should convey what is being tested."
     description: Test names should describe what is being tested
     check:
       type: grep

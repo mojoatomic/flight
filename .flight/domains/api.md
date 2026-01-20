@@ -146,7 +146,7 @@ REST/HTTP API design patterns. Framework-agnostic. Prevents common integration f
    504 Timeout - Upstream timeout
    ```
 
-3. **Consistent Error Response Format (RFC 7807)** - Use Problem Details for HTTP APIs
+3. **Consistent Error Response Format (RFC 9457)** - Use Problem Details for HTTP APIs (RFC 9457 supersedes RFC 7807)
    ```
    {
      "type": "https://api.example.com/errors/validation",

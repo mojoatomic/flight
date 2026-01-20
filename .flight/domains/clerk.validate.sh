@@ -257,12 +257,12 @@ done' _ "${FILES[@]}"
 # M6: Handle Organization Switching
 check "M6: Handle Organization Switching" \
     bash -c 'for f in "$@"; do
-  # Check client files using organization hooks
+  # Check client files using OrganizationSwitcher
   if grep -q "'"'"'use client'"'"'" "$f" 2>/dev/null; then
-    if grep -qE "useOrganization|OrganizationSwitcher" "$f" 2>/dev/null; then
-      # Should handle org changes
-      if ! grep -qE "onOrganizationSelect|organization\.id.*useEffect|router\.refresh|revalidate" "$f" 2>/dev/null; then
-        echo "$f: org component without change handling"
+    if grep -qE "OrganizationSwitcher" "$f" 2>/dev/null; then
+      # Should have URL prop or custom navigation handling
+      if ! grep -qE "afterSelectOrganizationUrl|setActive|router\.(push|replace|refresh)" "$f" 2>/dev/null; then
+        echo "$f: OrganizationSwitcher without navigation handling"
       fi
     fi
   fi
