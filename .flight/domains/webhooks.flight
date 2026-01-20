@@ -2,11 +2,40 @@
 # Source: Migrated from webhooks.md and webhooks.validate.sh
 
 domain: webhooks
-version: 1.0.0
+version: 1.1.0
+schema_version: 2
 description: >
   Outbound event notification design. Covers both webhook providers (sending)
   and consumers (receiving). Prevents integration failures, data loss, and
   security breaches.
+
+provenance:
+  last_full_audit: "2026-01-20"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-20"
+  sources_consulted:
+    - url: "https://www.standardwebhooks.com/"
+      accessed: "2026-01-20"
+      note: "Standard Webhooks specification"
+    - url: "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery"
+      accessed: "2026-01-20"
+      note: "OWASP SSRF prevention"
+    - url: "https://docs.stripe.com/webhooks/best-practices"
+      accessed: "2026-01-20"
+      note: "Stripe webhook best practices"
+    - url: "https://docs.github.com/en/webhooks/using-webhooks/best-practices-for-using-webhooks"
+      accessed: "2026-01-20"
+      note: "GitHub webhook best practices"
+  coverage:
+    apis_covered:
+      - "Webhook security patterns"
+      - "HMAC signature verification"
+      - "Retry and backoff strategies"
+      - "SSRF prevention"
+    known_gaps:
+      - "GraphQL subscriptions"
+      - "Server-Sent Events"
+      - "WebSocket alternatives"
 
 file_patterns:
   - "**/webhook*.js"
@@ -48,6 +77,14 @@ rules:
     description: >
       All webhook traffic must be encrypted. Plain HTTP exposes payloads
       to attackers via MITM attacks.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.standardwebhooks.com/"
+          accessed: "2026-01-20"
+          quote: "Webhooks must be delivered over HTTPS"
     check:
       type: script
       code: |
@@ -70,6 +107,14 @@ rules:
     description: >
       Never include secrets, passwords, API keys, SSNs, or credit card numbers
       in webhook payloads. Payloads may be logged or intercepted.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://docs.stripe.com/webhooks/best-practices"
+          accessed: "2026-01-20"
+          quote: "Never include sensitive information in webhook payloads"
     check:
       type: grep
       pattern: 'webhook.*password|webhook.*secret|webhook.*api_key|payload.*password|payload.*ssn|payload.*credit.?card'
@@ -90,6 +135,14 @@ rules:
     description: >
       Never use === or == for signature comparison. String comparison is
       vulnerable to timing attacks that reveal the signature byte-by-byte.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.standardwebhooks.com/"
+          accessed: "2026-01-20"
+          quote: "Use a constant-time comparison function to compare signatures"
     check:
       type: grep
       pattern: 'signature\s*(===?|!==?)\s*(expected|computed|hash)|signature\.equals\('
@@ -112,6 +165,14 @@ rules:
     description: >
       Never retry webhook delivery in an infinite loop without backoff.
       This hammers failing endpoints and wastes resources.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://docs.stripe.com/webhooks/best-practices"
+          accessed: "2026-01-20"
+          quote: "Use exponential backoff for retries"
     check:
       type: grep
       pattern: 'while.*true.*send|while.*retry.*webhook|for\s*\(;;\).*webhook'
@@ -134,6 +195,14 @@ rules:
     description: >
       Never allow file://, ftp://, gopher://, or other non-HTTPS schemes
       in webhook URLs. These enable SSRF attacks.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery"
+          accessed: "2026-01-20"
+          quote: "SSRF attacks can be prevented by validating and sanitizing all client-supplied input data"
     check:
       type: grep
       pattern: 'webhook.*file://|webhook.*ftp://|webhook.*gopher://|url.*file://|endpoint.*http://[^l]'
@@ -159,6 +228,14 @@ rules:
     description: >
       Webhook handlers should verify HMAC signatures before processing.
       Without verification, any request claiming to be a webhook will be accepted.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://docs.stripe.com/webhooks#verify-official-libraries"
+          accessed: "2026-01-20"
+          quote: "Use webhook signatures to verify that Stripe sent a webhook event"
     check:
       type: script
       code: |
@@ -194,6 +271,14 @@ rules:
     description: >
       Webhook handlers should enqueue work for async processing rather than
       blocking. Synchronous processing causes provider timeouts and retries.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://docs.stripe.com/webhooks/best-practices"
+          accessed: "2026-01-20"
+          quote: "Return a 200 response quickly. Any complex logic should happen after the response is sent"
     check:
       type: script
       code: |
@@ -225,6 +310,14 @@ rules:
     description: >
       Webhook handlers should use delivery IDs to deduplicate.
       Webhooks are delivered at-least-once, so duplicates will occur.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://docs.stripe.com/webhooks/best-practices"
+          accessed: "2026-01-20"
+          quote: "Handle duplicate events. Webhook endpoints might occasionally receive the same event more than once"
     check:
       type: script
       code: |
@@ -261,6 +354,14 @@ rules:
     description: >
       Webhook URL registration should validate URLs and block private IPs
       to prevent SSRF attacks targeting internal services.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery"
+          accessed: "2026-01-20"
+          quote: "Applications should validate and whitelist user-supplied URLs"
     check:
       type: script
       code: |
@@ -294,6 +395,14 @@ rules:
     description: >
       Webhook handlers should check and route by event type.
       Event types enable proper handling of different webhook events.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.standardwebhooks.com/"
+          accessed: "2026-01-20"
+          quote: "Each webhook contains a type field indicating what event occurred"
     check:
       type: script
       code: |
@@ -319,6 +428,14 @@ rules:
     description: >
       Webhook handlers should check timestamps for replay attack prevention
       and out-of-order detection.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.standardwebhooks.com/"
+          accessed: "2026-01-20"
+          quote: "The timestamp is included to prevent replay attacks"
     check:
       type: script
       code: |
@@ -344,6 +461,14 @@ rules:
     description: >
       Webhook providers should sign payloads with HMAC to enable
       consumer verification.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.standardwebhooks.com/"
+          accessed: "2026-01-20"
+          quote: "Signatures are computed using HMAC with SHA-256"
     check:
       type: script
       code: |
@@ -356,6 +481,14 @@ rules:
     description: >
       Webhook handlers should return 2xx within the timeout window.
       Providers interpret response codes to determine retry behavior.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://docs.stripe.com/webhooks/best-practices"
+          accessed: "2026-01-20"
+          quote: "Return a 200 status code quickly"
     check:
       type: script
       code: |
@@ -368,6 +501,14 @@ rules:
     description: >
       Webhook providers should implement exponential backoff with
       maximum retry limits.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://docs.github.com/en/webhooks/using-webhooks/best-practices-for-using-webhooks"
+          accessed: "2026-01-20"
+          quote: "GitHub will attempt to redeliver failed webhooks for up to three days"
     check:
       type: script
       code: |
@@ -380,6 +521,14 @@ rules:
     description: >
       Failed webhooks should be routed to a dead letter queue after
       exhausting retries for manual inspection and replay.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://docs.stripe.com/webhooks/best-practices"
+          accessed: "2026-01-20"
+          quote: "Implement a dead letter queue for failed webhooks"
     check:
       type: script
       code: |
@@ -391,6 +540,14 @@ rules:
     mechanical: true
     description: >
       Webhook providers should validate URLs before accepting registration.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery"
+          accessed: "2026-01-20"
+          quote: "Validate all user-supplied URLs before making requests"
     check:
       type: script
       code: |
@@ -409,6 +566,14 @@ rules:
     description: >
       Webhooks should keep payloads small (<20KB). Large payloads are
       slow and timeout-prone. Send references instead.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.standardwebhooks.com/"
+          accessed: "2026-01-20"
+          quote: "Keep payloads small and include IDs for fetching additional data"
     check:
       type: script
       code: |
@@ -420,6 +585,14 @@ rules:
     mechanical: true
     description: >
       Webhook handlers should log activity for debugging and audit trails.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://docs.stripe.com/webhooks/best-practices"
+          accessed: "2026-01-20"
+          quote: "Log webhook activity for debugging"
     check:
       type: script
       code: |
@@ -432,6 +605,14 @@ rules:
     description: >
       Webhook systems should support signing with multiple keys during
       secret rotation.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.standardwebhooks.com/"
+          accessed: "2026-01-20"
+          quote: "Support for key rotation by accepting multiple signatures"
     check:
       type: script
       code: |
@@ -443,6 +624,14 @@ rules:
     mechanical: true
     description: >
       Use constant-time comparison functions for signature verification.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.standardwebhooks.com/"
+          accessed: "2026-01-20"
+          quote: "Use constant-time string comparison to compare signatures"
     check:
       type: script
       code: |
@@ -454,6 +643,14 @@ rules:
     mechanical: true
     description: >
       Webhook handlers should integrate with a queue for async processing.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://docs.stripe.com/webhooks/best-practices"
+          accessed: "2026-01-20"
+          quote: "Use a queue to process webhooks asynchronously"
     check:
       type: script
       code: |
@@ -465,6 +662,14 @@ rules:
     mechanical: true
     description: >
       Validate incoming webhook payloads against a schema before processing.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://docs.stripe.com/webhooks/best-practices"
+          accessed: "2026-01-20"
+          quote: "Validate the payload structure before processing"
     check:
       type: script
       code: |
@@ -477,6 +682,14 @@ rules:
     description: >
       Webhook providers should verify URL ownership via challenge/response
       during registration.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.standardwebhooks.com/"
+          accessed: "2026-01-20"
+          quote: "Verify endpoint ownership before sending webhooks"
     check:
       type: script
       code: |
@@ -489,6 +702,14 @@ rules:
     description: >
       Webhook providers should route delivery through an egress proxy
       for centralized security enforcement.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery"
+          accessed: "2026-01-20"
+          quote: "Use an egress proxy to control outbound requests"
     check:
       type: script
       code: |
