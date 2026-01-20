@@ -399,6 +399,174 @@ For detailed guides, see:
 
 ---
 
+## Self-Validating Hooks (Claude Code)
+
+Flight can automatically validate code as you write it using Claude Code hooks. This creates a self-correction loop where violations are caught immediately.
+
+### What It Does
+
+Two hooks work together:
+
+| Hook | Trigger | Behavior |
+|------|---------|----------|
+| `PostToolUse` | After Write/Edit/MultiEdit | Runs validation, injects feedback (never blocks) |
+| `Stop` | Task completion | Blocks if NEVER/MUST violations exist |
+
+The agent sees violations immediately after editing, then is blocked from completing until they're fixed.
+
+### Prerequisites
+
+1. **flight-lint must be built**:
+   ```bash
+   cd flight-lint && npm install && npm run build && cd ..
+   ```
+
+2. **jq recommended** (optional but improves accuracy):
+   ```bash
+   # macOS
+   brew install jq
+
+   # Ubuntu/Debian
+   apt-get install jq
+   ```
+   Without jq, hooks fall back to grep-based parsing.
+
+### Setup
+
+1. **Hooks are installed automatically** with `install.sh`. To verify:
+   ```bash
+   ls -la .flight/hooks/
+   # Should show: lib.sh, post-tool-validate.sh, stop-validate.sh
+   ```
+
+2. **Configure Claude Code** - add to `.claude/settings.json`:
+   ```json
+   {
+     "hooks": {
+       "PostToolUse": [
+         {
+           "matcher": "Write|Edit|MultiEdit",
+           "command": ["./.flight/hooks/post-tool-validate.sh"],
+           "timeout": 30000
+         }
+       ],
+       "Stop": [
+         {
+           "command": ["./.flight/hooks/stop-validate.sh"],
+           "timeout": 60000
+         }
+       ],
+       "SubagentStop": [
+         {
+           "command": ["./.flight/hooks/stop-validate.sh"],
+           "timeout": 60000
+         }
+       ]
+     }
+   }
+   ```
+
+### How It Works
+
+```
+Agent writes code
+      ↓
+PostToolUse hook runs flight-lint
+      ↓
+Violations injected into context
+      ↓
+Agent attempts to complete task
+      ↓
+Stop hook checks for violations
+      ↓
+NEVER/MUST found? → BLOCK (agent must fix)
+Only SHOULD? → APPROVE with warnings
+Clean? → APPROVE
+```
+
+### Severity Behavior
+
+| Severity | PostToolUse | Stop Hook | Effect |
+|----------|-------------|-----------|--------|
+| NEVER | Shows in feedback | Blocks completion | Must fix before completing |
+| MUST | Shows in feedback | Blocks completion | Must fix before completing |
+| SHOULD | Shows in feedback | Allows with warning | Optional to fix |
+
+### Troubleshooting
+
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| Hook not running | Not configured | Check `.claude/settings.json` path |
+| "lib.sh not found" | Wrong directory | Ensure hooks are in `.flight/hooks/` |
+| Timeout errors | Slow validation | Increase timeout in settings.json |
+| "jq not available" | jq not installed | Install jq or hooks use grep fallback |
+| Still blocked after fix | Cached result | Re-run the Stop hook (complete again) |
+
+### Hook Files
+
+| File | Purpose |
+|------|---------|
+| `.flight/hooks/lib.sh` | Shared utilities (JSON output, lint runner) |
+| `.flight/hooks/post-tool-validate.sh` | Feedback hook (always approves) |
+| `.flight/hooks/stop-validate.sh` | Enforcement gate (blocks on violations) |
+
+### Testing Hooks Manually
+
+Test the Stop hook (enforcement gate):
+```bash
+./.flight/hooks/stop-validate.sh
+# Returns: {"decision":"approve",...} or {"decision":"block",...}
+```
+
+Test the PostToolUse hook (feedback):
+```bash
+echo '{"tool_name": "Write", "tool_input": {"file_path": "test.ts"}}' | \
+  ./.flight/hooks/post-tool-validate.sh
+# Returns: {"decision":"approve","additionalContext":"..."}
+```
+
+### Example Output
+
+**When violations are found (Stop hook blocks):**
+```json
+{
+  "decision": "block",
+  "reason": "Flight validation failed: 2 NEVER, 1 MUST violation(s)",
+  "additionalContext": "You MUST fix these violations before completing:\n\n- [NEVER] N1: Generic variable name at src/utils.ts:12\n- [NEVER] N8: console.log in production at src/api.ts:45\n- [MUST] M1: Missing error handling at src/db.ts:23\n\nThese are non-negotiable constraints. Fix them and try completing again."
+}
+```
+
+**When clean (Stop hook approves):**
+```json
+{
+  "decision": "approve",
+  "additionalContext": "Flight validation passed. All domain constraints satisfied."
+}
+```
+
+**When only warnings exist (Stop hook approves with context):**
+```json
+{
+  "decision": "approve",
+  "additionalContext": "Flight validation passed with 2 warning(s).\n\n- [SHOULD] S1: Consider using Promise.all at src/fetch.ts:18\n\nTask completed. Consider addressing warnings in follow-up."
+}
+```
+
+### Disabling Hooks
+
+To temporarily disable hooks, rename or remove from `.claude/settings.json`:
+```bash
+# Disable all hooks temporarily
+mv .claude/settings.json .claude/settings.json.bak
+
+# Re-enable
+mv .claude/settings.json.bak .claude/settings.json
+```
+
+Or remove specific hook entries from the JSON configuration.
+
+---
+
 ## Research Tools
 
 Use these during `/flight-prime` and `/flight-prd`:

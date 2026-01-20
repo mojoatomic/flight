@@ -1,2 +1,23 @@
 {
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "command": ["./.flight/hooks/post-tool-validate.sh"],
+        "timeout": 30000
+      }
+    ],
+    "Stop": [
+      {
+        "command": ["./.flight/hooks/stop-validate.sh"],
+        "timeout": 60000
+      }
+    ],
+    "SubagentStop": [
+      {
+        "command": ["./.flight/hooks/stop-validate.sh"],
+        "timeout": 60000
+      }
+    ]
+  }
 }
