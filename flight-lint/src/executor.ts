@@ -78,6 +78,10 @@ export function executeRule(
   const matches: QueryMatch[] = [];
 
   for (const capture of captures) {
+    // Only report captures named 'violation' - other captures are used for predicates
+    if (capture.name !== 'violation') {
+      continue;
+    }
     matches.push({
       line: capture.node.startPosition.row + 1,    // Convert 0-indexed to 1-indexed
       column: capture.node.startPosition.column + 1, // Convert 0-indexed to 1-indexed

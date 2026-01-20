@@ -58,12 +58,26 @@
       }
     },
     {
+      "id": "N1",
+      "title": "Unsafe Block Without Safety Comment",
+      "severity": "NEVER",
+      "type": "ast",
+      "pattern": null,
+      "query": "(unsafe_block) @violation",
+      "message": "All unsafe blocks must have a SAFETY comment explaining why the unsafe code is sound. Document what invariants must be upheld.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
       "id": "N2",
       "title": "mem::transmute Usage",
       "severity": "NEVER",
-      "type": "grep",
-      "pattern": "mem::transmute\\s*[<(]|transmute::<",
-      "query": null,
+      "type": "ast",
+      "pattern": null,
+      "query": "(call_expression\n  function: [\n    (scoped_identifier\n      name: (identifier) @fn)\n    (generic_function\n      function: (scoped_identifier\n        name: (identifier) @fn))\n  ]\n  (#eq? @fn \"transmute\")) @violation",
       "message": "Avoid mem::transmute - it's extremely dangerous and almost never needed. Use safer alternatives like from_ne_bytes, as casts, or pointer casts.",
       "provenance": {
         "last_verified": "2026-01-20",

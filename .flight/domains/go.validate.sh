@@ -84,7 +84,7 @@ printf '\n%s\n' "## NEVER Rules"
 
 # N1: Ignored Errors
 check "N1: Ignored Errors" \
-    grep -En "[^_]\\s*,\\s*_\\s*:?=\\s*\\w+\\s*\\([^)]*\\)|_\\s*=\\s*\\w+\\.\\w+\\s*\\(" "${FILES[@]}"
+    # Unknown check type: ast
 
 # N2: Panic for Normal Error Handling
 check "N2: Panic for Normal Error Handling" \
@@ -96,7 +96,7 @@ check "N3: math/rand for Security" \
 
 # N4: Defer in Loop
 check "N4: Defer in Loop" \
-    grep -Ezn "for\\s+[^{]*\\{[^}]*defer\\s+" "${FILES[@]}"
+    # Unknown check type: ast
 
 # N5: Goroutine without Lifetime Management
 check "N5: Goroutine without Lifetime Management" \

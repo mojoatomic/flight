@@ -83,24 +83,17 @@ rules:
           accessed: "2026-01-20"
           quote: "TypeScript also has a special type, any, that you can use whenever you don't want a particular value to cause typechecking errors"
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          awk '
-          /: any/ || /as any/ || /<any>/ {
-            # Check if previous line has justification
-            if (prev !~ /TODO|FIXME|any.*because|legacy|migration|third.party|lib types/) {
-              # Check if current line has justification in a comment
-              if ($0 !~ /\/\/.*any|\/\*.*any|\/\/.*TODO|\/\/.*FIXME|\/\/.*legacy|\/\/.*migration|\/\/.*third.party|\/\/.*lib types/) {
-                print FILENAME":"NR": "$0
-              }
-            }
-          }
-          { prev = $0 }
-          ' "$f"
-        done
+      type: ast
+      query: |
+        ((type_annotation
+          (predefined_type) @violation)
+         (#eq? @violation "any"))
+        ((as_expression
+          (predefined_type) @violation)
+         (#eq? @violation "any"))
+    supports_ok_comment: true
     note: |
-      `any` disables type checking. If you must use it, document why.
+      `any` disables type checking. Use `// flight:ok` to suppress for justified uses.
       Common justifications: legacy code migration, third-party lib types incorrect,
       TODO for later typing. Prefer `unknown` with validation for external data.
     examples:
@@ -127,9 +120,10 @@ rules:
           accessed: "2026-01-20"
           quote: "@ts-expect-error is a new directive... it will error if there's no error to suppress"
     check:
-      type: grep
-      pattern: '@ts-ignore\s*$'
-      flags: -En
+      type: ast
+      query: |
+        ((comment) @violation
+         (#match? @violation "^//\\s*@ts-ignore\\s*$"))
     note: |
       Bare @ts-ignore hides real bugs. If you need to suppress an error,
       use @ts-expect-error (fails if error goes away) with explanation.

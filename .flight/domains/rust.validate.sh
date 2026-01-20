@@ -84,20 +84,11 @@ printf '\n%s\n' "## NEVER Rules"
 
 # N1: Unsafe Block Without Safety Comment
 check "N1: Unsafe Block Without Safety Comment" \
-    bash -c 'for f in "$@"; do
-  awk '"'"'
-    /unsafe\s*\{/ {
-      if (prev !~ /\/\/\s*SAFETY:/ && prev !~ /\/\/\s*safety:/ && prev !~ /\/\*.*SAFETY:/) {
-        print FILENAME ":" NR ": unsafe block without SAFETY comment"
-      }
-    }
-    { prev = $0 }
-  '"'"' "$f" 2>/dev/null
-done' _ "${FILES[@]}"
+    # Unknown check type: ast
 
 # N2: mem::transmute Usage
 check "N2: mem::transmute Usage" \
-    grep -En "mem::transmute\\s*[<(]|transmute::<" "${FILES[@]}"
+    # Unknown check type: ast
 
 # N3: Panic in Library Code
 check "N3: Panic in Library Code" \

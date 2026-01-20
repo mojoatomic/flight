@@ -20,12 +20,26 @@
   },
   "rules": [
     {
+      "id": "N1",
+      "title": "Unjustified any",
+      "severity": "NEVER",
+      "type": "ast",
+      "pattern": null,
+      "query": "((type_annotation\n  (predefined_type) @violation)\n (#eq? @violation \"any\"))\n((as_expression\n  (predefined_type) @violation)\n (#eq? @violation \"any\"))",
+      "message": "Every `any` needs a comment explaining why it's necessary. Prefer `unknown` with type guards for external data.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
       "id": "N2",
       "title": "@ts-ignore Without Explanation",
       "severity": "NEVER",
-      "type": "grep",
-      "pattern": "@ts-ignore\\s*$",
-      "query": null,
+      "type": "ast",
+      "pattern": null,
+      "query": "((comment) @violation\n (#match? @violation \"^//\\\\s*@ts-ignore\\\\s*$\"))",
       "message": "@ts-ignore suppresses all type errors. If you must use it, explain why and reference an issue number if possible.",
       "provenance": {
         "last_verified": "2026-01-20",

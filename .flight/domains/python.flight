@@ -99,9 +99,11 @@ rules:
       Never use bare 'except:' which catches everything including
       KeyboardInterrupt and SystemExit.
     check:
-      type: grep
-      pattern: '^\s*except\s*:'
-      flags: -En
+      type: ast
+      query: |
+        (except_clause
+          . "except"
+          . ":" @violation)
     note: |
       Bare except catches KeyboardInterrupt, SystemExit, and GeneratorExit.
       Always specify the exception type you're handling.
@@ -172,9 +174,16 @@ rules:
       Default arguments are evaluated once at function definition,
       causing shared state across calls.
     check:
-      type: grep
-      pattern: 'def .+\(.*=\s*(\[\]|\{\}|set\(\))'
-      flags: -En
+      type: ast
+      query: |
+        (default_parameter
+          value: (list) @violation)
+        (default_parameter
+          value: (dictionary) @violation)
+        (default_parameter
+          value: (call
+            function: (identifier) @fn
+            (#eq? @fn "set")) @violation)
     note: |
       The default value is created once when the function is defined,
       not each time it's called. Use None and create inside the function.
