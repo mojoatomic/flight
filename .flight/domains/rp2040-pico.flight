@@ -2,11 +2,44 @@
 # Source: Migrated from rp2040-pico.md and rp2040-pico.validate.sh
 
 domain: rp2040-pico
-version: 1.0.0
+version: 1.1.0
+schema_version: 2
 description: >
   Raspberry Pi Pico (RP2040) dual-core embedded development with Pico SDK.
   Extends embedded-c-p10 with RP2040-specific patterns for dual-core safety,
   inter-core communication, and hardware abstraction.
+
+provenance:
+  last_full_audit: "2026-01-20"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-20"
+
+  sources_consulted:
+    - url: "https://datasheets.raspberrypi.com/pico/raspberry-pi-pico-c-sdk.pdf"
+      accessed: "2026-01-20"
+      note: "Official Pico C/C++ SDK documentation"
+    - url: "https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf"
+      accessed: "2026-01-20"
+      note: "RP2040 microcontroller datasheet"
+    - url: "https://github.com/raspberrypi/pico-sdk"
+      accessed: "2026-01-20"
+      note: "Official Pico SDK repository"
+    - url: "https://spinroot.com/p10/"
+      accessed: "2026-01-20"
+      note: "Power of 10 Rules for Safety-Critical Code"
+
+  coverage:
+    apis_covered:
+      - "pico_multicore"
+      - "hardware_watchdog"
+      - "hardware_sync (spinlocks)"
+      - "hardware_i2c"
+      - "hardware_spi"
+      - "hardware_gpio"
+    known_gaps:
+      - "PIO (Programmable I/O)"
+      - "DMA patterns"
+      - "USB device patterns"
 
 file_patterns:
   - "src/**/*.c"
@@ -44,6 +77,14 @@ rules:
     description: >
       Never use malloc, free, calloc, or realloc. Static allocation only.
       Dynamic memory is unpredictable in embedded systems.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://spinroot.com/p10/"
+          accessed: "2026-01-20"
+          quote: "Rule 3: Do not use dynamic memory allocation after initialization"
     check:
       type: grep
       pattern: '\bmalloc\s*\(|\bfree\s*\(|\bcalloc\s*\(|\brealloc\s*\('
@@ -64,6 +105,14 @@ rules:
       Never use printf, puts, or print functions inside interrupt handlers
       (_callback, _isr, _handler, _irq functions). These are not interrupt-safe
       and can cause undefined behavior.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://datasheets.raspberrypi.com/pico/raspberry-pi-pico-c-sdk.pdf"
+          accessed: "2026-01-20"
+          quote: "Interrupt handlers should be kept short and should not call functions that block or use stdio"
     check:
       type: script
       code: |
@@ -89,6 +138,14 @@ rules:
     description: >
       Never use recursive functions. Recursion makes stack usage unpredictable
       and can cause stack overflow on embedded systems with limited RAM.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://spinroot.com/p10/"
+          accessed: "2026-01-20"
+          quote: "Rule 1: Restrict all code to very simple control flow constructs – do not use...recursion"
     check:
       type: script
       code: |
@@ -123,6 +180,14 @@ rules:
     description: >
       Never access hardware registers directly via volatile pointers or
       raw addresses. Use Pico SDK hardware_* APIs for portability and safety.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://datasheets.raspberrypi.com/pico/raspberry-pi-pico-c-sdk.pdf"
+          accessed: "2026-01-20"
+          quote: "The SDK provides a comprehensive set of hardware abstraction libraries...avoiding direct register access"
     check:
       type: script
       code: |
@@ -142,6 +207,14 @@ rules:
     description: >
       Always use timeout versions of I2C/SPI functions. Non-timeout blocking
       calls can hang forever if hardware fails or bus is stuck.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_i2c/include/hardware/i2c.h"
+          accessed: "2026-01-20"
+          quote: "i2c_write_timeout_us/i2c_read_timeout_us provide timeout capability for robust I2C communication"
     check:
       type: script
       code: |
@@ -164,6 +237,14 @@ rules:
     description: >
       Array sizes must use #define constants, not magic numbers.
       This ensures buffer sizes are documented and can be changed in one place.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://spinroot.com/p10/"
+          accessed: "2026-01-20"
+          quote: "Rule 2: All loops must have a fixed upper-bound...use constant expressions"
     check:
       type: script
       code: |
@@ -185,6 +266,14 @@ rules:
     description: >
       Core 0 (main.c) must enable and update the hardware watchdog.
       The watchdog provides system recovery if Core 0 hangs.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf"
+          accessed: "2026-01-20"
+          quote: "The watchdog provides an automatic reset mechanism if software becomes unresponsive"
     check:
       type: script
       code: |
@@ -220,6 +309,14 @@ rules:
     description: >
       Blocking calls in safety-critical code (main.c, safety/, core0) should
       be reviewed. Core 0 owns safety and should not block indefinitely.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://datasheets.raspberrypi.com/pico/raspberry-pi-pico-c-sdk.pdf"
+          accessed: "2026-01-20"
+          quote: "Core 0 is responsible for critical system functions and should maintain responsiveness"
     check:
       type: script
       code: |
@@ -242,6 +339,14 @@ rules:
     description: >
       Floating point operations in safety-critical paths should be reviewed.
       Consider using fixed-point math for deterministic timing.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf"
+          accessed: "2026-01-20"
+          quote: "RP2040 does not include hardware floating point support, soft float adds non-deterministic timing"
     check:
       type: script
       code: |
@@ -265,6 +370,14 @@ rules:
     description: >
       while(true), while(1), and for(;;) loops should be reviewed to ensure
       they have proper exit conditions or are intentional main loops.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://spinroot.com/p10/"
+          accessed: "2026-01-20"
+          quote: "Rule 2: All loops must have a fixed upper-bound...provably determinable at compile time"
     check:
       type: grep
       pattern: 'while\s*\(\s*1\s*\)|while\s*\(\s*true\s*\)|for\s*\(\s*;\s*;\s*\)'
@@ -287,6 +400,14 @@ rules:
     description: >
       When using multicore_launch_core1, implement a FIFO handshake to
       ensure Core 1 has initialized before Core 0 continues.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/pico_multicore/multicore.c"
+          accessed: "2026-01-20"
+          quote: "multicore_fifo_push_blocking/pop_blocking provide inter-core synchronization via hardware FIFOs"
     check:
       type: script
       code: |
@@ -315,6 +436,14 @@ rules:
     description: >
       Files with volatile globals (g_*) or static volatile should use
       spinlocks for thread-safe access between cores.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf"
+          accessed: "2026-01-20"
+          quote: "Hardware spinlocks provide mutual exclusion between cores with minimal overhead"
     check:
       type: script
       code: |
@@ -342,6 +471,14 @@ rules:
     description: >
       Functions that take pointer parameters should ASSERT they are not NULL
       at the start of the function.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://spinroot.com/p10/"
+          accessed: "2026-01-20"
+          quote: "Rule 5: Use assertions to check...return value of non-void functions"
     check:
       type: script
       code: |
@@ -379,6 +516,14 @@ rules:
     description: >
       Function calls that return status_t should have their return value
       checked or explicitly cast to (void).
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://spinroot.com/p10/"
+          accessed: "2026-01-20"
+          quote: "Rule 5: Check the return value of all non-void functions"
     check:
       type: script
       code: |
@@ -400,6 +545,14 @@ rules:
     description: >
       RP2040 projects should have main.c for Core 0 entry and
       core1.c (or core_1.c) for Core 1 entry.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: medium
+      re_verify_after: "2026-07-20"
+      sources:
+        - url: "https://datasheets.raspberrypi.com/pico/raspberry-pi-pico-c-sdk.pdf"
+          accessed: "2026-01-20"
+          quote: "The RP2040 has two Cortex-M0+ processors...separation of concerns between cores is recommended"
     check:
       type: script
       code: |
@@ -429,6 +582,14 @@ rules:
     description: >
       Safety-critical RP2040 projects should have emergency handling
       code for failure scenarios.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: medium
+      re_verify_after: "2026-07-20"
+      sources:
+        - url: "https://spinroot.com/p10/"
+          accessed: "2026-01-20"
+          quote: "Safety-critical code must handle all failure modes with defined recovery procedures"
     check:
       type: script
       code: |
@@ -449,6 +610,14 @@ rules:
     description: >
       Dual-core projects should implement a heartbeat mechanism
       between cores to detect if one core has stalled.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: medium
+      re_verify_after: "2026-07-20"
+      sources:
+        - url: "https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf"
+          accessed: "2026-01-20"
+          quote: "Inter-core communication can be used for heartbeat monitoring between processors"
     check:
       type: script
       code: |
