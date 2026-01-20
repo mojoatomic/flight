@@ -2,11 +2,44 @@
 # Source: Migrated from sms-twilio.md and sms-twilio.validate.sh
 
 domain: sms-twilio
-version: 1.0.0
+version: 1.1.0
+schema_version: 2
 description: >
   SMS consent management, opt-in/opt-out handling, and Twilio error code
   interpretation. Compliance-focused domain for TCPA, CTIA, and A2P 10DLC
   requirements.
+
+provenance:
+  last_full_audit: "2026-01-20"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-20"
+
+  sources_consulted:
+    - url: "https://www.twilio.com/docs/messaging/guides/opt-out-keywords"
+      accessed: "2026-01-20"
+      note: "Twilio opt-out and keyword handling"
+    - url: "https://www.twilio.com/docs/api/errors"
+      accessed: "2026-01-20"
+      note: "Twilio error codes reference"
+    - url: "https://www.twilio.com/docs/messaging/compliance/a2p-10dlc"
+      accessed: "2026-01-20"
+      note: "A2P 10DLC compliance requirements"
+    - url: "https://www.fcc.gov/tcpa"
+      accessed: "2026-01-20"
+      note: "TCPA regulatory requirements"
+    - url: "https://www.ctia.org/the-wireless-industry/industry-commitments/messaging-principles-and-best-practices"
+      accessed: "2026-01-20"
+      note: "CTIA messaging best practices"
+
+  coverage:
+    apis_covered:
+      - "Twilio SMS API"
+      - "Twilio webhook handling"
+      - "A2P 10DLC campaigns"
+    known_gaps:
+      - "WhatsApp Business API"
+      - "International SMS regulations"
+      - "MMS consent"
 
 file_patterns:
   - "**/sms*.js"
@@ -48,6 +81,14 @@ rules:
     description: >
       SMS consent states (OPTED_IN, OPTED_OUT, PENDING, UNKNOWN) must be
       defined in code. These states drive the consent state machine.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.twilio.com/docs/messaging/guides/opt-out-keywords"
+          accessed: "2026-01-20"
+          quote: "Consent state must be tracked for each recipient"
     check:
       type: script
       code: |
@@ -76,6 +117,14 @@ rules:
       INVARIANT: Never send messages to users in OPTED_OUT or UNKNOWN state.
       Only OPTED_IN users can receive messages. Violating this is a legal
       compliance issue (TCPA).
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.fcc.gov/tcpa"
+          accessed: "2026-01-20"
+          quote: "Prior express consent required for non-emergency messages"
     check:
       type: grep
       pattern: 'OPTED_OUT.*send|UNKNOWN.*send|send.*OPTED_OUT|send.*UNKNOWN'
@@ -98,6 +147,14 @@ rules:
     description: >
       Always check consent state before sending any SMS. Sending without
       checking consent violates TCPA and carrier policies.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.twilio.com/docs/messaging/compliance/a2p-10dlc"
+          accessed: "2026-01-20"
+          quote: "Verify consent before sending any A2P message"
     check:
       type: script
       code: |
@@ -130,6 +187,14 @@ rules:
       STOP keyword must trigger a state change to OPTED_OUT. Ignoring STOP
       is a legal violation. Twilio handles this automatically but your
       database must also be updated.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.twilio.com/docs/messaging/guides/opt-out-keywords"
+          accessed: "2026-01-20"
+          quote: "STOP keyword is required and cannot be disabled"
     check:
       type: script
       code: |
@@ -163,6 +228,14 @@ rules:
     description: >
       INVARIANT: Twilio error 21610 (unsubscribed recipient) must mark the
       user as OPTED_OUT. This is a carrier-level block. Do NOT retry.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.twilio.com/docs/api/errors/21610"
+          accessed: "2026-01-20"
+          quote: "Attempt to send to unsubscribed recipient"
     check:
       type: script
       code: |
@@ -194,6 +267,14 @@ rules:
       INVARIANT: Twilio error 30004 (message blocked by carrier) must mark
       the user as OPTED_OUT. This indicates carrier-level blocking.
       Do NOT retry.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.twilio.com/docs/api/errors/30004"
+          accessed: "2026-01-20"
+          quote: "Message blocked - carrier rejected the message"
     check:
       type: script
       code: |
@@ -224,6 +305,14 @@ rules:
     description: >
       INVARIANT: Never retry on opt-out errors (21610, 30004). The user
       has opted out - retrying violates their consent and carrier policies.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.fcc.gov/tcpa"
+          accessed: "2026-01-20"
+          quote: "Consent withdrawal must be honored immediately"
     check:
       type: script
       code: |
@@ -256,6 +345,14 @@ rules:
     description: >
       INVARIANT: Twilio errors 30005 (unknown destination) and 30006
       (landline/unreachable) must mark the number as INVALID. Do NOT retry.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.twilio.com/docs/api/errors/30005"
+          accessed: "2026-01-20"
+          quote: "Unknown destination handset"
     check:
       type: script
       code: |
@@ -286,6 +383,14 @@ rules:
     description: >
       The first message to a newly opted-in user MUST include opt-out
       instructions (STOP keyword). This is required by CTIA guidelines.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.ctia.org/the-wireless-industry/industry-commitments/messaging-principles-and-best-practices"
+          accessed: "2026-01-20"
+          quote: "First message must include opt-out instructions"
     check:
       type: script
       code: |
@@ -312,6 +417,14 @@ rules:
     description: >
       Never hardcode phone numbers in source code. Use environment
       variables or configuration for phone numbers.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://owasp.org/www-project-web-security-testing-guide/"
+          accessed: "2026-01-20"
+          quote: "Sensitive data should never be hardcoded"
     check:
       type: grep
       pattern: '"\+1[0-9]{10}"|\x27\+1[0-9]{10}\x27'
@@ -329,6 +442,14 @@ rules:
     description: >
       Never hardcode Twilio credentials (Account SID, Auth Token) in
       source code. Use environment variables.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.twilio.com/docs/usage/secure-credentials"
+          accessed: "2026-01-20"
+          quote: "Never commit credentials to source control"
     check:
       type: grep
       pattern: 'ACCOUNT_SID\s*=\s*[''"]AC|AUTH_TOKEN\s*=\s*[''"][a-f0-9]{32}'
@@ -352,6 +473,14 @@ rules:
     description: >
       START and UNSTOP keywords should be handled to allow users to
       re-subscribe after opting out. UNSTOP is required for Toll-Free.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.twilio.com/docs/messaging/guides/opt-out-keywords"
+          accessed: "2026-01-20"
+          quote: "START and UNSTOP allow users to re-subscribe"
     check:
       type: script
       code: |
@@ -380,6 +509,14 @@ rules:
     description: >
       HELP keyword should trigger a response with support contact
       information and opt-out reminder.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.ctia.org/the-wireless-industry/industry-commitments/messaging-principles-and-best-practices"
+          accessed: "2026-01-20"
+          quote: "HELP response must include support information"
     check:
       type: script
       code: |
@@ -408,6 +545,14 @@ rules:
     description: >
       Temporary errors (30003 unreachable, 30017 congestion) should
       trigger retry with exponential backoff.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.twilio.com/docs/api/errors/30003"
+          accessed: "2026-01-20"
+          quote: "Temporary delivery failure - retry with backoff"
     check:
       type: script
       code: |
@@ -438,6 +583,14 @@ rules:
     description: >
       Rate limit errors (30022, 30023, 30027) should be handled by
       slowing down or waiting until the next day.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.twilio.com/docs/messaging/compliance/a2p-10dlc"
+          accessed: "2026-01-20"
+          quote: "Rate limits vary by trust score and carrier"
     check:
       type: script
       code: |
@@ -466,6 +619,14 @@ rules:
     description: >
       Messages should include business/brand name for identification
       as required by CTIA guidelines.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.ctia.org/the-wireless-industry/industry-commitments/messaging-principles-and-best-practices"
+          accessed: "2026-01-20"
+          quote: "Message must identify the sender"
     check:
       type: script
       code: |
@@ -491,6 +652,14 @@ rules:
     description: >
       When a user opts out, send one final confirmation message. This is
       the only message allowed after opt-out.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.twilio.com/docs/messaging/guides/opt-out-keywords"
+          accessed: "2026-01-20"
+          quote: "One confirmation message is allowed after opt-out"
     check:
       type: script
       code: |
@@ -519,6 +688,14 @@ rules:
     description: >
       Implement double opt-in flow for marketing messages. User provides
       number, receives confirmation request, replies YES to confirm.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.twilio.com/docs/messaging/compliance/a2p-10dlc"
+          accessed: "2026-01-20"
+          quote: "Double opt-in recommended for marketing campaigns"
     check:
       type: script
       code: |
@@ -547,6 +724,14 @@ rules:
     description: >
       Log all messages for compliance audit. Store message SID, direction,
       status, and timestamp. Don't store message body (PII).
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.fcc.gov/tcpa"
+          accessed: "2026-01-20"
+          quote: "Records must be maintained for compliance auditing"
     check:
       type: script
       code: |
@@ -580,6 +765,14 @@ rules:
     description: >
       Track timestamps for consent changes (opted_in_at, opted_out_at)
       for compliance audit and legal requirements.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.fcc.gov/tcpa"
+          accessed: "2026-01-20"
+          quote: "Consent records must include timestamps"
     check:
       type: script
       code: |
