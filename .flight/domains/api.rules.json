@@ -1,0 +1,245 @@
+{
+  "domain": "api",
+  "version": "1.1.0",
+  "language": "python",
+  "file_patterns": [
+    "**/routes*.{js,ts}",
+    "**/controller*.{js,ts}",
+    "**/api/**/*.{js,ts}",
+    "**/*Router*.java",
+    "**/*Controller*.java",
+    "**/views.py",
+    "**/urls.py"
+  ],
+  "provenance": {
+    "last_full_audit": "2026-01-16",
+    "audited_by": "flight-research",
+    "next_audit_due": "2026-07-16"
+  },
+  "rules": [
+    {
+      "id": "M3",
+      "title": "Consistent Error Response Format (RFC 9457)",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "application/problem\\+json|type.*title.*status|ProblemDetails",
+      "query": null,
+      "message": "Use Problem Details for HTTP APIs (RFC 9457 supersedes RFC 7807)",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "M4",
+      "title": "Plural Nouns for Collection URIs",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "['\"]/(user|product|order|item|account|customer|payment)(/|['\"\"])",
+      "query": null,
+      "message": "Collections should use plural nouns",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "M6",
+      "title": "Version Your API from Day One",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "/v[0-9]+([/'\"?]|$)|version.*header|api-version",
+      "query": null,
+      "message": "APIs must be versioned",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "M7",
+      "title": "Rate Limit Headers",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "x-ratelimit|rate.?limit|retry-after",
+      "query": null,
+      "message": "Include rate limiting information in responses",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "M9",
+      "title": "Content-Type Header on All Responses",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "content-type|\\.type\\(|\\.json\\(",
+      "query": null,
+      "message": "All responses must have explicit Content-Type",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N1",
+      "title": "Verbs in URIs",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "['\"]/?(create|delete|remove|update|get|fetch|add|edit|modify)([A-Z]|[_-][a-z])",
+      "query": null,
+      "message": "URIs identify resources, HTTP methods define actions",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N2",
+      "title": "200 OK with Error Body",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "status\\(200\\).*['\"]?error['\"]?\\s*:|\\.ok\\(.*['\"]?error['\"]?\\s*:|status.*200.*success.*false",
+      "query": null,
+      "message": "Status code must reflect outcome",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N3",
+      "title": "Exposing Internal IDs in Pagination",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "after_id|before_id|since_id|last_id|start_id",
+      "query": null,
+      "message": "Auto-increment IDs leak data (record count, sequence)",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N5",
+      "title": "Sensitive Data in Query Strings",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "req\\.(query|params)(\\.(password|secret|api_key|token|auth)|\\[['\"]?(password|secret|api_key|token|auth))|(\\{[^}]*(password|secret|api_key|token|auth)[^}]*\\})\\s*=\\s*req\\.(query|params)",
+      "query": null,
+      "message": "URLs are logged everywhere (proxies, browsers, servers)",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N6",
+      "title": "Offset Pagination for Large Datasets",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "offset.*limit|page.*per_page|skip.*take",
+      "query": null,
+      "message": "Performance degrades at scale (database scans and discards rows)",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "medium",
+        "re_verify_after": "2026-07-16"
+      }
+    },
+    {
+      "id": "N7",
+      "title": "500 for Client Errors",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "catch.*\\{[^}]*(status\\(500\\)|res\\.status\\s*=\\s*500)|(ValidationError|validate|invalid).*500|500.*(validation|invalid)",
+      "query": null,
+      "message": "Server errors mask validation failures",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "S1",
+      "title": "Use HTTPS Always",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "http://[a-zA-Z]",
+      "query": null,
+      "message": "Never expose APIs over plain HTTP",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "S3",
+      "title": "Use ISO 8601 for Dates",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "toISOString|ISO.*8601|datetime|DateTimeFormatter",
+      "query": null,
+      "message": "Use standard date format with timezone",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "S8",
+      "title": "Idempotency Keys for Non-Idempotent Operations",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "idempotency|idempotent",
+      "query": null,
+      "message": "POST operations should support idempotency keys",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "S9",
+      "title": "CORS Headers for Browser Clients",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "access-control-allow|cors\\(|cors\\.enable",
+      "query": null,
+      "message": "Include CORS headers for browser-based API consumers",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "S12",
+      "title": "No Hardcoded URLs",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "https?://[a-zA-Z0-9][a-zA-Z0-9.-]+\\.(com|io|net|org|dev|app)",
+      "query": null,
+      "message": "Use configuration/environment for external URLs",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    }
+  ]
+}

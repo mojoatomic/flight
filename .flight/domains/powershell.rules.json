@@ -1,0 +1,192 @@
+{
+  "domain": "powershell",
+  "version": "1.1.0",
+  "language": "unknown",
+  "file_patterns": [
+    "*.ps1",
+    "*.psm1",
+    "*.psd1"
+  ],
+  "exclude_patterns": [
+    "node_modules/**",
+    "vendor/**",
+    ".git/**",
+    "dist/**",
+    "build/**"
+  ],
+  "provenance": {
+    "last_full_audit": "2026-01-20",
+    "audited_by": "flight-research",
+    "next_audit_due": "2026-07-20"
+  },
+  "rules": [
+    {
+      "id": "M6",
+      "title": "Parameter Validation",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "param\\s*\\(\\s*\\$",
+      "query": null,
+      "message": "Parameters must have type constraints and validation attributes.\nUse [Parameter(Mandatory)] for required parameters.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N1",
+      "title": "Invoke-Expression with User Input",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "Invoke-Expression|[^a-zA-Z]iex\\s",
+      "query": null,
+      "message": "Invoke-Expression executes arbitrary strings as code. With any external input,\nthis creates command injection vulnerabilities. The \"iex\" alias is equally dangerous.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N2",
+      "title": "Plain Text Passwords in Code",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "-Password\\s+['\"][^'\"]+['\"]|password\\s*=\\s*['\"][^'\"]+['\"]",
+      "query": null,
+      "message": "Never store passwords, API keys, or secrets as plain text in scripts.\nUse SecureString, the SecretManagement module, or environment variables.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N4",
+      "title": "ConvertTo-SecureString with -AsPlainText in Source",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "ConvertTo-SecureString.*-AsPlainText.*['\"][^'\"]+['\"]",
+      "query": null,
+      "message": "Using ConvertTo-SecureString -AsPlainText with a literal string defeats the purpose\nof SecureString. The secret is still in plain text in your source code.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N5",
+      "title": "Using Aliases in Scripts",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "^\\s*(%|[?]|\\bls\\b|\\bcat\\b|\\bcurl\\b|\\bwget\\b|\\bdiff\\b|\\bsort\\b)\\s",
+      "query": null,
+      "message": "Aliases like %, ?, foreach, where, ls, cat, curl vary by platform and session.\nScripts using aliases may fail on Linux/macOS or in constrained environments.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N6",
+      "title": "Write-Host for Data Output",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "Write-Host.*\\$[a-zA-Z]",
+      "query": null,
+      "message": "Write-Host writes to the console, not the pipeline. Output cannot be captured,\nredirected, or used by other commands. Use Write-Output for data.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N7",
+      "title": "Positional Parameters in Scripts",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "\\b(Copy-Item|Move-Item|Set-Content|Out-File)\\s+[^-]",
+      "query": null,
+      "message": "Positional parameters make code harder to read and prone to errors when\ncmdlet signatures change. Always use named parameters in scripts.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "S1",
+      "title": "Use",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "#Requires",
+      "query": null,
+      "message": "Scripts should declare their requirements with #Requires statements\nto fail fast if prerequisites aren't met.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "S6",
+      "title": "Explicitly Handle $null Comparisons",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "\\$\\w+\\s+-eq\\s+\\$null|\\$\\w+\\s+-ne\\s+\\$null",
+      "query": null,
+      "message": "Always put $null on the left side of comparisons. When on the right,\narrays are filtered instead of compared.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "S7",
+      "title": "Avoid Global Variables",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "\\$global:",
+      "query": null,
+      "message": "Avoid using $global: scope. It pollutes the session and creates hidden\ndependencies. Use parameters or script scope instead.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "S8",
+      "title": "Avoid Empty Catch Blocks",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "catch\\s*\\{\\s*\\}",
+      "query": null,
+      "message": "Empty catch blocks silently swallow errors, making debugging impossible.\nAt minimum, log the error.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "S11",
+      "title": "Use Join-Path for Path Construction",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "\\$\\w+\\s*\\+\\s*['\"][\\\\/]|['\"][\\\\/]['\"]",
+      "query": null,
+      "message": "Never concatenate paths with string operations. Use Join-Path for\ncross-platform compatibility (handles / vs \\).",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    }
+  ]
+}

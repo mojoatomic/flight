@@ -1,0 +1,41 @@
+{
+  "domain": "scaffold",
+  "version": "1.1.0",
+  "language": "javascript",
+  "file_patterns": [
+    "**/*.sh",
+    "**/Makefile",
+    "**/package.json",
+    "**/.github/workflows/*.yml",
+    "**/.github/workflows/*.yaml"
+  ],
+  "exclude_patterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.venv/**",
+    "**/venv/**",
+    "**/.git/**"
+  ],
+  "provenance": {
+    "last_full_audit": "2026-01-20",
+    "audited_by": "flight-research",
+    "next_audit_due": "2026-07-20"
+  },
+  "rules": [
+    {
+      "id": "N1",
+      "title": "Destructive Scaffold Flags",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "create-vite.*--overwrite|create-vite.*--force|create-next-app.*--overwrite|create-react-app.*--overwrite|--overwrite.*create-|--force.*create-",
+      "query": null,
+      "message": "Never use --overwrite, --force, or similar flags that delete existing directories. These can destroy project infrastructure (.flight/, tasks/, .git/, etc.).",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    }
+  ]
+}

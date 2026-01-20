@@ -1,0 +1,105 @@
+{
+  "domain": "kubernetes",
+  "version": "1.1.0",
+  "language": "unknown",
+  "file_patterns": [
+    "**/*.yaml",
+    "**/*.yml"
+  ],
+  "exclude_patterns": [
+    "**/node_modules/**",
+    "**/.git/**",
+    "**/vendor/**"
+  ],
+  "provenance": {
+    "last_full_audit": "2026-01-16",
+    "audited_by": "flight-research",
+    "next_audit_due": "2026-07-16"
+  },
+  "rules": [
+    {
+      "id": "N1",
+      "title": "Privileged Containers",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "privileged:\\s*true",
+      "query": null,
+      "message": "Do not run privileged containers. Privileged mode disables most security\nmechanisms and grants full host access. Container escape becomes trivial.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N2",
+      "title": "Host Namespace Sharing",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "host(PID|IPC|Network):\\s*true",
+      "query": null,
+      "message": "Do not share host namespaces (hostPID, hostIPC, hostNetwork). This breaks\ncontainer isolation and allows access to host processes, IPC, and network.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N3",
+      "title": "Dangerous Capabilities",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "capabilities:[\\s\\S]*?add:[\\s\\S]*?(SYS_ADMIN|NET_ADMIN|SYS_PTRACE|NET_RAW|SYS_MODULE|DAC_READ_SEARCH|ALL)\\b",
+      "query": null,
+      "message": "Do not add dangerous capabilities like SYS_ADMIN, NET_ADMIN, or ALL.\nThese capabilities enable privilege escalation and container escape.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N4",
+      "title": "HostPath Volume Mounts",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "hostPath:",
+      "query": null,
+      "message": "Do not mount host filesystem paths. HostPath volumes allow container escape\nby accessing sensitive host files like /etc/shadow or Docker socket.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N6",
+      "title": "Running as Root User",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "runAsUser:\\s*0\\s*$",
+      "query": null,
+      "message": "Do not run containers as root (UID 0). Root inside a container has the\nsame UID as root on the host, enabling privilege escalation.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N7",
+      "title": "Secrets in Environment Variables",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "name:\\s*(PASSWORD|SECRET|API_KEY|TOKEN|PRIVATE_KEY|CREDENTIAL|AUTH_TOKEN)\\s*\\n\\s*value:\\s*[\"\\x27]?[^\"\\x27\\n]+",
+      "query": null,
+      "message": "Do not hardcode secrets in environment variables. Secrets in env vars are\nvisible in pod specs, logs, and kubectl describe output.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    }
+  ]
+}

@@ -1,0 +1,150 @@
+{
+  "domain": "javascript",
+  "version": "1.1.0",
+  "language": "javascript",
+  "file_patterns": [
+    "**/*.js",
+    "**/*.mjs",
+    "**/*.cjs"
+  ],
+  "exclude_patterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.next/**",
+    "**/.git/**"
+  ],
+  "provenance": {
+    "last_full_audit": "2026-01-16",
+    "audited_by": "flight-research",
+    "next_audit_due": "2026-07-16"
+  },
+  "rules": [
+    {
+      "id": "N1",
+      "title": "Generic Variable Names",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "\\b(const|let|var)\\s+(data|result|temp|info|item|value|obj|thing|stuff|tmp|ret|val)\\s*=",
+      "query": null,
+      "message": "Never use generic names like data, result, temp, info, item, value, obj, thing, stuff, foo, bar, baz, tmp, ret, val. Use domain-specific names instead.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N2",
+      "title": "Redundant Conditional Returns",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "return true;?\\s*(else|})?\\s*return false|return false;?\\s*(else|})?\\s*return true",
+      "query": null,
+      "message": "Never write 'if (condition) return true; else return false' or equivalent. Return the condition directly.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N3",
+      "title": "Ternary Returning Boolean Literals",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "\\?\\s*true\\s*:\\s*false|\\?\\s*false\\s*:\\s*true",
+      "query": null,
+      "message": "Never write 'condition ? true : false'. The condition is already boolean.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N4",
+      "title": "Redundant Boolean Comparisons",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "===\\s*true|===\\s*false|!==\\s*true|!==\\s*false",
+      "query": null,
+      "message": "Never write '=== true', '=== false', '!== true', or '!== false'. Use the boolean directly.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N5",
+      "title": "Magic Number Calculations",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "[0-9]+\\s*\\*\\s*[0-9]+\\s*\\*\\s*[0-9]+",
+      "query": null,
+      "message": "Never compute at runtime what can be a constant. Pre-calculate time values and other derived constants.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N6",
+      "title": "Generic Function Names",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "function\\s+(handle|process|do|run|execute|manage)(Data|Item|Value|Info|Result|Object)\\s*\\(",
+      "query": null,
+      "message": "Never use generic verbs like handle, process, do, run, execute, manage combined with generic nouns without specific context.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N7",
+      "title": "Single-Letter Variables",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "\\b(const|let|var)\\s+[a-hln-z]\\s*=",
+      "query": null,
+      "message": "Never use single-letter variables except i, j, k as loop counters.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N9",
+      "title": "var Declaration",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "\\bvar\\s+\\w+\\s*=",
+      "query": null,
+      "message": "Never use var. Use const for values that won't be reassigned, let for values that will. Block scoping and temporal dead zone prevent common bugs.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N10",
+      "title": "Loose Equality",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "[^=!<>]==[^=]|!=[^=]",
+      "query": null,
+      "message": "Never use == or !=. Use === and !== to avoid type coercion bugs. Type coercion rules are complex and lead to unexpected behavior.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    }
+  ]
+}

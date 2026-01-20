@@ -13,6 +13,7 @@ Single source of truth: .flight YAML generates both spec and validator.
 """
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -97,6 +98,7 @@ class DomainSpec:
     info: dict = field(default_factory=dict)
     anti_patterns: list = field(default_factory=list)
     sources: list = field(default_factory=list)
+    exclude_patterns: list = field(default_factory=list)
 
     def rules_by_severity(self, severity: str) -> list:
         """Get rules filtered by severity, sorted by ID."""
@@ -330,6 +332,7 @@ def parse_domain_spec(data: dict) -> DomainSpec:
         info=data.get("info", {}),
         anti_patterns=data.get("anti_patterns", []),
         sources=data.get("sources", []),
+        exclude_patterns=data.get("exclude_patterns", []),
     )
 
 
@@ -892,6 +895,163 @@ def generate_sh(spec: DomainSpec) -> str:
     return "".join(lines)
 
 
+# =============================================================================
+# JSON Generator (.rules.json for flight-lint)
+# =============================================================================
+
+# Direct mapping from domain name to language
+DOMAIN_TO_LANGUAGE = {
+    'javascript': 'javascript',
+    'typescript': 'typescript',
+    'python': 'python',
+    'go': 'go',
+    'rust': 'rust',
+    'react': 'javascript',
+    'nextjs': 'javascript',
+}
+
+
+def infer_language_from_domain(domain_name: str, file_patterns: list) -> str:
+    """Infer language from domain name or file patterns.
+
+    Returns the programming language for the domain, or 'unknown' if
+    it cannot be determined.
+    """
+    if domain_name in DOMAIN_TO_LANGUAGE:
+        return DOMAIN_TO_LANGUAGE[domain_name]
+
+    # Infer from file patterns
+    for pattern in file_patterns:
+        if '.js' in pattern or '.mjs' in pattern or '.cjs' in pattern:
+            return 'javascript'
+        if '.ts' in pattern or '.tsx' in pattern:
+            return 'typescript'
+        if '.py' in pattern:
+            return 'python'
+        if '.go' in pattern:
+            return 'go'
+        if '.rs' in pattern:
+            return 'rust'
+
+    return 'unknown'
+
+
+def convert_check_to_rule(rule: Rule) -> dict | None:
+    """Convert a Rule with check config to a JSON rule entry.
+
+    Returns None for non-mechanical rules or unknown check types.
+    Only grep and presence checks are supported (Task 007 adds ast).
+    """
+    if not rule.mechanical:
+        return None
+
+    check = rule.check
+    check_type = check.get('type', 'grep')
+
+    # Only support grep/presence types for now
+    if check_type not in ('grep', 'presence'):
+        return None
+
+    json_rule = {
+        'id': rule.id,
+        'title': rule.title,
+        'severity': rule.severity,
+        'type': 'grep',
+        'pattern': check.get('pattern', ''),
+        'query': None,
+        'message': rule.description.strip() if rule.description else rule.title,
+    }
+
+    # Add rule-level provenance if present
+    if rule.provenance:
+        prov = {}
+        if rule.provenance.last_verified:
+            prov['last_verified'] = rule.provenance.last_verified
+        if rule.provenance.confidence:
+            prov['confidence'] = rule.provenance.confidence
+        if rule.provenance.re_verify_after:
+            prov['re_verify_after'] = rule.provenance.re_verify_after
+        if prov:
+            json_rule['provenance'] = prov
+
+    return json_rule
+
+
+def generate_rules_json(spec: DomainSpec) -> str:
+    """Generate .rules.json content from a DomainSpec.
+
+    Returns JSON string with proper formatting for flight-lint consumption.
+    """
+    rules_list = []
+    for rule in spec.rules.values():
+        json_rule = convert_check_to_rule(rule)
+        if json_rule:
+            rules_list.append(json_rule)
+
+    # Sort rules by ID for consistent output (N1, N2, ..., S1, S2, ...)
+    def sort_key(rule_entry: dict) -> tuple:
+        rule_id = rule_entry['id']
+        prefix = rule_id[0]
+        numeric_part = rule_id[1:]
+        return (prefix, int(numeric_part) if numeric_part.isdigit() else 0)
+
+    rules_list.sort(key=sort_key)
+
+    language = infer_language_from_domain(spec.domain, spec.file_patterns)
+
+    rules_file = {
+        'domain': spec.domain,
+        'version': spec.version,
+        'language': language,
+        'file_patterns': spec.file_patterns,
+    }
+
+    if spec.exclude_patterns:
+        rules_file['exclude_patterns'] = spec.exclude_patterns
+
+    # Add domain-level provenance if present
+    if spec.provenance:
+        prov = {}
+        if spec.provenance.last_full_audit:
+            prov['last_full_audit'] = spec.provenance.last_full_audit
+        if spec.provenance.audited_by:
+            prov['audited_by'] = spec.provenance.audited_by
+        if spec.provenance.next_audit_due:
+            prov['next_audit_due'] = spec.provenance.next_audit_due
+        if prov:
+            rules_file['provenance'] = prov
+
+    rules_file['rules'] = rules_list
+
+    return json.dumps(rules_file, indent=2)
+
+
+def validate_rules_json(json_content: str) -> bool:
+    """Validate generated .rules.json against schema requirements.
+
+    Returns True if valid, raises ValueError with details if invalid.
+    """
+    rules_data = json.loads(json_content)
+
+    required_fields = ['domain', 'version', 'language', 'file_patterns', 'rules']
+    for field_name in required_fields:
+        if field_name not in rules_data:
+            raise ValueError(f"Missing required field: {field_name}")
+
+    rules_list = rules_data.get('rules', [])
+    required_rule_fields = ['id', 'title', 'severity', 'type', 'message']
+
+    for idx, rule_entry in enumerate(rules_list):
+        for field_name in required_rule_fields:
+            if field_name not in rule_entry:
+                raise ValueError(
+                    f"Rule {idx} (id={rule_entry.get('id', 'unknown')}) "
+                    f"missing required field: {field_name}"
+                )
+
+    return True
+
+
 def validate_yaml_syntax(flight_path: Path) -> bool:
     """Validate .flight file using yaml.validate.sh (dogfooding).
 
@@ -1055,6 +1215,12 @@ Examples:
     )
 
     parser.add_argument(
+        "--json-only",
+        action="store_true",
+        help="Generate only .rules.json, skip .md and .sh generation"
+    )
+
+    parser.add_argument(
         "--debug",
         action="store_true",
         help="Print parsed YAML structure"
@@ -1110,7 +1276,8 @@ def compile_domain(domain: str, args) -> int:
     # Generate outputs
     domains_dir = get_domains_dir()
 
-    if not args.sh_only:
+    # Generate .md (unless sh-only or json-only)
+    if not args.sh_only and not args.json_only:
         md_content = generate_md(spec)
         md_path = domains_dir / f"{spec.domain}.md"
 
@@ -1128,7 +1295,8 @@ def compile_domain(domain: str, args) -> int:
             md_path.write_text(md_content, encoding='utf-8')
             print(f"\nWrote {md_path}")
 
-    if not args.md_only:
+    # Generate .validate.sh (unless md-only or json-only)
+    if not args.md_only and not args.json_only:
         sh_content = generate_sh(spec)
         sh_path = domains_dir / f"{spec.domain}.validate.sh"
 
@@ -1151,6 +1319,32 @@ def compile_domain(domain: str, args) -> int:
             if not validate_shell_script(sh_path):
                 return 1
 
+    # Generate .rules.json (unless md-only or sh-only)
+    if not args.md_only and not args.sh_only:
+        json_content = generate_rules_json(spec)
+        json_path = domains_dir / f"{spec.domain}.rules.json"
+
+        if args.check:
+            # Dry-run: compare with existing
+            if json_path.exists():
+                existing = json_path.read_text()
+                if existing != json_content:
+                    print(f"{json_path} would be updated")
+                else:
+                    print(f"{json_path} unchanged")
+            else:
+                print(f"{json_path} would be created")
+        else:
+            # Validate before writing
+            try:
+                validate_rules_json(json_content)
+            except ValueError as validation_error:
+                print(f"ERROR: Generated JSON is invalid: {validation_error}", file=sys.stderr)
+                return 1
+
+            json_path.write_text(json_content, encoding='utf-8')
+            print(f"Wrote {json_path}")
+
     return 0
 
 
@@ -1167,8 +1361,9 @@ def main() -> int:
         print("ERROR: Cannot specify both domain and --all", file=sys.stderr)
         return 1
 
-    if args.md_only and args.sh_only:
-        print("ERROR: Cannot specify both --md-only and --sh-only", file=sys.stderr)
+    mode_flags = sum([args.md_only, args.sh_only, args.json_only])
+    if mode_flags > 1:
+        print("ERROR: Cannot specify multiple --*-only flags", file=sys.stderr)
         return 1
 
     # Handle --all mode

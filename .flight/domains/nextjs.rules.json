@@ -1,0 +1,67 @@
+{
+  "domain": "nextjs",
+  "version": "1.1.0",
+  "language": "javascript",
+  "file_patterns": [
+    "app/**/*.tsx",
+    "app/**/*.ts",
+    "app/*.tsx",
+    "app/*.ts"
+  ],
+  "exclude_patterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.next/**",
+    "**/.git/**"
+  ],
+  "provenance": {
+    "last_full_audit": "2026-01-16",
+    "audited_by": "flight-research",
+    "next_audit_due": "2026-07-16"
+  },
+  "rules": [
+    {
+      "id": "N3",
+      "title": "useEffect Fetch for Initial Page Data",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "useEffect.*fetch\\(|useEffect.*axios|useEffect.*useSWR",
+      "query": null,
+      "message": "Don't use useEffect to fetch initial page data. Server components can fetch data directly, avoiding the extra round trip.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N6",
+      "title": "Hardcoded Multi-segment Routes",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "href=['\"][^'\"]+/[^'\"]+/[^'\"]+['\"]|push\\(['\"][^'\"]+/[^'\"]+/[^'\"]+['\"]\\)",
+      "query": null,
+      "message": "Hardcoded route strings with multiple segments are fragile. Use centralized route constants for maintainability.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "medium",
+        "re_verify_after": "2026-07-16"
+      }
+    },
+    {
+      "id": "N7",
+      "title": "console.log in App Directory",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "console\\.log",
+      "query": null,
+      "message": "Console statements in production code indicate incomplete development or forgotten debugging. Remove before deploying.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    }
+  ]
+}

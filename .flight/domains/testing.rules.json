@@ -1,0 +1,112 @@
+{
+  "domain": "testing",
+  "version": "1.1.0",
+  "language": "javascript",
+  "file_patterns": [
+    "**/*test*.js",
+    "**/*spec*.js",
+    "**/*_test.py",
+    "**/test_*.py",
+    "**/*_test.go",
+    "**/Test*.java"
+  ],
+  "exclude_patterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.venv/**",
+    "**/venv/**",
+    "**/.git/**"
+  ],
+  "provenance": {
+    "last_full_audit": "2026-01-20",
+    "audited_by": "flight-research",
+    "next_audit_due": "2026-07-20"
+  },
+  "rules": [
+    {
+      "id": "N1",
+      "title": "Enumerated Test Names",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "test\\(['\"]test[0-9]|it\\(['\"][0-9]|def test[0-9]+|func Test[0-9]+\\(",
+      "query": null,
+      "message": "Never use enumerated test names (test1, test2, testA). They provide no information about what the test verifies. Use descriptive names that describe the behavior being tested.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N2",
+      "title": "Empty Test Bodies",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "it\\([^)]+,\\s*\\(\\)\\s*=>\\s*\\{\\s*\\}\\)|it\\(['\"]['\"],|def test[^:]+:\\s*pass$|func Test[^{]+\\{\\s*\\}|@Test[^{]+\\{\\s*\\}",
+      "query": null,
+      "message": "Never write tests without assertions. Empty tests pass but prove nothing. Every test must have at least one assertion.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N3",
+      "title": "Hardcoded Sleep/Delays",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "sleep\\s*\\(|time\\.sleep|Thread\\.sleep|\\.sleep\\(|usleep|nanosleep|await\\s+new\\s+Promise.*setTimeout",
+      "query": null,
+      "message": "Never use hardcoded sleep/delays in tests. They make tests slow and flaky. Use waitFor, mock timers, or event-based waiting instead.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N4",
+      "title": "Testing Private Methods Directly",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "expect\\([^)]*\\._[a-z]|assert.*\\._[a-z]|expect\\([^)]*\\.__",
+      "query": null,
+      "message": "Never test private methods directly. It breaks encapsulation and couples tests to implementation. Test through the public interface.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N5",
+      "title": "Unawaited Async Assertions",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "\\.then\\s*\\(\\s*[^)]*expect|\\.then\\s*\\(\\s*[^)]*assert",
+      "query": null,
+      "message": "Never leave async assertions unawaited. The promise is never awaited and the test passes even if the assertion fails. Always await or return the promise.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "S3",
+      "title": "Non-Descriptive Test Names",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "test\\(['\"]test['\"]|test\\(['\"]works['\"]|it\\(['\"]it['\"]|it\\(['\"]test['\"]",
+      "query": null,
+      "message": "Test names should describe the behavior being tested. Names like 'test', 'works', or 'it' provide no useful information.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    }
+  ]
+}

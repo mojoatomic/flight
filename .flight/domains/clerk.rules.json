@@ -1,0 +1,51 @@
+{
+  "domain": "clerk",
+  "version": "1.1.0",
+  "language": "typescript",
+  "file_patterns": [
+    "**/*.ts",
+    "**/*.tsx"
+  ],
+  "exclude_patterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.git/**",
+    "**/*.d.ts"
+  ],
+  "provenance": {
+    "last_full_audit": "2026-01-16",
+    "audited_by": "flight-research",
+    "next_audit_due": "2026-07-16"
+  },
+  "rules": [
+    {
+      "id": "N2",
+      "title": "Deprecated authMiddleware",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "authMiddleware|from ['\"]@clerk/nextjs['\"].*authMiddleware",
+      "query": null,
+      "message": "authMiddleware is deprecated. Use clerkMiddleware() instead. authMiddleware has known issues with Next.js 14+ and doesn't support the new routing patterns.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N5",
+      "title": "Hardcoded Clerk Keys",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "pk_test_[a-zA-Z0-9]+|pk_live_[a-zA-Z0-9]+|sk_test_[a-zA-Z0-9]+|sk_live_[a-zA-Z0-9]+",
+      "query": null,
+      "message": "Never hardcode Clerk publishable or secret keys. Use environment variables. Hardcoded credentials get committed and leaked.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    }
+  ]
+}

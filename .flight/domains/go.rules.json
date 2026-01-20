@@ -1,0 +1,328 @@
+{
+  "domain": "go",
+  "version": "1.1.0",
+  "language": "go",
+  "file_patterns": [
+    "**/*.go"
+  ],
+  "exclude_patterns": [
+    "**/*_test.go",
+    "**/vendor/**",
+    "**/.git/**"
+  ],
+  "provenance": {
+    "last_full_audit": "2026-01-16",
+    "audited_by": "flight-research",
+    "next_audit_due": "2026-07-16"
+  },
+  "rules": [
+    {
+      "id": "M1",
+      "title": "MixedCaps Naming",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "(func|var|const|type)\\s+[a-z]+_[a-z]+\\s*[=(]",
+      "query": null,
+      "message": "Go uses MixedCaps or mixedCaps, not underscores",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "M2",
+      "title": "Initialisms Must Be Consistent Case",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "(Url|Http|Api|Sql|Json|Xml|Html|Css|Tcp|Udp|Ip|Dns|Cpu|Gpu|Ram|Ssd|Hdd|Usb|Pdf|Csv)[A-Z]|(Url|Http|Api|Sql|Json|Xml|Html|Css|Tcp|Udp|Ip|Dns|Cpu|Gpu|Ram|Ssd|Hdd|Usb|Pdf|Csv)\\s*[=:(]",
+      "query": null,
+      "message": "Initialisms like URL, HTTP, ID should be all caps or all lower",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "M4",
+      "title": "Context as First Parameter",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "func\\s+\\w+\\([^)]*,\\s*ctx\\s+context\\.Context|func\\s+\\w+\\([^)]*context\\.Context[^)]*,[^)]+\\)\\s*[^{]*\\{",
+      "query": null,
+      "message": "Functions using Context should accept it as their first parameter",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "M5",
+      "title": "Error Variable Naming",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "var\\s+[A-Z][a-z]+Error\\s*=",
+      "query": null,
+      "message": "Error variables should be named err or have Err prefix for package-level",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "M6",
+      "title": "Package Names Must Be Lowercase",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "^package\\s+[A-Z_]|^package\\s+\\w+_\\w+",
+      "query": null,
+      "message": "Package names should be lowercase, single words without underscores",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "M7",
+      "title": "Receiver Name Consistency",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "func\\s*\\(\\s*(this|self|me|my)\\s+",
+      "query": null,
+      "message": "Receiver names should be short and consistent across methods",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "M8",
+      "title": "Error Strings Lowercase",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "errors\\.New\\s*\\(\\s*\"[A-Z]|fmt\\.Errorf\\s*\\(\\s*\"[A-Z]|errors\\.New\\s*\\([^)]*\\.\\s*\"\\s*\\)|fmt\\.Errorf\\s*\\([^)]*\\.\\s*\"\\s*\\)",
+      "query": null,
+      "message": "Error strings should not be capitalized or end with punctuation",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N1",
+      "title": "Ignored Errors",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "[^_]\\s*,\\s*_\\s*:?=\\s*\\w+\\s*\\([^)]*\\)|_\\s*=\\s*\\w+\\.\\w+\\s*\\(",
+      "query": null,
+      "message": "Do not discard errors using _ variables. Handle, return, or log them.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N2",
+      "title": "Panic for Normal Error Handling",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "panic\\s*\\(\\s*(err|fmt\\.Errorf|errors\\.New|\"[^\"]*error|\"[^\"]*fail|\"[^\"]*invalid)",
+      "query": null,
+      "message": "Don't use panic for normal error handling. Use error returns.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N3",
+      "title": "math/rand for Security",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "math/rand[\"/v2]*\"",
+      "query": null,
+      "message": "Do not use math/rand for cryptographic purposes. Use crypto/rand.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N4",
+      "title": "Defer in Loop",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "for\\s+[^{]*\\{[^}]*defer\\s+",
+      "query": null,
+      "message": "Defer in loops can cause resource leaks - defers don't run until function returns",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N6",
+      "title": "Unbuffered Channel in Select with Default",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "select\\s*\\{[^}]*case\\s+[^<]*<-[^:]*:[^}]*default:",
+      "query": null,
+      "message": "Sending to unbuffered channel in select with default may silently drop messages",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N7",
+      "title": "Nil Map Write",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "var\\s+\\w+\\s+map\\[[^\\]]+\\][^\\n=]*$",
+      "query": null,
+      "message": "Writing to a nil map causes a panic",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N8",
+      "title": "Range Loop Variable Capture (Pre-Go 1.22)",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "for\\s+[^,]+,?\\s*(\\w+)\\s*:?=\\s*range[^{]*\\{[^}]*go\\s+func\\s*\\([^)]*\\)\\s*\\{[^}]*\\1",
+      "query": null,
+      "message": "Loop variable capture in goroutines/closures - all share the same variable",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "S3",
+      "title": "Prefer var for Zero Values",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": ":=\\s*\\[\\][a-zA-Z]+\\{\\s*\\}|:=\\s*make\\s*\\(\\s*\\[\\][a-zA-Z]+\\s*,\\s*0\\s*\\)",
+      "query": null,
+      "message": "Use var declaration for zero-value slices and maps",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "S4",
+      "title": "Synchronous Functions Preferred",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "func\\s+\\w+\\([^)]*chan\\s*<-[^)]*\\)\\s*\\{[^}]*go\\s+func",
+      "query": null,
+      "message": "Prefer synchronous functions over asynchronous ones",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "S7",
+      "title": "Avoid Global State",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "^var\\s+\\w+\\s*=\\s*&?\\w+\\{|^var\\s+\\w+\\s+\\*\\w+\\s*$",
+      "query": null,
+      "message": "Avoid package-level variables; pass dependencies explicitly",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "S8",
+      "title": "Mutex Field Naming",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "sync\\.(Mutex|RWMutex)\\s*$",
+      "query": null,
+      "message": "Mutex fields should be named mu and placed above the fields they protect",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "S9",
+      "title": "Check Errors Before Using Defer",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "\\w+,\\s*_\\s*:?=\\s*\\w+\\.[^)]+\\)\\s*\\n\\s*defer",
+      "query": null,
+      "message": "Check resource creation errors before deferring cleanup",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "S10",
+      "title": "Indent Error Flow",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "if\\s+err\\s*==\\s*nil\\s*\\{[^}]+\\}\\s*else\\s*\\{",
+      "query": null,
+      "message": "Keep normal code path at minimal indentation, handle errors first",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "S11",
+      "title": "Avoid Init Functions",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "^func init\\s*\\(\\s*\\)",
+      "query": null,
+      "message": "Prefer explicit initialization over init() functions",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "S12",
+      "title": "Use Meaningful Test Names",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "func Test[A-Z][a-z]*\\s*\\(",
+      "query": null,
+      "message": "Test names should describe what is being tested",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    }
+  ]
+}

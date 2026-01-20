@@ -1,0 +1,163 @@
+{
+  "domain": "react",
+  "version": "1.1.0",
+  "language": "javascript",
+  "file_patterns": [
+    "**/*.jsx",
+    "**/*.tsx"
+  ],
+  "exclude_patterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.next/**",
+    "**/.git/**"
+  ],
+  "provenance": {
+    "last_full_audit": "2026-01-20",
+    "audited_by": "flight-research",
+    "next_audit_due": "2026-07-20"
+  },
+  "rules": [
+    {
+      "id": "N1",
+      "title": "Inline Objects in JSX Props",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "=[{][{]|=\\{\\s*\\{",
+      "query": null,
+      "message": "Creates new object reference every render, causing unnecessary re-renders of child components even when values haven't changed.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N2",
+      "title": "Inline Functions in JSX Props",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "onClick=\\{.*=>|onChange=\\{.*=>|onSubmit=\\{.*=>|onBlur=\\{.*=>|onFocus=\\{.*=>",
+      "query": null,
+      "message": "Creates new function reference every render, causing unnecessary re-renders and breaking React.memo optimization.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N3",
+      "title": "Index as Key",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "key=\\{.*index|key=\\{i\\}|key=\\{idx\\}",
+      "query": null,
+      "message": "Using array index as key breaks React reconciliation on reorder/delete. Items get wrong state and animations break.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N4",
+      "title": "Direct State Mutation",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "\\.push\\(|\\.splice\\(|\\.pop\\(|\\.shift\\(|\\.unshift\\(",
+      "query": null,
+      "message": "Never mutate state directly with push/pop/splice. React won't detect the change and won't re-render.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N6",
+      "title": "Conditional Hooks",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "if.*\\{[^}]*(useState|useEffect|useMemo|useCallback|useRef)",
+      "query": null,
+      "message": "Calling hooks inside conditions/loops breaks Rules of Hooks. React tracks hooks by call order which must be stable.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N7",
+      "title": "Generic Component Names",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "function\\s+\\w+\\(\\s*\\{\\s*(data|info|item|value)\\s*\\}",
+      "query": null,
+      "message": "Component functions named Item, Card, Component, etc. are too generic. Use domain-specific names that describe what the component represents.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N10",
+      "title": "Console.log in Components",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "console\\.(log|warn|error)",
+      "query": null,
+      "message": "Console statements in components indicate incomplete development or forgotten debugging code. Remove before committing.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N11",
+      "title": "Ternary Returning Boolean Literals",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "\\?\\s*true\\s*:\\s*false|\\?\\s*false\\s*:\\s*true",
+      "query": null,
+      "message": "condition ? true : false is always redundant. The condition is already boolean (or truthy/falsy).",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N12",
+      "title": "Redundant Boolean Comparisons",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "===\\s*true|===\\s*false|!==\\s*true|!==\\s*false",
+      "query": null,
+      "message": "Comparing to true/false explicitly is redundant. Booleans are already truthy/falsy.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "S3",
+      "title": "Boolean Props Use Prefix",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "^\\s*(loading|visible|active)=",
+      "query": null,
+      "message": "Boolean props should use is/has/can/should prefix for clarity. Exception: HTML attributes like disabled, checked, selected.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    }
+  ]
+}

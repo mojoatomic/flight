@@ -1,0 +1,72 @@
+{
+  "domain": "sms-twilio",
+  "version": "1.1.0",
+  "language": "javascript",
+  "file_patterns": [
+    "**/sms*.js",
+    "**/sms*.ts",
+    "**/*twilio*.js",
+    "**/*twilio*.ts",
+    "**/consent*.js",
+    "**/consent*.ts",
+    "**/sms*.py",
+    "**/twilio*.py"
+  ],
+  "exclude_patterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.venv/**",
+    "**/venv/**",
+    "**/.git/**"
+  ],
+  "provenance": {
+    "last_full_audit": "2026-01-20",
+    "audited_by": "flight-research",
+    "next_audit_due": "2026-07-20"
+  },
+  "rules": [
+    {
+      "id": "N2",
+      "title": "Never Send to OPTED_OUT or UNKNOWN",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "OPTED_OUT.*send|UNKNOWN.*send|send.*OPTED_OUT|send.*UNKNOWN",
+      "query": null,
+      "message": "INVARIANT: Never send messages to users in OPTED_OUT or UNKNOWN state. Only OPTED_IN users can receive messages. Violating this is a legal compliance issue (TCPA).",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N10",
+      "title": "No Hardcoded Phone Numbers",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "\"\\+1[0-9]{10}\"|\\x27\\+1[0-9]{10}\\x27",
+      "query": null,
+      "message": "Never hardcode phone numbers in source code. Use environment variables or configuration for phone numbers.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N11",
+      "title": "No Hardcoded Twilio Credentials",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "ACCOUNT_SID\\s*=\\s*['\"]AC|AUTH_TOKEN\\s*=\\s*['\"][a-f0-9]{32}",
+      "query": null,
+      "message": "Never hardcode Twilio credentials (Account SID, Auth Token) in source code. Use environment variables.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    }
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "domain": "webhooks",
+  "version": "1.1.0",
+  "language": "javascript",
+  "file_patterns": [
+    "**/webhook*.js",
+    "**/webhook*.ts",
+    "**/hooks/**/*.js",
+    "**/hooks/**/*.ts",
+    "**/*Webhook*.java",
+    "**/webhooks.py",
+    "**/webhook_handler*.py"
+  ],
+  "exclude_patterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.next/**",
+    "**/.git/**"
+  ],
+  "provenance": {
+    "last_full_audit": "2026-01-20",
+    "audited_by": "flight-research",
+    "next_audit_due": "2026-07-20"
+  },
+  "rules": [
+    {
+      "id": "N2",
+      "title": "Secrets in Webhook Payloads",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "webhook.*password|webhook.*secret|webhook.*api_key|payload.*password|payload.*ssn|payload.*credit.?card",
+      "query": null,
+      "message": "Never include secrets, passwords, API keys, SSNs, or credit card numbers in webhook payloads. Payloads may be logged or intercepted.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N3",
+      "title": "Unsafe Signature Comparison",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "signature\\s*(===?|!==?)\\s*(expected|computed|hash)|signature\\.equals\\(",
+      "query": null,
+      "message": "Never use === or == for signature comparison. String comparison is vulnerable to timing attacks that reveal the signature byte-by-byte.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N4",
+      "title": "Infinite Retry Without Backoff",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "while.*true.*send|while.*retry.*webhook|for\\s*\\(;;\\).*webhook",
+      "query": null,
+      "message": "Never retry webhook delivery in an infinite loop without backoff. This hammers failing endpoints and wastes resources.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N5",
+      "title": "Non-HTTPS URL Schemes",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "webhook.*file://|webhook.*ftp://|webhook.*gopher://|url.*file://|endpoint.*http://[^l]",
+      "query": null,
+      "message": "Never allow file://, ftp://, gopher://, or other non-HTTPS schemes in webhook URLs. These enable SSRF attacks.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    }
+  ]
+}
