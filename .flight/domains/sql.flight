@@ -2,10 +2,40 @@
 # Source: Migrated from sql.md and sql.validate.sh
 
 domain: sql
-version: 1.0.0
+version: 1.1.0
+schema_version: 2
 description: >
   Production SQL patterns for PostgreSQL/Supabase. Security, performance,
   maintainability. Covers both SQL files and source code containing SQL queries.
+
+provenance:
+  last_full_audit: "2026-01-20"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-20"
+
+  sources_consulted:
+    - url: "https://www.postgresql.org/docs/current/"
+      accessed: "2026-01-20"
+      note: "PostgreSQL official documentation"
+    - url: "https://owasp.org/www-community/attacks/SQL_Injection"
+      accessed: "2026-01-20"
+      note: "OWASP SQL Injection prevention"
+    - url: "https://supabase.com/docs/guides/database"
+      accessed: "2026-01-20"
+      note: "Supabase database patterns"
+    - url: "https://use-the-index-luke.com/"
+      accessed: "2026-01-20"
+      note: "SQL indexing best practices"
+
+  coverage:
+    apis_covered:
+      - "PostgreSQL 15+"
+      - "Supabase client library"
+      - "Row Level Security (RLS)"
+    known_gaps:
+      - "MySQL-specific syntax"
+      - "SQLite patterns"
+      - "Stored procedures"
 
 file_patterns:
   - "**/*.sql"
@@ -44,6 +74,14 @@ rules:
     description: >
       Never use SELECT * - breaks on schema changes, wastes bandwidth.
       Always specify explicit column lists.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.postgresql.org/docs/current/queries-select-lists.html"
+          accessed: "2026-01-20"
+          quote: "SELECT * is generally bad practice"
     check:
       type: grep
       pattern: 'SELECT\s+\*\s+FROM'
@@ -61,6 +99,14 @@ rules:
     description: >
       Never use string interpolation in SQL queries. SQL injection risk.
       Use parameterized queries with placeholders ($1, ?, :param).
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://owasp.org/www-community/attacks/SQL_Injection"
+          accessed: "2026-01-20"
+          quote: "Always use parameterized queries or prepared statements"
     check:
       type: script
       code: |
@@ -94,6 +140,14 @@ rules:
     description: >
       Never run UPDATE or DELETE without a WHERE clause. This modifies or
       deletes ALL rows in the table, causing catastrophic data loss.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.postgresql.org/docs/current/sql-delete.html"
+          accessed: "2026-01-20"
+          quote: "Without WHERE, all rows are deleted"
     check:
       type: script
       code: |
@@ -118,6 +172,14 @@ rules:
     description: >
       Never use LIKE with a leading wildcard ('%...') - it forces a full
       table scan and cannot use indexes. Use full text search instead.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://use-the-index-luke.com/sql/where-clause/searching-for-ranges/like-performance-tuning"
+          accessed: "2026-01-20"
+          quote: "Leading wildcards prevent index usage"
     check:
       type: grep
       pattern: "LIKE\\s+['\"]%[^'\"]+['\"]"
@@ -136,6 +198,14 @@ rules:
     description: >
       Never apply functions to indexed columns in WHERE clauses. This
       prevents index usage and forces full table scans.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://use-the-index-luke.com/sql/where-clause/obfuscation/functions"
+          accessed: "2026-01-20"
+          quote: "Functions on indexed columns prevent index usage"
     check:
       type: grep
       pattern: 'WHERE.*(YEAR|MONTH|DAY|LOWER|UPPER|TRIM)\s*\('
@@ -155,6 +225,14 @@ rules:
     description: >
       Never use large OFFSET values for pagination. OFFSET scans and discards
       rows, getting slower as offset grows. Use cursor/keyset pagination.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://use-the-index-luke.com/no-offset"
+          accessed: "2026-01-20"
+          quote: "OFFSET causes performance degradation at scale"
     check:
       type: grep
       pattern: 'OFFSET\s+[0-9]{4,}|OFFSET\s+\$'
@@ -176,6 +254,14 @@ rules:
     description: >
       Never store passwords in plain text. Use password_hash, password_digest,
       or hashed_password columns and store bcrypt/argon2 hashes.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://owasp.org/www-community/password-storage-cheat-sheet"
+          accessed: "2026-01-20"
+          quote: "Never store plaintext passwords"
     check:
       type: script
       code: |
@@ -202,6 +288,14 @@ rules:
     description: >
       Never use 'timestamp' without timezone. Use 'timestamptz' or
       'timestamp with time zone' to avoid timezone ambiguity.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.postgresql.org/docs/current/datatype-datetime.html"
+          accessed: "2026-01-20"
+          quote: "timestamptz is recommended for storing timestamps"
     check:
       type: script
       code: |
@@ -225,6 +319,14 @@ rules:
     description: >
       Never use float or real types for monetary values. Floating point
       has precision issues. Use decimal(10,2) for exact currency amounts.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.postgresql.org/docs/current/datatype-numeric.html"
+          accessed: "2026-01-20"
+          quote: "Use numeric types for monetary amounts"
     check:
       type: script
       code: |
@@ -254,6 +356,14 @@ rules:
     description: >
       Boolean columns should have NOT NULL DEFAULT to avoid three-state
       logic (true, false, NULL). Explicit defaults prevent bugs.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.postgresql.org/docs/current/datatype-boolean.html"
+          accessed: "2026-01-20"
+          quote: "NULL creates three-valued logic complexity"
     check:
       type: script
       code: |
@@ -279,6 +389,14 @@ rules:
     description: >
       Tables with user_id columns should have Row Level Security enabled
       to prevent data leakage in multi-tenant applications.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://supabase.com/docs/guides/database/postgres/row-level-security"
+          accessed: "2026-01-20"
+          quote: "Enable RLS on all user-scoped tables"
     check:
       type: script
       code: |
@@ -317,6 +435,14 @@ rules:
     description: >
       Foreign key columns should have indexes for efficient JOINs and
       CASCADE operations. Without indexes, these operations scan full tables.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.postgresql.org/docs/current/ddl-constraints.html"
+          accessed: "2026-01-20"
+          quote: "Index foreign key columns for performance"
     check:
       type: script
       code: |
@@ -354,6 +480,14 @@ rules:
     description: >
       Avoid executing queries inside loops (N+1 pattern). This causes
       excessive database round trips. Use JOINs or batch queries instead.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://use-the-index-luke.com/sql/join"
+          accessed: "2026-01-20"
+          quote: "Batch queries or JOINs eliminate N+1 problems"
     check:
       type: script
       code: |
@@ -386,6 +520,14 @@ rules:
     description: >
       Multiple INSERT/UPDATE operations should be wrapped in a transaction
       to ensure atomicity. Partial failures leave data in inconsistent state.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.postgresql.org/docs/current/tutorial-transactions.html"
+          accessed: "2026-01-20"
+          quote: "Transactions ensure atomicity of related operations"
     check:
       type: script
       code: |
@@ -425,6 +567,14 @@ rules:
     description: >
       Supabase .select() calls should specify columns explicitly. Empty
       .select() returns all columns like SELECT *.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://supabase.com/docs/reference/javascript/select"
+          accessed: "2026-01-20"
+          quote: "Specify columns to reduce payload size"
     check:
       type: grep
       pattern: '\.select\(\s*\)'
