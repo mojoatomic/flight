@@ -1,0 +1,234 @@
+{
+  "domain": "yaml",
+  "version": "1.1.0",
+  "language": "unknown",
+  "file_patterns": [
+    "*.yaml",
+    "*.yml"
+  ],
+  "exclude_patterns": [
+    "node_modules/**",
+    "vendor/**",
+    ".git/**",
+    "dist/**",
+    "build/**",
+    "*.min.yaml"
+  ],
+  "provenance": {
+    "last_full_audit": "2026-01-20",
+    "audited_by": "flight-research",
+    "next_audit_due": "2026-07-20"
+  },
+  "rules": [
+    {
+      "id": "M1",
+      "title": "Unquoted Norway Problem",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": ":\\s+(no|NO|No|yes|YES|Yes|on|ON|On|off|OFF|Off)\\s*(#|$)",
+      "query": null,
+      "message": "Country codes NO, DK, or values like \"yes\", \"no\", \"on\", \"off\" parse as\nbooleans in YAML 1.1. This is the infamous \"Norway problem.\"",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "M2",
+      "title": "Unquoted Sexagesimal Numbers",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": ":\\s+[0-9]+:[0-9]+(:[0-9]+)?\\s*(#|$)",
+      "query": null,
+      "message": "Values like 22:22 or 4:30 are parsed as base-60 (sexagesimal) numbers\nin YAML 1.1, converting to seconds. Port mappings are commonly affected.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "M3",
+      "title": "Unquoted Octal Numbers",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": ":\\s+0[0-7]{2,}\\s*(#|$)",
+      "query": null,
+      "message": "Numbers starting with 0 are octal in YAML 1.1. The value 0777 becomes\n511 decimal. File permissions are commonly affected.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "M4",
+      "title": "Version Number Coercion",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "version:\\s+[0-9]+\\.[0-9]+\\s*(#|$)",
+      "query": null,
+      "message": "Version strings like 1.0 or 10.23 are parsed as floats, losing precision\nor format. Version 1.10 becomes 1.1, version 10.0 becomes 10.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "M5",
+      "title": "Unquoted Scientific Notation",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": ":\\s+[0-9]+[eE][0-9]+\\s*(#|$)",
+      "query": null,
+      "message": "Values that look like scientific notation (1e10, 2E5) are parsed as\nfloats. Version numbers or identifiers can be misinterpreted.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "M6",
+      "title": "Unquoted Special Strings",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": ":\\s+(null|Null|NULL|~|true|True|TRUE|false|False|FALSE|\\.inf|\\.Inf|\\.INF|\\.nan|\\.NaN|\\.NAN)\\s*(#|$)",
+      "query": null,
+      "message": "Values null, ~, true, false, and .inf/.nan have special meaning in YAML.\nThey must be quoted if you want the literal string.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "M8",
+      "title": "Trailing Whitespace in Multiline",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "[[:space:]]+$",
+      "query": null,
+      "message": "Trailing spaces in multiline strings can cause unexpected behavior,\nespecially with folded (>) or literal (|) block scalars.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N1",
+      "title": "Tab Characters",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "^\\t",
+      "query": null,
+      "message": "Tabs are not allowed in YAML indentation. YAML requires spaces for\nindentation. Tabs will cause parse errors or unpredictable behavior.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N3",
+      "title": "Unsafe YAML Load",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "yaml\\.load\\s*\\([^)]*\\)\\s*$|yaml\\.load\\s*\\([^,)]+\\)(?!\\s*,\\s*Loader)",
+      "query": null,
+      "message": "Never use unsafe YAML loading functions that allow arbitrary code execution.\nYAML tags like !python/object can execute code during parsing.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N4",
+      "title": "YAML Bomb (Billion Laughs)",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "&[a-zA-Z_][a-zA-Z0-9_]*\\s*\\[\\s*\\*[a-zA-Z_]",
+      "query": null,
+      "message": "Exponentially expanding anchors/aliases can cause denial of service.\nNever allow deeply nested anchor references from untrusted sources.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "S2",
+      "title": "Quote Strings Starting with Special Characters",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": ":\\s+[@`*&!|>{[%][^[:space:]]",
+      "query": null,
+      "message": "Strings starting with @, `, *, &, !, |, >, {, [, or % should be quoted\nto avoid being parsed as YAML special constructs.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "S3",
+      "title": "Avoid Anchors for Simple Values",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "&[a-zA-Z_][a-zA-Z0-9_]*\\s+[^[{]",
+      "query": null,
+      "message": "Anchors and aliases add complexity. For simple values, prefer\nrepetition or external templating over YAML anchors.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "medium",
+        "re_verify_after": "2026-07-20"
+      }
+    },
+    {
+      "id": "S4",
+      "title": "Use Lowercase for Boolean Values",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": ":\\s+(True|TRUE|False|FALSE)\\s*(#|$)",
+      "query": null,
+      "message": "Use lowercase true/false for booleans. Other spellings (True, TRUE,\nyes, on) work in YAML 1.1 but are less portable.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "S5",
+      "title": "Quote Empty Strings",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_-]*:\\s*$",
+      "query": null,
+      "message": "Empty values in YAML are null, not empty strings. Use explicit quotes\nfor empty strings. Note: This check may flag parent keys with nested\ncontent.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "S6",
+      "title": "Avoid Flow Style for Complex Structures",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "\\{[^}]*\\{|\\[[^\\]]*\\[",
+      "query": null,
+      "message": "Flow style ({}, []) is harder to read for nested structures.\nUse block style for anything beyond simple lists.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "medium",
+        "re_verify_after": "2026-07-20"
+      }
+    }
+  ]
+}

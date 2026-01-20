@@ -1,0 +1,115 @@
+{
+  "domain": "docker",
+  "version": "1.1.0",
+  "language": "unknown",
+  "file_patterns": [
+    "**/Dockerfile",
+    "**/Dockerfile.*",
+    "**/*.dockerfile"
+  ],
+  "provenance": {
+    "last_full_audit": "2026-01-16",
+    "audited_by": "flight-research",
+    "next_audit_due": "2026-07-16"
+  },
+  "rules": [
+    {
+      "id": "M1",
+      "title": "Use Absolute WORKDIR",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "^WORKDIR\\s+[^/]",
+      "query": null,
+      "message": "WORKDIR must be an absolute path. Relative paths cause confusion and may behave differently depending on previous instructions.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "M4",
+      "title": "MAINTAINER is Deprecated",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "^MAINTAINER\\s+",
+      "query": null,
+      "message": "MAINTAINER instruction is deprecated. Use LABEL maintainer=\"...\" instead for better metadata handling and OCI compliance.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N2",
+      "title": "Secrets in Build Args or Environment",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "(ARG|ENV)\\s+\\w*(PASSWORD|SECRET|API_KEY|PRIVATE_KEY|TOKEN|CREDENTIAL|AUTH)\\w*\\s*=",
+      "query": null,
+      "message": "Never pass secrets via ARG or ENV. Build args are visible in image history. Environment variables may be logged or exposed. Use secret mounts instead.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N3",
+      "title": "ADD for Remote URLs",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "^ADD\\s+https?://",
+      "query": null,
+      "message": "Do not use ADD for downloading remote files. ADD with URLs is unpredictable and cannot be verified. Use RUN with curl/wget for checksums and control.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N4",
+      "title": "Privileged Operations in Dockerfile",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "--privileged|--cap-add|SYS_ADMIN|NET_ADMIN|ALL",
+      "query": null,
+      "message": "Do not configure privileged capabilities in Dockerfile. Capabilities should be granted at runtime with minimal scope, not baked into images.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N5",
+      "title": "Hardcoded Passwords or Keys",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "(password|passwd|secret|api_key|apikey|private_key|token)\\s*[=:]\\s*[\"\\047][^\"\\047]+[\"\\047]",
+      "query": null,
+      "message": "Never hardcode passwords, API keys, or other secrets directly in Dockerfiles. These become permanently visible in image layers and history.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "S9",
+      "title": "Avoid apt-get upgrade",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "apt-get\\s+(upgrade|dist-upgrade)",
+      "query": null,
+      "message": "Avoid apt-get upgrade/dist-upgrade in Dockerfiles. Upgrading packages can cause unpredictable changes. Pin base images instead.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    }
+  ]
+}

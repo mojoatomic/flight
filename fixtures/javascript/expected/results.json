@@ -1,0 +1,103 @@
+{
+  "description": "Expected results for JavaScript AST query validation",
+  "version": "1.0.0",
+  "domain": "javascript",
+  "domainVersion": "1.2.0",
+  "positive": {
+    "n1-generic-vars.js": {
+      "rule": "N1",
+      "title": "Generic Variable Names",
+      "expectedViolations": 14,
+      "violationNames": ["data", "result", "temp", "info", "item", "value", "obj", "thing", "stuff", "tmp", "ret", "val", "data2", "result2"],
+      "description": "Tests variable_declarator with forbidden generic names"
+    },
+    "n2-redundant-returns.js": {
+      "rule": "N2",
+      "title": "Redundant Conditional Returns",
+      "expectedViolations": 4,
+      "description": "Tests if_statement with return true/false patterns"
+    },
+    "n3-ternary-booleans.js": {
+      "rule": "N3",
+      "title": "Ternary Returning Boolean Literals",
+      "expectedViolations": 6,
+      "description": "Tests ternary_expression with true/false as consequence and alternative"
+    },
+    "n4-boolean-comparisons.js": {
+      "rule": "N4",
+      "title": "Redundant Boolean Comparisons",
+      "expectedViolations": 8,
+      "description": "Tests binary_expression comparing to true/false literals"
+    },
+    "n5-magic-numbers.js": {
+      "rule": "N5",
+      "title": "Magic Number Calculations",
+      "expectedViolations": 8,
+      "description": "Tests chained multiplication of 3+ numbers"
+    },
+    "n6-generic-functions.js": {
+      "rule": "N6",
+      "title": "Generic Function Names",
+      "expectedViolations": 18,
+      "description": "Tests function_declaration with handleData, processItem, etc."
+    },
+    "n7-single-letter-vars.js": {
+      "rule": "N7",
+      "title": "Single-Letter Variables",
+      "expectedViolations": 24,
+      "description": "Tests variable_declarator with single-letter names (except i,j,k,m)"
+    },
+    "n8-console-log.js": {
+      "rule": "N8",
+      "title": "console.log in Source Files",
+      "expectedViolations": 8,
+      "description": "Tests call_expression with console.log"
+    },
+    "n9-var-declaration.js": {
+      "rule": "N9",
+      "title": "var Declaration",
+      "expectedViolations": 8,
+      "description": "Tests variable_declaration with kind 'var'"
+    },
+    "n10-loose-equality.js": {
+      "rule": "N10",
+      "title": "Loose Equality",
+      "expectedViolations": 11,
+      "description": "Tests binary_expression with == or != operators"
+    },
+    "s1-await-in-loops.js": {
+      "rule": "S1",
+      "title": "Await in Loops",
+      "severity": "SHOULD",
+      "expectedViolations": 6,
+      "description": "Tests await_expression inside for/while loops"
+    }
+  },
+  "negative": {
+    "comments.js": {
+      "expectedViolations": 0,
+      "description": "All rule violation patterns are inside comments (single-line and multi-line). AST queries should not match comment content."
+    },
+    "strings.js": {
+      "expectedViolations": 0,
+      "description": "All rule violation patterns are inside string literals (single, double, template). AST queries should not match string content."
+    },
+    "similar-patterns.js": {
+      "expectedViolations": 0,
+      "description": "Valid code that looks similar to violations but uses allowed patterns (descriptive names, strict equality, const/let, etc.)."
+    }
+  },
+  "notes": {
+    "n1": "The regex ^(data|result|temp|info|item|value|obj|thing|stuff|tmp|ret|val)$ must match exactly these names",
+    "n2": "Complex pattern requiring if with return true in consequence and return false in alternative (or vice versa)",
+    "n3": "Matches ternary with both consequence and alternative being true or false",
+    "n4": "Only matches === or !== with true/false on the RIGHT side",
+    "n5": "Requires 3+ numbers in a multiplication chain (60 * 60 * 1000)",
+    "n6": "Regex ^(handle|process|do|run|execute|manage)(Data|Item|Value|Info|Result|Object)$ for exact matches",
+    "n7": "Regex ^[a-hln-z]$ excludes i, j, k, m as allowed loop counters",
+    "n8": "Only matches console.log, not other console methods",
+    "n9": "Matches variable_declaration with kind 'var' (not const/let)",
+    "n10": "Matches == and != operators (not === or !==)",
+    "s1": "Matches await inside for_statement, for_in_statement, or while_statement body"
+  }
+}

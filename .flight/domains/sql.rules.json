@@ -1,0 +1,97 @@
+{
+  "domain": "sql",
+  "version": "1.1.0",
+  "language": "javascript",
+  "file_patterns": [
+    "**/*.sql",
+    "**/*.js",
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.py"
+  ],
+  "exclude_patterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.venv/**",
+    "**/venv/**",
+    "**/.git/**"
+  ],
+  "provenance": {
+    "last_full_audit": "2026-01-20",
+    "audited_by": "flight-research",
+    "next_audit_due": "2026-07-20"
+  },
+  "rules": [
+    {
+      "id": "N1",
+      "title": "SELECT *",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "SELECT\\s+\\*\\s+FROM",
+      "query": null,
+      "message": "Never use SELECT * - breaks on schema changes, wastes bandwidth. Always specify explicit column lists.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N4",
+      "title": "LIKE with Leading Wildcard",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "LIKE\\s+['\"]%[^'\"]+['\"]",
+      "query": null,
+      "message": "Never use LIKE with a leading wildcard ('%...') - it forces a full table scan and cannot use indexes. Use full text search instead.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N5",
+      "title": "Functions on Columns in WHERE",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "WHERE.*(YEAR|MONTH|DAY|LOWER|UPPER|TRIM)\\s*\\(",
+      "query": null,
+      "message": "Never apply functions to indexed columns in WHERE clauses. This prevents index usage and forces full table scans.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N6",
+      "title": "Large OFFSET Values",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "OFFSET\\s+[0-9]{4,}|OFFSET\\s+\\$",
+      "query": null,
+      "message": "Never use large OFFSET values for pagination. OFFSET scans and discards rows, getting slower as offset grows. Use cursor/keyset pagination.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "S6",
+      "title": "Supabase .select() Without Columns",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "\\.select\\(\\s*\\)",
+      "query": null,
+      "message": "Supabase .select() calls should specify columns explicitly. Empty .select() returns all columns like SELECT *.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    }
+  ]
+}

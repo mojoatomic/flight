@@ -1,0 +1,93 @@
+{
+  "domain": "typescript",
+  "version": "1.1.0",
+  "language": "typescript",
+  "file_patterns": [
+    "**/*.ts",
+    "**/*.tsx"
+  ],
+  "exclude_patterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.git/**",
+    "**/*.d.ts"
+  ],
+  "provenance": {
+    "last_full_audit": "2026-01-20",
+    "audited_by": "flight-research",
+    "next_audit_due": "2026-07-20"
+  },
+  "rules": [
+    {
+      "id": "N2",
+      "title": "@ts-ignore Without Explanation",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "@ts-ignore\\s*$",
+      "query": null,
+      "message": "@ts-ignore suppresses all type errors. If you must use it, explain why and reference an issue number if possible.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N3",
+      "title": "Chained Non-null Assertions",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "\\w+!\\.\\w+!\\.",
+      "query": null,
+      "message": "Multiple `!` assertions in one expression (x!.y!.z!) hide real bugs. Handle null cases explicitly or use optional chaining with fallbacks.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N4",
+      "title": "Type Assertion on Unvalidated Data",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "JSON\\.parse\\([^)]+\\)\\s+as\\s+|\\.json\\(\\)\\s+as\\s+",
+      "query": null,
+      "message": "Don't use `as Type` on JSON.parse or fetch responses. External data is unknown until validated.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N5",
+      "title": "Loose Object Types",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": ":\\s*object\\s*[;,)=\\{]|:\\s*\\{\\s*\\}\\s*[;,)=]",
+      "query": null,
+      "message": "Don't use `: object` or `: {}` as parameter types. They accept anything and provide no type safety.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N6",
+      "title": "String Type for Status/Type/Kind Fields",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "(status|type|kind|state|mode):\\s*string\\s*[;,)]",
+      "query": null,
+      "message": "Don't use `string` for fields named status, type, kind, state, or mode. Use union types to catch typos at compile time.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    }
+  ]
+}

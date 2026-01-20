@@ -1,0 +1,51 @@
+{
+  "domain": "rp2040-pico",
+  "version": "1.1.0",
+  "language": "unknown",
+  "file_patterns": [
+    "src/**/*.c",
+    "src/**/*.h",
+    "src/*.c",
+    "src/*.h"
+  ],
+  "exclude_patterns": [
+    "**/node_modules/**",
+    "**/build/**",
+    "**/.git/**"
+  ],
+  "provenance": {
+    "last_full_audit": "2026-01-20",
+    "audited_by": "flight-research",
+    "next_audit_due": "2026-07-20"
+  },
+  "rules": [
+    {
+      "id": "N1",
+      "title": "No malloc/free",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "\\bmalloc\\s*\\(|\\bfree\\s*\\(|\\bcalloc\\s*\\(|\\brealloc\\s*\\(",
+      "query": null,
+      "message": "Never use malloc, free, calloc, or realloc. Static allocation only. Dynamic memory is unpredictable in embedded systems.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "S3",
+      "title": "Review Unbounded Loops",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "while\\s*\\(\\s*1\\s*\\)|while\\s*\\(\\s*true\\s*\\)|for\\s*\\(\\s*;\\s*;\\s*\\)",
+      "query": null,
+      "message": "while(true), while(1), and for(;;) loops should be reviewed to ensure they have proper exit conditions or are intentional main loops.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    }
+  ]
+}

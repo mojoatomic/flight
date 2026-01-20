@@ -1,0 +1,51 @@
+{
+  "domain": "supabase",
+  "version": "1.1.0",
+  "language": "typescript",
+  "file_patterns": [
+    "**/*.ts",
+    "**/*.tsx"
+  ],
+  "exclude_patterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.git/**",
+    "**/*.d.ts"
+  ],
+  "provenance": {
+    "last_full_audit": "2026-01-20",
+    "audited_by": "flight-research",
+    "next_audit_due": "2026-07-20"
+  },
+  "rules": [
+    {
+      "id": "N2",
+      "title": "Deprecated @supabase/auth-helpers-nextjs",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "@supabase/auth-helpers-nextjs|@supabase/auth-helpers-react|@supabase/auth-helpers-shared",
+      "query": null,
+      "message": "@supabase/auth-helpers-nextjs is deprecated. Use @supabase/ssr instead. The auth-helpers package has known issues with Next.js 13+ App Router.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N4",
+      "title": "Hardcoded Supabase Credentials",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "createClient\\(['\"][^'\"]*supabase[^'\"]*['\"]\\s*,\\s*['\"]ey",
+      "query": null,
+      "message": "Never hardcode Supabase URLs or keys. Use environment variables. Hardcoded credentials get committed and leaked.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "domain": "prisma",
+  "version": "1.1.0",
+  "language": "typescript",
+  "file_patterns": [
+    "**/*.ts",
+    "**/*.tsx",
+    "**/schema.prisma"
+  ],
+  "exclude_patterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.git/**",
+    "**/*.d.ts",
+    "**/prisma/migrations/**"
+  ],
+  "provenance": {
+    "last_full_audit": "2026-01-20",
+    "audited_by": "flight-research",
+    "next_audit_due": "2026-07-20"
+  },
+  "rules": [
+    {
+      "id": "N2",
+      "title": "$queryRawUnsafe with User Input",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "\\$queryRawUnsafe|\\$executeRawUnsafe",
+      "query": null,
+      "message": "$queryRawUnsafe bypasses parameterization. Using it with user input creates SQL injection vulnerabilities. Use $queryRaw with tagged templates instead.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    }
+  ]
+}

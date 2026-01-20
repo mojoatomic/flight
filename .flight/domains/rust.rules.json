@@ -1,0 +1,145 @@
+{
+  "domain": "rust",
+  "version": "1.1.0",
+  "language": "rust",
+  "file_patterns": [
+    "**/*.rs"
+  ],
+  "exclude_patterns": [
+    "**/target/**",
+    "**/.git/**"
+  ],
+  "provenance": {
+    "last_full_audit": "2026-01-20",
+    "audited_by": "flight-research",
+    "next_audit_due": "2026-07-20"
+  },
+  "rules": [
+    {
+      "id": "M3",
+      "title": "String Parameter When &str Would Work",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "fn\\s+\\w+\\s*\\([^)]*:\\s*&?String[^)]*(,|\\))|fn\\s+\\w+\\s*<[^>]*>\\s*\\([^)]*:\\s*&?String",
+      "query": null,
+      "message": "Function parameters should use &str instead of String or &String when the function only reads the string. This accepts both String and &str.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "M4",
+      "title": "Vec Parameter When Slice Would Work",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "fn\\s+\\w+\\s*\\([^)]*:\\s*&Vec<[^>]+>[^)]*(,|\\))",
+      "query": null,
+      "message": "Function parameters should use &[T] instead of &Vec<T> when the function only reads the vector. Slices are more general.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "M5",
+      "title": "Box<T> When T Would Work",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "Box<(String|Vec<|HashMap<|HashSet<)",
+      "query": null,
+      "message": "Avoid unnecessary Box<T> allocations. Use Box only for recursive types, trait objects, or when you need stable addresses.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N2",
+      "title": "mem::transmute Usage",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "mem::transmute\\s*[<(]|transmute::<",
+      "query": null,
+      "message": "Avoid mem::transmute - it's extremely dangerous and almost never needed. Use safer alternatives like from_ne_bytes, as casts, or pointer casts.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N5",
+      "title": ".expect() Without Descriptive Message",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "\\.expect\\s*\\(\\s*\"\"\\s*\\)|\\.expect\\s*\\(\\s*\\)",
+      "query": null,
+      "message": "When using .expect(), always provide a descriptive message explaining why the value should be present. Empty or generic messages defeat the purpose.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N6",
+      "title": "Raw Pointer Arithmetic Without Bounds Check",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "\\.offset\\s*\\(|\\.add\\s*\\(|\\.sub\\s*\\(|\\.wrapping_offset\\s*\\(",
+      "query": null,
+      "message": "Raw pointer arithmetic (offset, add, sub) requires bounds checking. Going out of bounds is undefined behavior even without dereferencing.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N7",
+      "title": "mem::forget Without Clear Justification",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "mem::forget\\s*\\(|std::mem::forget\\s*\\(",
+      "query": null,
+      "message": "mem::forget prevents destructors from running, causing resource leaks. Almost always indicates a design problem. Use ManuallyDrop if needed.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "S6",
+      "title": "Use snake_case for Functions and Variables",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "(let|fn)\\s+[a-z]+[A-Z][a-zA-Z]*\\s*[=:(]",
+      "query": null,
+      "message": "Rust conventions require snake_case for functions, methods, variables, and modules. CamelCase is for types and traits only.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "S8",
+      "title": "Prefer From/Into Over as for Type Conversions",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "\\s+as\\s+(u8|u16|u32|i8|i16|i32)\\s*[;,)\\]]",
+      "query": null,
+      "message": "Use From/Into traits for type conversions instead of 'as' casts when possible. From/Into are checked and more explicit about conversion intent.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "domain": "bash",
+  "version": "1.1.0",
+  "language": "unknown",
+  "file_patterns": [
+    "**/*.sh"
+  ],
+  "exclude_patterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.git/**",
+    "**/vendor/**"
+  ],
+  "provenance": {
+    "last_full_audit": "2026-01-16",
+    "audited_by": "flight-research",
+    "next_audit_due": "2026-07-16"
+  },
+  "rules": []
+}

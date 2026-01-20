@@ -1,0 +1,136 @@
+{
+  "domain": "python",
+  "version": "1.1.0",
+  "language": "python",
+  "file_patterns": [
+    "**/*.py"
+  ],
+  "exclude_patterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.venv/**",
+    "**/venv/**",
+    "**/__pycache__/**",
+    "**/.git/**"
+  ],
+  "provenance": {
+    "last_full_audit": "2026-01-20",
+    "audited_by": "flight-research",
+    "next_audit_due": "2026-07-20"
+  },
+  "rules": [
+    {
+      "id": "N1",
+      "title": "Bare except:",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "^\\s*except\\s*:",
+      "query": null,
+      "message": "Never use bare 'except:' which catches everything including KeyboardInterrupt and SystemExit.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N3",
+      "title": "Mutable Default Arguments",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "def .+\\(.*=\\s*(\\[\\]|\\{\\}|set\\(\\))",
+      "query": null,
+      "message": "Never use mutable default arguments (=[], ={}, =set()). Default arguments are evaluated once at function definition, causing shared state across calls.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N4",
+      "title": "from x import *",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "^from .+ import \\*",
+      "query": null,
+      "message": "Never use wildcard imports. They pollute the namespace and hide where names come from.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N5",
+      "title": "type(x) == for Type Checking",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "type\\(.+\\)\\s*==|==\\s*type\\(",
+      "query": null,
+      "message": "Never use type() for type checking. It breaks inheritance and doesn't work with abstract base classes.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N6",
+      "title": "Generic Variable Names at Module Level",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "^(data|temp|result|info|obj)\\s*=",
+      "query": null,
+      "message": "Never use generic variable names (data, temp, result, info, obj) at module level. Use domain-specific names.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N8",
+      "title": "Hardcoded Absolute Paths",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "['\"]/(home|usr|var|etc|tmp)/|['\"][A-Z]:\\\\",
+      "query": null,
+      "message": "Never hardcode absolute paths. They break across environments and operating systems.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "S1",
+      "title": "String += Patterns",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "\\+=\\s*['\"]|\\+=.*str\\(",
+      "query": null,
+      "message": "Avoid string concatenation with += in loops. It creates O(n\u00b2) complexity due to string immutability.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "S2",
+      "title": "Magic Numbers in Logic",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "if .+ [<>=]+ [0-9]{2,}|while .+ [<>=]+ [0-9]{2,}|sleep\\([0-9]{2,}\\)",
+      "query": null,
+      "message": "Avoid magic numbers in conditionals and function calls. Use named constants for clarity.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    }
+  ]
+}

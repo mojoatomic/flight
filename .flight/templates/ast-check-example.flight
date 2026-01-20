@@ -1,0 +1,210 @@
+# ===========================================================================
+# AST CHECK EXAMPLE TEMPLATE
+# ===========================================================================
+# This template demonstrates how to write tree-sitter query-based checks.
+# AST checks are more precise than grep patterns - no false positives from
+# comments, strings, or similar-looking code.
+#
+# Tree-sitter query syntax uses S-expressions (Lisp-like parentheses).
+# ===========================================================================
+
+domain: example-ast
+version: "1.0.0"
+schema_version: 2
+description: Example domain demonstrating AST-based checks using tree-sitter queries.
+
+file_patterns:
+  - "**/*.js"
+  - "**/*.mjs"
+
+exclude_patterns:
+  - "**/node_modules/**"
+  - "**/dist/**"
+
+provenance:
+  last_full_audit: "2026-01-20"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-20"
+
+rules:
+
+  # =========================================================================
+  # NEVER - AST-based checks (no false positives from comments/strings)
+  # =========================================================================
+
+  N1:
+    title: No eval()
+    severity: NEVER
+    mechanical: true
+    description: eval() executes arbitrary code and is a security risk. Detected via AST.
+
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/eval"
+          accessed: "2026-01-20"
+          quote: "Never use eval()!"
+
+    check:
+      type: ast
+      query: |
+        (call_expression
+          function: (identifier) @fn
+          (#eq? @fn "eval"))
+
+    examples:
+      bad:
+        - "eval(userInput)"
+        - "eval('alert(1)')"
+      good:
+        - "JSON.parse(jsonData)"
+        - "new Function('return 1')()"
+
+  N2:
+    title: No Function constructor with string
+    severity: NEVER
+    mechanical: true
+    description: new Function() with string args is essentially eval().
+
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+
+    check:
+      type: ast
+      query: |
+        (new_expression
+          constructor: (identifier) @ctor
+          arguments: (arguments (string) @arg)
+          (#eq? @ctor "Function"))
+
+    examples:
+      bad:
+        - "new Function('return ' + userInput)"
+      good:
+        - "new Function()  // empty is OK"
+
+  # =========================================================================
+  # MUST - Required patterns
+  # =========================================================================
+
+  M1:
+    title: Use strict equality
+    severity: MUST
+    mechanical: true
+    description: Use === or !== instead of == or != to avoid type coercion.
+
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+
+    check:
+      type: ast
+      query: |
+        (binary_expression
+          operator: ["==" "!="] @op)
+
+    examples:
+      bad:
+        - "if (x == null)"
+        - "if (y != undefined)"
+      good:
+        - "if (x === null)"
+        - "if (y !== undefined)"
+
+  # =========================================================================
+  # SHOULD - Best practices (warnings)
+  # =========================================================================
+
+  S1:
+    title: No console.log in production
+    severity: SHOULD
+    mechanical: true
+    description: Remove console.* calls before production deployment.
+
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: medium
+      re_verify_after: "2026-07-20"
+
+    check:
+      type: ast
+      query: |
+        (call_expression
+          function: (member_expression
+            object: (identifier) @obj
+            property: (property_identifier) @prop)
+          (#eq? @obj "console"))
+
+    examples:
+      bad:
+        - "console.log('debug')"
+        - "console.error(err)"
+      good:
+        - "logger.debug('Processing')"
+        - "logger.error('Failed', { error: err })"
+
+  S2:
+    title: Prefer const over let
+    severity: SHOULD
+    mechanical: true
+    description: Use const for variables that aren't reassigned.
+    note: This grep-based check still works alongside AST checks.
+
+    check:
+      type: grep
+      pattern: '\blet\s+\w+\s*='
+      flags: -En
+
+    examples:
+      bad:
+        - "let x = 5"
+      good:
+        - "const x = 5"
+
+# ===========================================================================
+# QUERY SYNTAX REFERENCE
+# ===========================================================================
+# Basic patterns:
+#   (node_type)                       - Match any node of type
+#   (node_type) @capture             - Capture the node
+#   (#eq? @capture "value")          - Predicate: equals string
+#   (#match? @capture "regex")       - Predicate: matches regex
+#   (#not-eq? @capture "value")      - Predicate: not equals
+#
+# Node relationships:
+#   (parent child: (child_type))     - Named child
+#   (parent (child_type))            - Anonymous child
+#   (parent (child_type) @cap)       - Captured child
+#
+# Alternatives:
+#   ["==" "!="]                       - Match either operator
+#   (node_type)* @matches            - Zero or more
+#   (node_type)+ @matches            - One or more
+#   (node_type)? @matches            - Optional
+#
+# Common JavaScript node types:
+#   call_expression                  - Function calls
+#   member_expression                - Property access (a.b)
+#   binary_expression               - Operators (+, -, ==, etc.)
+#   identifier                       - Variable names
+#   string / template_string        - String literals
+#   new_expression                  - new Constructor()
+#   function_declaration            - function name() {}
+#   arrow_function                  - () => {}
+# ===========================================================================
+
+anti_patterns:
+  - pattern: "eval()"
+    example: "eval(userInput)"
+    fix: "Use JSON.parse() for data parsing"
+  - pattern: "new Function(string)"
+    example: "new Function('return ' + x)"
+    fix: "Use safe alternatives or validate input"
+  - pattern: "== / !="
+    example: "if (x == null)"
+    fix: "Use === and !== for strict comparison"

@@ -2,3 +2,10 @@
 *.swp
 *.swo
 *~
+
+# Flight working files (not for version control)
+tasks/
+PRIME.md
+PROMPT.md
+PRD.md
+MILESTONES.md

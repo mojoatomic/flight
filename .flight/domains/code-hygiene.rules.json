@@ -1,0 +1,117 @@
+{
+  "domain": "code-hygiene",
+  "version": "1.1.0",
+  "language": "javascript",
+  "file_patterns": [
+    "**/*.js",
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.jsx",
+    "**/*.py",
+    "**/*.go",
+    "**/*.rs",
+    "**/*.java",
+    "**/*.c",
+    "**/*.cpp",
+    "**/*.h"
+  ],
+  "exclude_patterns": [
+    "**/node_modules/**",
+    "**/vendor/**",
+    "**/target/**",
+    "**/.git/**",
+    "**/dist/**",
+    "**/build/**"
+  ],
+  "provenance": {
+    "last_full_audit": "2026-01-16",
+    "audited_by": "flight-research",
+    "next_audit_due": "2026-07-16"
+  },
+  "rules": [
+    {
+      "id": "N1",
+      "title": "Generic Variable Names",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "^\\s*(const|let|var|)\\s*(data|result|temp|tmp|info|item|value|val|obj|thing|stuff|ret|res|output|input|payload)\\s*=",
+      "query": null,
+      "message": "Do not use generic names like data, result, temp, item, value, obj. The name should describe WHAT it holds, not THAT it holds something.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N2",
+      "title": "Redundant Conditional Returns",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "if\\s*\\([^)]+\\)\\s*return\\s+(true|false)\\s*;\\s*(else\\s*)?(return\\s+(true|false))?",
+      "query": null,
+      "message": "Do not use if/else to return boolean literals. Return the condition directly.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N3",
+      "title": "Ternary Returning Boolean Literals",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "\\?\\s*true\\s*:\\s*false|\\?\\s*false\\s*:\\s*true",
+      "query": null,
+      "message": "Do not use ternary operator to return true/false. Use the condition directly.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N4",
+      "title": "Redundant Boolean Comparisons",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "===?\\s*true|===?\\s*false|!==?\\s*true|!==?\\s*false",
+      "query": null,
+      "message": "Do not compare booleans to true/false. Use the boolean directly.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N6",
+      "title": "Generic Function Names",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "function\\s+(handleData|processItem|processItems|doSomething|getData|setData|updateValue|handleEvent|processResult|transformData|handleInput|processInput)\\s*\\(|def\\s+(handle_data|process_item|do_something|get_data|set_data|update_value|handle_event|process_result|transform_data)\\s*\\(",
+      "query": null,
+      "message": "Function names should include the domain noun they operate on. Avoid handleData, processItem, doSomething, etc.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N9",
+      "title": "Negated Boolean Names",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "(is|has|can|should|will)(Not|No)[A-Z]",
+      "query": null,
+      "message": "Avoid boolean names with negative prefixes (isNot, hasNo, cannot). They lead to confusing double negatives like !isNotValid.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    }
+  ]
+}
