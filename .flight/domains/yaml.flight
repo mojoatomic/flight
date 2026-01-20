@@ -2,11 +2,39 @@
 # Compiled by flight-domain-compile into yaml.md + yaml.validate.sh
 
 domain: yaml
-version: "1.0"
+version: "1.1.0"
+schema_version: 2
 description: |
   YAML syntax best practices and common footguns. Covers type coercion,
   string handling, security, and structural patterns. Catches the infamous
   Norway problem, sexagesimal parsing, and other YAML surprises.
+
+provenance:
+  last_full_audit: "2026-01-20"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-20"
+  sources_consulted:
+    - url: "https://yaml.org/spec/1.2.2/"
+      accessed: "2026-01-20"
+      note: "YAML 1.2 Specification"
+    - url: "https://ruudvanasseldonk.com/2023/01/11/the-yaml-document-from-hell"
+      accessed: "2026-01-20"
+      note: "YAML footguns and pitfalls"
+    - url: "https://hitchdev.com/strictyaml/why/"
+      accessed: "2026-01-20"
+      note: "StrictYAML rationale and implicit typing issues"
+    - url: "https://pyyaml.org/wiki/PyYAMLDocumentation"
+      accessed: "2026-01-20"
+      note: "PyYAML safe loading best practices"
+  coverage:
+    apis_covered:
+      - "YAML 1.1/1.2 parsing"
+      - "Type coercion issues"
+      - "PyYAML safe loading"
+      - "Anchor/alias security"
+    known_gaps:
+      - "Language-specific YAML libraries beyond PyYAML"
+      - "Kubernetes-specific YAML patterns"
 
 file_patterns:
   - "*.yaml"
@@ -29,6 +57,14 @@ rules:
     title: Tab Characters
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://yaml.org/spec/1.2.2/#61-indentation-spaces"
+          accessed: "2026-01-20"
+          quote: "To maintain portability, tab characters must not be used in indentation"
     description: |
       Tabs are not allowed in YAML indentation. YAML requires spaces for
       indentation. Tabs will cause parse errors or unpredictable behavior.
@@ -49,6 +85,14 @@ rules:
     title: Duplicate Keys
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://yaml.org/spec/1.2.2/#321-node-tags"
+          accessed: "2026-01-20"
+          quote: "JSON's RFC4627 requires that mappings keys merely 'SHOULD' be unique, while YAML insists they 'MUST' be"
     description: |
       Duplicate keys in the same mapping are invalid. The second value silently
       overwrites the first, causing data loss with no warning.
@@ -98,6 +142,14 @@ rules:
     title: Unsafe YAML Load
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://pyyaml.org/wiki/PyYAMLDocumentation"
+          accessed: "2026-01-20"
+          quote: "Warning: It is not safe to call yaml.load with any data received from an untrusted source"
     description: |
       Never use unsafe YAML loading functions that allow arbitrary code execution.
       YAML tags like !python/object can execute code during parsing.
@@ -121,6 +173,14 @@ rules:
     title: YAML Bomb (Billion Laughs)
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://en.wikipedia.org/wiki/Billion_laughs_attack"
+          accessed: "2026-01-20"
+          quote: "A billion laughs attack is a type of denial-of-service attack which is aimed at parsers of XML (and YAML)"
     description: |
       Exponentially expanding anchors/aliases can cause denial of service.
       Never allow deeply nested anchor references from untrusted sources.
@@ -153,6 +213,17 @@ rules:
     title: Unquoted Norway Problem
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://hitchdev.com/strictyaml/why/implicit-typing-removed/"
+          accessed: "2026-01-20"
+          quote: "Norway's country code is NO, which YAML interprets as false"
+        - url: "https://ruudvanasseldonk.com/2023/01/11/the-yaml-document-from-hell"
+          accessed: "2026-01-20"
+          quote: "The value of country is now false... This is the infamous Norway problem"
     description: |
       Country codes NO, DK, or values like "yes", "no", "on", "off" parse as
       booleans in YAML 1.1. This is the infamous "Norway problem."
@@ -176,6 +247,14 @@ rules:
     title: Unquoted Sexagesimal Numbers
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://ruudvanasseldonk.com/2023/01/11/the-yaml-document-from-hell"
+          accessed: "2026-01-20"
+          quote: "YAML 1.1 supports sexagesimal (base 60) numbers. The value 4:30 is 4×60 + 30 = 270"
     description: |
       Values like 22:22 or 4:30 are parsed as base-60 (sexagesimal) numbers
       in YAML 1.1, converting to seconds. Port mappings are commonly affected.
@@ -199,6 +278,14 @@ rules:
     title: Unquoted Octal Numbers
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://yaml.org/type/int.html"
+          accessed: "2026-01-20"
+          quote: "Integers starting with '0' are presumed to be octal"
     description: |
       Numbers starting with 0 are octal in YAML 1.1. The value 0777 becomes
       511 decimal. File permissions are commonly affected.
@@ -222,6 +309,14 @@ rules:
     title: Version Number Coercion
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://ruudvanasseldonk.com/2023/01/11/the-yaml-document-from-hell"
+          accessed: "2026-01-20"
+          quote: "Version numbers like 1.10 become 1.1 because trailing zeros are stripped from floats"
     description: |
       Version strings like 1.0 or 10.23 are parsed as floats, losing precision
       or format. Version 1.10 becomes 1.1, version 10.0 becomes 10.
@@ -247,6 +342,14 @@ rules:
     title: Unquoted Scientific Notation
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://yaml.org/type/float.html"
+          accessed: "2026-01-20"
+          quote: "Scientific notation uses lowercase or uppercase e to indicate the exponent"
     description: |
       Values that look like scientific notation (1e10, 2E5) are parsed as
       floats. Version numbers or identifiers can be misinterpreted.
@@ -268,6 +371,17 @@ rules:
     title: Unquoted Special Strings
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://yaml.org/type/null.html"
+          accessed: "2026-01-20"
+          quote: "Canonical: ~. Regexp: null | Null | NULL | ~"
+        - url: "https://yaml.org/type/bool.html"
+          accessed: "2026-01-20"
+          quote: "Regexp: true | True | TRUE | false | False | FALSE"
     description: |
       Values null, ~, true, false, and .inf/.nan have special meaning in YAML.
       They must be quoted if you want the literal string.
@@ -293,6 +407,14 @@ rules:
     title: Inconsistent Indentation
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://yaml.org/spec/1.2.2/#61-indentation-spaces"
+          accessed: "2026-01-20"
+          quote: "YAML uses a fixed number of spaces for each indentation level"
     description: |
       Mixed indentation levels (e.g., 2 spaces then 4 spaces) cause parse
       errors or incorrect nesting. Use consistent indentation throughout.
@@ -340,6 +462,14 @@ rules:
     title: Trailing Whitespace in Multiline
     severity: MUST
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://yaml.org/spec/1.2.2/#81-block-scalar-styles"
+          accessed: "2026-01-20"
+          quote: "The content of a literal scalar excludes trailing whitespace indicators"
     description: |
       Trailing spaces in multiline strings can cause unexpected behavior,
       especially with folded (>) or literal (|) block scalars.
@@ -367,6 +497,14 @@ rules:
     title: Prefer Explicit Document Start
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: medium
+      re_verify_after: "2026-07-20"
+      sources:
+        - url: "https://yaml.org/spec/1.2.2/#91-documents"
+          accessed: "2026-01-20"
+          quote: "A document begins with a document start marker"
     description: |
       Multi-document YAML files should have explicit document start markers.
       Single-document files benefit from consistency.
@@ -404,6 +542,14 @@ rules:
     title: Quote Strings Starting with Special Characters
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://yaml.org/spec/1.2.2/#51-character-set"
+          accessed: "2026-01-20"
+          quote: "Indicators and special characters have specific meaning in YAML"
     description: |
       Strings starting with @, `, *, &, !, |, >, {, [, or % should be quoted
       to avoid being parsed as YAML special constructs.
@@ -431,6 +577,14 @@ rules:
     title: Avoid Anchors for Simple Values
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: medium
+      re_verify_after: "2026-07-20"
+      sources:
+        - url: "https://hitchdev.com/strictyaml/why/"
+          accessed: "2026-01-20"
+          quote: "Anchor and alias references add complexity and can cause security issues"
     description: |
       Anchors and aliases add complexity. For simple values, prefer
       repetition or external templating over YAML anchors.
@@ -462,6 +616,14 @@ rules:
     title: Use Lowercase for Boolean Values
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://yaml.org/spec/1.2.2/#10212-boolean"
+          accessed: "2026-01-20"
+          quote: "YAML 1.2 boolean uses lowercase: true | false"
     description: |
       Use lowercase true/false for booleans. Other spellings (True, TRUE,
       yes, on) work in YAML 1.1 but are less portable.
@@ -488,6 +650,14 @@ rules:
     title: Quote Empty Strings
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://yaml.org/type/null.html"
+          accessed: "2026-01-20"
+          quote: "An empty value is interpreted as null"
     description: |
       Empty values in YAML are null, not empty strings. Use explicit quotes
       for empty strings. Note: This check may flag parent keys with nested
@@ -514,6 +684,14 @@ rules:
     title: Avoid Flow Style for Complex Structures
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: medium
+      re_verify_after: "2026-07-20"
+      sources:
+        - url: "https://yaml.org/spec/1.2.2/#73-flow-collection-styles"
+          accessed: "2026-01-20"
+          quote: "Flow styles can be thought of as a way of representing YAML inline"
     description: |
       Flow style ({}, []) is harder to read for nested structures.
       Use block style for anything beyond simple lists.
@@ -701,22 +879,3 @@ anti_patterns:
   - pattern: "Tab indentation"
     problem: "Parse error"
     fix: "Use spaces only"
-
-sources:
-  - name: "YAML 1.2 Specification"
-    url: "https://yaml.org/spec/1.2.2/"
-
-  - name: "The YAML Document From Hell"
-    url: "https://ruudvanasseldonk.com/2023/01/11/the-yaml-document-from-hell"
-
-  - name: "StrictYAML - Why"
-    url: "https://hitchdev.com/strictyaml/why/"
-
-  - name: "Norway Problem"
-    url: "https://hitchdev.com/strictyaml/why/implicit-typing-removed/"
-
-  - name: "PyYAML Documentation"
-    url: "https://pyyaml.org/wiki/PyYAMLDocumentation"
-
-  - name: "YAML Multiline Strings"
-    url: "https://yaml-multiline.info/"
