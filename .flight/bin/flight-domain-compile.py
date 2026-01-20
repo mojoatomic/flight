@@ -248,7 +248,7 @@ def validate_spec(data: dict, domain: str) -> tuple[list, list]:
         check = rule_data.get("check", {})
         if check:
             check_type = check.get("type")
-            valid_types = ["grep", "presence", "script", "multi-condition", "file_exists"]
+            valid_types = ["grep", "presence", "script", "multi-condition", "file_exists", "ast"]
             if check_type and check_type not in valid_types:
                 errors.append(
                     f"{domain}.flight: Rule {rule_id} has unknown check type '{check_type}'"
@@ -270,6 +270,13 @@ def validate_spec(data: dict, domain: str) -> tuple[list, list]:
                         errors.append(
                             f"{domain}.flight: Rule {rule_id} condition {i} has invalid regex pattern"
                         )
+
+            # ast checks require query field
+            if check_type == "ast":
+                if "query" not in check:
+                    errors.append(
+                        f"{domain}.flight: Rule {rule_id} has type 'ast' but no 'query' field"
+                    )
 
         # Provenance warnings (schema v2)
         provenance = rule_data.get("provenance", {})
@@ -939,8 +946,8 @@ def infer_language_from_domain(domain_name: str, file_patterns: list) -> str:
 def convert_check_to_rule(rule: Rule) -> dict | None:
     """Convert a Rule with check config to a JSON rule entry.
 
-    Returns None for non-mechanical rules or unknown check types.
-    Only grep and presence checks are supported (Task 007 adds ast).
+    Returns None for non-mechanical rules or unsupported check types.
+    Supports grep, presence, and ast types.
     """
     if not rule.mechanical:
         return None
@@ -948,17 +955,20 @@ def convert_check_to_rule(rule: Rule) -> dict | None:
     check = rule.check
     check_type = check.get('type', 'grep')
 
-    # Only support grep/presence types for now
-    if check_type not in ('grep', 'presence'):
+    # Support grep, presence, and ast types
+    if check_type not in ('grep', 'presence', 'ast'):
         return None
+
+    # Determine output type and fields based on check type
+    is_ast = check_type == 'ast'
 
     json_rule = {
         'id': rule.id,
         'title': rule.title,
         'severity': rule.severity,
-        'type': 'grep',
-        'pattern': check.get('pattern', ''),
-        'query': None,
+        'type': 'ast' if is_ast else 'grep',
+        'pattern': None if is_ast else check.get('pattern', ''),
+        'query': check.get('query', '').strip() if is_ast else None,
         'message': rule.description.strip() if rule.description else rule.title,
     }
 
