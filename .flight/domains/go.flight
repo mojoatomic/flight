@@ -77,9 +77,12 @@ rules:
           quote: "Do not discard errors using _ variables. If a function returns an error, check it to make sure the function succeeded."
     description: Do not discard errors using _ variables. Handle, return, or log them.
     check:
-      type: grep
-      pattern: '[^_]\s*,\s*_\s*:?=\s*\w+\s*\([^)]*\)|_\s*=\s*\w+\.\w+\s*\('
-      flags: -En
+      type: ast
+      query: |
+        (short_var_declaration
+          left: (expression_list
+            (identifier) @violation
+            (#eq? @violation "_")))
     note: |
       From Go Code Review Comments: "Do not discard errors using _ variables.
       If a function returns an error, check it to make sure the function succeeded."
@@ -171,9 +174,11 @@ rules:
           quote: "The deferred call's arguments are evaluated immediately, but the function call is not executed until the surrounding function returns."
     description: Defer in loops can cause resource leaks - defers don't run until function returns
     check:
-      type: grep
-      pattern: 'for\s+[^{]*\{[^}]*defer\s+'
-      flags: -Ezn
+      type: ast
+      query: |
+        (for_statement
+          body: (block
+            (defer_statement) @violation))
     note: |
       Deferred calls are executed when the surrounding function returns, not when
       the loop iteration ends. This causes resource accumulation.

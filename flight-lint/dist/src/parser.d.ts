@@ -2,7 +2,7 @@ import Parser from 'tree-sitter';
 type TreeSitterLanguage = any;
 /**
  * Get a tree-sitter language by name, with caching.
- * @param languageName - The language to load (javascript, jsx, typescript, tsx)
+ * @param languageName - The language to load (javascript, jsx, typescript, tsx, python)
  * @returns The tree-sitter Language object
  * @throws Error if the language is not supported
  */

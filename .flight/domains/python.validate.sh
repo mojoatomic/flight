@@ -84,7 +84,7 @@ printf '\n%s\n' "## NEVER Rules"
 
 # N1: Bare except:
 check "N1: Bare except:" \
-    grep -En "^\\s*except\\s*:" "${FILES[@]}"
+    # Unknown check type: ast
 
 # N2: except Exception: pass
 check "N2: except Exception: pass" \
@@ -94,7 +94,7 @@ done' _ "${FILES[@]}"
 
 # N3: Mutable Default Arguments
 check "N3: Mutable Default Arguments" \
-    grep -En "def .+\\(.*=\\s*(\\[\\]|\\{\\}|set\\(\\))" "${FILES[@]}"
+    # Unknown check type: ast
 
 # N4: from x import *
 check "N4: from x import *" \

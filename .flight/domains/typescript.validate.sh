@@ -84,24 +84,11 @@ printf '\n%s\n' "## NEVER Rules"
 
 # N1: Unjustified any
 check "N1: Unjustified any" \
-    bash -c 'for f in "$@"; do
-  awk '"'"'
-  /: any/ || /as any/ || /<any>/ {
-    # Check if previous line has justification
-    if (prev !~ /TODO|FIXME|any.*because|legacy|migration|third.party|lib types/) {
-      # Check if current line has justification in a comment
-      if ($0 !~ /\/\/.*any|\/\*.*any|\/\/.*TODO|\/\/.*FIXME|\/\/.*legacy|\/\/.*migration|\/\/.*third.party|\/\/.*lib types/) {
-        print FILENAME":"NR": "$0
-      }
-    }
-  }
-  { prev = $0 }
-  '"'"' "$f"
-done' _ "${FILES[@]}"
+    # Unknown check type: ast
 
 # N2: @ts-ignore Without Explanation
 check "N2: @ts-ignore Without Explanation" \
-    grep -En "@ts-ignore\\s*\$" "${FILES[@]}"
+    # Unknown check type: ast
 
 # N3: Chained Non-null Assertions
 check "N3: Chained Non-null Assertions" \

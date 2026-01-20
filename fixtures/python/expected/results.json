@@ -1,0 +1,21 @@
+{
+  "description": "Expected results for Python AST rule validation",
+  "rules": {
+    "N1": {
+      "positive_fixtures": {
+        "n1-bare-except.py": 3
+      },
+      "negative_fixtures": {
+        "n1-except-in-strings.py": 0
+      }
+    },
+    "N3": {
+      "positive_fixtures": {
+        "n3-mutable-defaults.py": 4
+      },
+      "negative_fixtures": {
+        "n3-defaults-in-strings.py": 0
+      }
+    }
+  }
+}

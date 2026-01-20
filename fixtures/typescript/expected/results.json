@@ -1,0 +1,62 @@
+{
+  "description": "Expected results for TypeScript AST query validation",
+  "version": "1.0.0",
+  "domain": "typescript",
+  "domainVersion": "1.1.0",
+  "positive": {
+    "n1-any-type.ts": {
+      "rule": "N1",
+      "title": "Unjustified any",
+      "expectedViolations": 14,
+      "violationTypes": [
+        "type_annotation: responseData, configValue, legacyVar (3)",
+        "as_expression: parsed, forcedCast, nestedCast (3)",
+        "parameter: inputParam, transformInput, callbackArg, arrowParam (4)",
+        "return_type: getAnything, transform, arrowFn (3)",
+        "interface_property: payload (1)"
+      ],
+      "notDetected": [
+        "function_type return: AnyCallback => any (not type_annotation)",
+        "array_type: AnyArray = any[] (not type_annotation)",
+        "type_arguments: Array<any> (not type_annotation)"
+      ],
+      "description": "Tests type_annotation and as_expression with predefined_type 'any'. Note: some any usages in function_type, array_type, and type_arguments are not detected by current query."
+    },
+    "n2-ts-ignore.ts": {
+      "rule": "N2",
+      "title": "@ts-ignore Without Explanation",
+      "expectedViolations": 5,
+      "violationComments": [
+        "// @ts-ignore (before doSomething)",
+        "// @ts-ignore (before badCall)",
+        "// @ts-ignore (before functionWithSpaces)",
+        "// @ts-ignore (before firstBadCall)",
+        "// @ts-ignore (before secondBadCall)"
+      ],
+      "description": "Tests comment nodes matching ^//\\s*@ts-ignore\\s*$ (bare, no explanation)"
+    }
+  },
+  "negative": {
+    "n1-any-in-comments.ts": {
+      "expectedViolations": 0,
+      "description": "All 'any' patterns are inside comments (single-line, multi-line, JSDoc). AST queries should not match comment text content."
+    },
+    "n1-any-in-strings.ts": {
+      "expectedViolations": 0,
+      "description": "All 'any' patterns are inside string literals (double, single, template, regex). AST queries should not match string content."
+    },
+    "n2-ts-ignore-explained.ts": {
+      "expectedViolations": 0,
+      "description": "All @ts-ignore comments have explanations (dash, colon, or direct text). Also includes @ts-expect-error which is a different directive."
+    },
+    "n2-ts-ignore-in-string.ts": {
+      "expectedViolations": 0,
+      "description": "All '@ts-ignore' patterns are inside string literals. AST queries should not match string content."
+    }
+  },
+  "notes": {
+    "n1": "The AST query matches predefined_type 'any' in type_annotation and as_expression nodes only",
+    "n2": "The regex ^//\\s*@ts-ignore\\s*$ requires the comment to have ONLY @ts-ignore (with optional whitespace). Any additional text means it has an explanation and should not match.",
+    "negative_may_have_other_violations": "Negative fixtures may trigger other rules (e.g., code-hygiene). The expected 0 violations is specifically for N1 and N2 rules."
+  }
+}

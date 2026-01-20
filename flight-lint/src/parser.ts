@@ -17,7 +17,7 @@ const languageCache = new Map<string, TreeSitterLanguage>();
 
 /**
  * Get a tree-sitter language by name, with caching.
- * @param languageName - The language to load (javascript, jsx, typescript, tsx)
+ * @param languageName - The language to load (javascript, jsx, typescript, tsx, python)
  * @returns The tree-sitter Language object
  * @throws Error if the language is not supported
  */
@@ -41,8 +41,17 @@ export async function getLanguage(languageName: string): Promise<TreeSitterLangu
       // @ts-expect-error - tree-sitter-typescript lacks TypeScript declarations
       languageModule = (await import('tree-sitter-typescript/bindings/node/typescript.js')) as LanguageModule;
       break;
+    case 'python':
+      languageModule = (await import('tree-sitter-python')) as LanguageModule;
+      break;
+    case 'go':
+      languageModule = (await import('tree-sitter-go')) as LanguageModule;
+      break;
+    case 'rust':
+      languageModule = (await import('tree-sitter-rust')) as LanguageModule;
+      break;
     default:
-      throw new Error(`Unsupported language: ${languageName}. Supported: javascript, jsx, typescript, tsx`);
+      throw new Error(`Unsupported language: ${languageName}. Supported: javascript, jsx, typescript, tsx, python, go, rust`);
   }
 
   languageCache.set(languageName, languageModule.default);
@@ -83,6 +92,13 @@ export function detectLanguage(filePath: string): string | null {
       return 'typescript';
     case 'tsx':
       return 'tsx';
+    case 'py':
+    case 'pyi':
+      return 'python';
+    case 'go':
+      return 'go';
+    case 'rs':
+      return 'rust';
     default:
       return null;
   }

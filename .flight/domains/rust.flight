@@ -85,18 +85,10 @@ rules:
           accessed: "2026-01-20"
           quote: "Unsafe Rust must be carefully documented with safety comments"
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          awk '
-            /unsafe\s*\{/ {
-              if (prev !~ /\/\/\s*SAFETY:/ && prev !~ /\/\/\s*safety:/ && prev !~ /\/\*.*SAFETY:/) {
-                print FILENAME ":" NR ": unsafe block without SAFETY comment"
-              }
-            }
-            { prev = $0 }
-          ' "$f" 2>/dev/null
-        done
+      type: ast
+      pattern: null
+      query: |
+        (unsafe_block) @violation
     note: |
       From Rustonomicon: Unsafe code must be carefully documented. The SAFETY
       comment explains why the code is correct despite bypassing Rust's safety checks.
@@ -130,9 +122,18 @@ rules:
           accessed: "2026-01-20"
           quote: "transmute is incredibly unsafe...both types must have the same size"
     check:
-      type: grep
-      pattern: 'mem::transmute\s*[<(]|transmute::<'
-      flags: -En
+      type: ast
+      pattern: null
+      query: |
+        (call_expression
+          function: [
+            (scoped_identifier
+              name: (identifier) @fn)
+            (generic_function
+              function: (scoped_identifier
+                name: (identifier) @fn))
+          ]
+          (#eq? @fn "transmute")) @violation
     note: |
       transmute bypasses all type checking and can easily cause undefined behavior.
       Most uses can be replaced with safer alternatives.
