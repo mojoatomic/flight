@@ -2,7 +2,8 @@
 # Source: Migrated from python.md and python.validate.sh
 
 domain: python
-version: 1.0.0
+version: 1.1.0
+schema_version: 2
 description: >
   Production Python patterns for clean, maintainable, type-safe code.
   Prevents common mistakes like mutable defaults, bare exceptions, and
@@ -19,6 +20,45 @@ exclude_patterns:
   - "**/venv/**"
   - "**/__pycache__/**"
   - "**/.git/**"
+
+provenance:
+  last_full_audit: "2026-01-20"
+  audited_by: "flight-research"
+  next_audit_due: "2026-07-20"
+
+  sources_consulted:
+    - url: "https://docs.python.org/3/tutorial/errors.html"
+      accessed: "2026-01-20"
+      note: "Python exception handling documentation"
+    - url: "https://docs.python.org/3/tutorial/controlflow.html#default-argument-values"
+      accessed: "2026-01-20"
+      note: "Default argument values behavior"
+    - url: "https://docs.python.org/3/library/logging.html"
+      accessed: "2026-01-20"
+      note: "Logging module documentation"
+    - url: "https://docs.python.org/3/library/pathlib.html"
+      accessed: "2026-01-20"
+      note: "pathlib module for file operations"
+    - url: "https://peps.python.org/pep-0008/"
+      accessed: "2026-01-20"
+      note: "PEP 8 Style Guide"
+    - url: "https://peps.python.org/pep-0484/"
+      accessed: "2026-01-20"
+      note: "PEP 484 Type Hints"
+
+  coverage:
+    apis_covered:
+      - "Exception handling (try/except patterns)"
+      - "Function definitions (defaults, type hints)"
+      - "Import statements"
+      - "Logging module"
+      - "pathlib for file operations"
+      - "Code structure and organization"
+    known_gaps:
+      - "Async/await patterns (mechanical checks)"
+      - "pytest fixtures and testing patterns"
+      - "Django/Flask specific patterns"
+      - "Package management (pyproject.toml)"
 
 suppression:
   comment: "# noqa"
@@ -47,6 +87,14 @@ rules:
     title: "Bare except:"
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://docs.python.org/3/tutorial/errors.html#handling-exceptions"
+          accessed: "2026-01-20"
+          quote: "A bare except clause will catch all exceptions, including SystemExit and KeyboardInterrupt"
     description: >
       Never use bare 'except:' which catches everything including
       KeyboardInterrupt and SystemExit.
@@ -75,6 +123,14 @@ rules:
     title: "except Exception: pass"
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://peps.python.org/pep-0008/#programming-recommendations"
+          accessed: "2026-01-20"
+          quote: "When catching exceptions, mention specific exceptions whenever possible instead of using a bare except clause"
     description: >
       Never silently swallow exceptions with 'except Exception: pass'.
       Silent failures hide bugs and make debugging impossible.
@@ -103,6 +159,14 @@ rules:
     title: Mutable Default Arguments
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://docs.python.org/3/tutorial/controlflow.html#default-argument-values"
+          accessed: "2026-01-20"
+          quote: "The default value is evaluated only once. This makes a difference when the default is a mutable object"
     description: >
       Never use mutable default arguments (=[], ={}, =set()).
       Default arguments are evaluated once at function definition,
@@ -130,6 +194,14 @@ rules:
     title: "from x import *"
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://peps.python.org/pep-0008/#imports"
+          accessed: "2026-01-20"
+          quote: "Wildcard imports (from <module> import *) should be avoided"
     description: >
       Never use wildcard imports. They pollute the namespace and
       hide where names come from.
@@ -152,6 +224,14 @@ rules:
     title: "type(x) == for Type Checking"
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://peps.python.org/pep-0008/#programming-recommendations"
+          accessed: "2026-01-20"
+          quote: "Object type comparisons should always use isinstance() instead of comparing types directly"
     description: >
       Never use type() for type checking. It breaks inheritance
       and doesn't work with abstract base classes.
@@ -174,6 +254,14 @@ rules:
     title: Generic Variable Names at Module Level
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://peps.python.org/pep-0008/#naming-conventions"
+          accessed: "2026-01-20"
+          quote: "Names should be short but descriptive"
     description: >
       Never use generic variable names (data, temp, result, info, obj)
       at module level. Use domain-specific names.
@@ -196,6 +284,14 @@ rules:
     title: print() Outside __main__
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://docs.python.org/3/library/logging.html"
+          accessed: "2026-01-20"
+          quote: "Logging provides a set of convenience functions for simple logging usage"
     description: >
       Never use print() for logging outside of __main__ blocks.
       Use the logging module for proper log levels and context.
@@ -223,6 +319,14 @@ rules:
     title: Hardcoded Absolute Paths
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://docs.python.org/3/library/pathlib.html"
+          accessed: "2026-01-20"
+          quote: "pathlib offers classes representing filesystem paths with semantics appropriate for different operating systems"
     description: >
       Never hardcode absolute paths. They break across environments
       and operating systems.
@@ -246,6 +350,14 @@ rules:
     title: Deeply Nested Conditionals
     severity: NEVER
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://peps.python.org/pep-0020/"
+          accessed: "2026-01-20"
+          quote: "Flat is better than nested"
     description: >
       Never nest conditionals more than 3 levels deep.
       Use early returns to flatten the structure.
@@ -290,6 +402,14 @@ rules:
     title: String += Patterns
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://docs.python.org/3/library/stdtypes.html#str.join"
+          accessed: "2026-01-20"
+          quote: "Return a string which is the concatenation of the strings in iterable"
     description: >
       Avoid string concatenation with += in loops. It creates O(n²)
       complexity due to string immutability.
@@ -313,6 +433,14 @@ rules:
     title: Magic Numbers in Logic
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://peps.python.org/pep-0008/#constants"
+          accessed: "2026-01-20"
+          quote: "Constants are usually defined on a module level and written in all capital letters"
     description: >
       Avoid magic numbers in conditionals and function calls.
       Use named constants for clarity.
@@ -335,6 +463,14 @@ rules:
     title: Type Hints on Public Functions
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://peps.python.org/pep-0484/"
+          accessed: "2026-01-20"
+          quote: "This PEP aims to provide a standard syntax for type annotations"
     description: >
       Public functions should have type hints for parameters and
       return values to enable static analysis and documentation.
@@ -358,6 +494,14 @@ rules:
     title: if __name__ == __main__ Guard
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://docs.python.org/3/library/__main__.html"
+          accessed: "2026-01-20"
+          quote: "__main__ is the name of the environment where top-level code is run"
     description: >
       Scripts with a main() function should have an
       'if __name__ == "__main__":' guard.
@@ -385,6 +529,14 @@ rules:
     title: Use pathlib for File Operations
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://docs.python.org/3/library/pathlib.html"
+          accessed: "2026-01-20"
+          quote: "This module offers classes representing filesystem paths with semantics appropriate for different operating systems"
     description: >
       Prefer pathlib over os.path for file operations.
       pathlib provides a cleaner, more object-oriented API.
@@ -412,6 +564,14 @@ rules:
     title: Use logging Module
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://docs.python.org/3/howto/logging.html"
+          accessed: "2026-01-20"
+          quote: "Logging is a means of tracking events that happen when some software runs"
     description: >
       Large files (>50 lines) should use the logging module
       for proper log levels and configuration.
@@ -440,6 +600,14 @@ rules:
     title: Docstrings on Public Functions
     severity: SHOULD
     mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://peps.python.org/pep-0257/"
+          accessed: "2026-01-20"
+          quote: "A docstring is a string literal that occurs as the first statement in a module, function, class, or method definition"
     description: >
       Public functions should have docstrings explaining their
       purpose, arguments, and return values.
