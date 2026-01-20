@@ -32,6 +32,7 @@ chmod +x .flight/validate-all.sh 2>/dev/null || true
 chmod +x .flight/domains/*.validate.sh 2>/dev/null || true
 chmod +x .flight/domains/*.sh 2>/dev/null || true
 chmod +x .flight/inject-flight-protocol.sh 2>/dev/null || true
+chmod +x .flight/hooks/*.sh 2>/dev/null || true
 
 # Inject Flight Execution Protocol into CLAUDE.md
 ./.flight/inject-flight-protocol.sh .
@@ -79,6 +80,10 @@ echo "  /flight-prime     - Research task and context"
 echo "  /flight-compile   - Build PROMPT.md"
 echo "  /flight-validate  - Run domain validation"
 echo "  /flight-tighten   - Strengthen rules on failure"
+echo ""
+echo "Self-Validating Hooks (optional):"
+echo "  Enable automatic validation in Claude Code."
+echo "  See .flight/FLIGHT.md 'Self-Validating Hooks' section for setup."
 echo ""
 echo "IMPORTANT: Read .flight/FLIGHT.md before starting!"
 echo ""
