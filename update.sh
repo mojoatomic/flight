@@ -44,9 +44,8 @@ fi
 
 # Update flight-lint (AST validation tool)
 if [[ -d "$TMP_DIR/flight-lint" ]]; then
-    # Copy source files, preserve node_modules if exists
     if [[ -d "flight-lint/node_modules" ]]; then
-        # Preserve existing node_modules and build
+        # Preserve existing node_modules and dist
         mv flight-lint/node_modules /tmp/flight-lint-node_modules-$$ 2>/dev/null || true
         mv flight-lint/dist /tmp/flight-lint-dist-$$ 2>/dev/null || true
         rm -rf flight-lint
@@ -56,7 +55,11 @@ if [[ -d "$TMP_DIR/flight-lint" ]]; then
     else
         rm -rf flight-lint
         cp -r "$TMP_DIR/flight-lint" .
-        echo "flight-lint updated. Build it: cd flight-lint && npm install && npm run build"
+    fi
+    # Build if not already built
+    if [[ ! -d "flight-lint/dist" ]]; then
+        echo "Building flight-lint..."
+        (cd flight-lint && npm install && npm run build)
     fi
 fi
 
@@ -88,7 +91,6 @@ echo "  - .flight/validate-all.sh, exclusions.sh"
 echo "  - .flight/domains/* (all stock domains)"
 echo "  - .flight/bin/* (tooling scripts)"
 echo "  - .flight/examples/, exercises/, templates/"
-echo "  - flight-lint/* (AST validation tool)"
 echo "  - CLAUDE.md (Flight Execution Protocol injected/updated)"
 echo ""
 echo "Preserved:"
@@ -96,4 +98,3 @@ echo "  - CLAUDE.md (your project description - protocol section updated only)"
 echo "  - PROMPT.md, PRIME.md (your working files)"
 echo "  - .flight/known-landmines.md (your project's temporal data)"
 echo "  - Custom domains (any .md/.sh not in Flight repo)"
-echo "  - flight-lint/node_modules, flight-lint/dist (your build)"

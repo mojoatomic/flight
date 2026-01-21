@@ -8,7 +8,7 @@ If you see placeholders below, ask the user what they're building.
 
 ---
 
-<!-- FLIGHT_PROTOCOL_19ffd79f START -->
+<!-- FLIGHT_PROTOCOL START -->
 ## Flight Execution Protocol
 
 ### Why This Exists
@@ -49,7 +49,7 @@ This is what craft feels like.
 
 Compliance is not obedience. Compliance is precision.
 The mold is not a cage. The mold is what makes perfection possible.
-<!-- FLIGHT_PROTOCOL_19ffd79f END -->
+<!-- FLIGHT_PROTOCOL END -->
 
 
 ---
