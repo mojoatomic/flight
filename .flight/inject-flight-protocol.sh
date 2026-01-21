@@ -10,14 +10,8 @@
 
 set -euo pipefail
 
-PROTOCOL_VERSION="v1"
-START_MARKER="<!-- FLIGHT_PROTOCOL_${PROTOCOL_VERSION} START -->"
-END_MARKER="<!-- FLIGHT_PROTOCOL_${PROTOCOL_VERSION} END -->"
-MARKER_PATTERN="<!-- FLIGHT_PROTOCOL_.*START -->"
-
-# Protocol content - update version number in markers when content changes
-read -r -d '' PROTOCOL_BLOCK << 'EOF' || true
-<!-- FLIGHT_PROTOCOL_v1 START -->
+# Protocol content (markers added dynamically based on content hash)
+read -r -d '' PROTOCOL_CONTENT << 'EOF' || true
 ## Flight Execution Protocol
 
 ### Why This Exists
@@ -58,8 +52,18 @@ This is what craft feels like.
 
 Compliance is not obedience. Compliance is precision.
 The mold is not a cage. The mold is what makes perfection possible.
-<!-- FLIGHT_PROTOCOL_v1 END -->
 EOF
+
+# Generate version hash from content (first 8 chars of md5)
+PROTOCOL_VERSION=$(echo "$PROTOCOL_CONTENT" | md5sum | cut -c1-8)
+START_MARKER="<!-- FLIGHT_PROTOCOL_${PROTOCOL_VERSION} START -->"
+END_MARKER="<!-- FLIGHT_PROTOCOL_${PROTOCOL_VERSION} END -->"
+MARKER_PATTERN="<!-- FLIGHT_PROTOCOL_.*START -->"
+
+# Build full block with markers
+PROTOCOL_BLOCK="${START_MARKER}
+${PROTOCOL_CONTENT}
+${END_MARKER}"
 
 #------------------------------------------------------------------------------
 # Functions

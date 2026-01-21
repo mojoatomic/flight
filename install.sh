@@ -21,6 +21,12 @@ cp -r "$TMP_DIR/.flight" .
 cp -r "$TMP_DIR/.claude" .
 cp "$TMP_DIR/update.sh" .
 
+# Copy flight-lint (AST validation tool)
+if [[ -d "$TMP_DIR/flight-lint" ]]; then
+    cp -r "$TMP_DIR/flight-lint" .
+    echo "flight-lint copied. Build it with: cd flight-lint && npm install && npm run build"
+fi
+
 # Copy project files only if they don't exist
 [[ ! -f CLAUDE.md ]] && cp "$TMP_DIR/CLAUDE.md" .
 [[ ! -f PROMPT.md ]] && cp "$TMP_DIR/PROMPT.md" . 2>/dev/null || true
@@ -70,8 +76,11 @@ fi
 echo ""
 echo "Flight installed"
 echo ""
+echo "AST Validation (optional but recommended):"
+echo "  cd flight-lint && npm install && npm run build && cd .."
+echo ""
 echo "Local CI:"
-echo "  npm run validate  - Run all domain validators"
+echo "  npm run validate  - Run all domain validators (includes AST if built)"
 echo "  npm run preflight - Validate + lint before commit"
 echo ""
 echo "Skills (use as /command in Claude Code):"
