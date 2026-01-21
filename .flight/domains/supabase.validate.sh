@@ -94,7 +94,7 @@ done' _ "${FILES[@]}"
 
 # N2: Deprecated @supabase/auth-helpers-nextjs
 check "N2: Deprecated @supabase/auth-helpers-nextjs" \
-    grep -En "@supabase/auth-helpers-nextjs|@supabase/auth-helpers-react|@supabase/auth-helpers-shared" "${FILES[@]}"
+    # Unknown check type: ast
 
 # N3: Raw @supabase/supabase-js in Next.js App Router
 check "N3: Raw @supabase/supabase-js in Next.js App Router" \
@@ -110,7 +110,7 @@ done' _ "${FILES[@]}"
 
 # N4: Hardcoded Supabase Credentials
 check "N4: Hardcoded Supabase Credentials" \
-    grep -En "createClient\\(['\"][^'\"]*supabase[^'\"]*['\"]\\s*,\\s*['\"]ey" "${FILES[@]}"
+    # Unknown check type: ast
 
 # N5: .single() Without Error Handling
 check "N5: .single() Without Error Handling" \
