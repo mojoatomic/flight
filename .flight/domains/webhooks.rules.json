@@ -1,7 +1,6 @@
 {
   "domain": "webhooks",
   "version": "1.1.0",
-  "language": "javascript",
   "file_patterns": [
     "**/webhook*.js",
     "**/webhook*.ts",
@@ -28,9 +27,10 @@
       "id": "N2",
       "title": "Secrets in Webhook Payloads",
       "severity": "NEVER",
-      "type": "grep",
-      "pattern": "webhook.*password|webhook.*secret|webhook.*api_key|payload.*password|payload.*ssn|payload.*credit.?card",
-      "query": null,
+      "type": "ast",
+      "language": "typescript",
+      "pattern": null,
+      "query": "((property_identifier) @violation\n (#match? @violation \"^(password|secret|api_key|ssn|credit_card)$\"))",
       "message": "Never include secrets, passwords, API keys, SSNs, or credit card numbers in webhook payloads. Payloads may be logged or intercepted.",
       "provenance": {
         "last_verified": "2026-01-20",
@@ -42,9 +42,10 @@
       "id": "N3",
       "title": "Unsafe Signature Comparison",
       "severity": "NEVER",
-      "type": "grep",
-      "pattern": "signature\\s*(===?|!==?)\\s*(expected|computed|hash)|signature\\.equals\\(",
-      "query": null,
+      "type": "ast",
+      "language": "typescript",
+      "pattern": null,
+      "query": "(binary_expression\n  left: (identifier) @left\n  (#match? @left \"^(signature|hash|sig)$\")) @violation",
       "message": "Never use === or == for signature comparison. String comparison is vulnerable to timing attacks that reveal the signature byte-by-byte.",
       "provenance": {
         "last_verified": "2026-01-20",
@@ -54,12 +55,13 @@
     },
     {
       "id": "N4",
-      "title": "Infinite Retry Without Backoff",
+      "title": "Unsafe Signature .equals() Call",
       "severity": "NEVER",
-      "type": "grep",
-      "pattern": "while.*true.*send|while.*retry.*webhook|for\\s*\\(;;\\).*webhook",
-      "query": null,
-      "message": "Never retry webhook delivery in an infinite loop without backoff. This hammers failing endpoints and wastes resources.",
+      "type": "ast",
+      "language": "typescript",
+      "pattern": null,
+      "query": "(call_expression\n  function: (member_expression\n    object: (identifier) @obj\n    property: (property_identifier) @prop)\n  (#match? @obj \"^(signature|hash|sig)$\")\n  (#eq? @prop \"equals\")) @violation",
+      "message": "Never use .equals() method for signature comparison. This is vulnerable to timing attacks just like === comparison.",
       "provenance": {
         "last_verified": "2026-01-20",
         "confidence": "high",
@@ -68,11 +70,42 @@
     },
     {
       "id": "N5",
+      "title": "Infinite Retry - while(true)",
+      "severity": "NEVER",
+      "type": "ast",
+      "language": "typescript",
+      "pattern": null,
+      "query": "(while_statement\n  condition: (parenthesized_expression (true))) @violation",
+      "message": "Never retry webhook delivery in a while(true) loop without backoff. This hammers failing endpoints and wastes resources.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N6",
+      "title": "Infinite Retry - for(;;)",
+      "severity": "NEVER",
+      "type": "ast",
+      "language": "typescript",
+      "pattern": null,
+      "query": "(for_statement\n  initializer: (empty_statement)\n  condition: (empty_statement)) @violation",
+      "message": "Never retry webhook delivery in a for(;;) infinite loop without backoff. This hammers failing endpoints and wastes resources.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N7",
       "title": "Non-HTTPS URL Schemes",
       "severity": "NEVER",
-      "type": "grep",
-      "pattern": "webhook.*file://|webhook.*ftp://|webhook.*gopher://|url.*file://|endpoint.*http://[^l]",
-      "query": null,
+      "type": "ast",
+      "language": "typescript",
+      "pattern": null,
+      "query": "((string_fragment) @violation\n (#match? @violation \"^(file://|ftp://|gopher://|http://[^l1])\"))",
       "message": "Never allow file://, ftp://, gopher://, or other non-HTTPS schemes in webhook URLs. These enable SSRF attacks.",
       "provenance": {
         "last_verified": "2026-01-20",

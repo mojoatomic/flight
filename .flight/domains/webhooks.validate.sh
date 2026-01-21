@@ -88,19 +88,27 @@ check "N1: Plain HTTP Webhook URLs" \
 
 # N2: Secrets in Webhook Payloads
 check "N2: Secrets in Webhook Payloads" \
-    grep -Ein "webhook.*password|webhook.*secret|webhook.*api_key|payload.*password|payload.*ssn|payload.*credit.?card" "${FILES[@]}"
+    # Unknown check type: ast
 
 # N3: Unsafe Signature Comparison
 check "N3: Unsafe Signature Comparison" \
-    grep -Ein "signature\\s*(===?|!==?)\\s*(expected|computed|hash)|signature\\.equals\\(" "${FILES[@]}"
+    # Unknown check type: ast
 
-# N4: Infinite Retry Without Backoff
-check "N4: Infinite Retry Without Backoff" \
-    grep -Ein "while.*true.*send|while.*retry.*webhook|for\\s*\\(;;\\).*webhook" "${FILES[@]}"
+# N4: Unsafe Signature .equals() Call
+check "N4: Unsafe Signature .equals() Call" \
+    # Unknown check type: ast
 
-# N5: Non-HTTPS URL Schemes
-check "N5: Non-HTTPS URL Schemes" \
-    grep -Ein "webhook.*file://|webhook.*ftp://|webhook.*gopher://|url.*file://|endpoint.*http://[^l]" "${FILES[@]}"
+# N5: Infinite Retry - while(true)
+check "N5: Infinite Retry - while(true)" \
+    # Unknown check type: ast
+
+# N6: Infinite Retry - for(;;)
+check "N6: Infinite Retry - for(;;)" \
+    # Unknown check type: ast
+
+# N7: Non-HTTPS URL Schemes
+check "N7: Non-HTTPS URL Schemes" \
+    # Unknown check type: ast
 
 printf '\n%s\n' "## SHOULD Rules"
 

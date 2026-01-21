@@ -51,13 +51,21 @@ Outbound event notification design. Covers both webhook providers (sending) and 
    crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
    ```
 
-4. **Infinite Retry Without Backoff** - Never retry webhook delivery in an infinite loop without backoff. This hammers failing endpoints and wastes resources.
+4. **Unsafe Signature .equals() Call** - Never use .equals() method for signature comparison. This is vulnerable to timing attacks just like === comparison.
+
+   ```
+   // BAD
+   signature.equals(expected)
+
+   // GOOD
+   crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+   ```
+
+5. **Infinite Retry - while(true)** - Never retry webhook delivery in a while(true) loop without backoff. This hammers failing endpoints and wastes resources.
 
    ```
    // BAD
    while (true) { await sendWebhook(url, payload); }
-   // BAD
-   while (retry) { webhook.send(); }
 
    // GOOD
    // Retry at: 5s, 25s, 125s... with max 10 attempts
@@ -65,7 +73,17 @@ Outbound event notification design. Covers both webhook providers (sending) and 
    const delay = Math.min(BASE * Math.pow(MULT, attempt) + jitter(), MAX);
    ```
 
-5. **Non-HTTPS URL Schemes** - Never allow file://, ftp://, gopher://, or other non-HTTPS schemes in webhook URLs. These enable SSRF attacks.
+6. **Infinite Retry - for(;;)** - Never retry webhook delivery in a for(;;) infinite loop without backoff. This hammers failing endpoints and wastes resources.
+
+   ```
+   // BAD
+   for (;;) { webhook.deliver(); }
+
+   // GOOD
+   for (let i = 0; i < maxRetries; i++) { ... }
+   ```
+
+7. **Non-HTTPS URL Schemes** - Never allow file://, ftp://, gopher://, or other non-HTTPS schemes in webhook URLs. These enable SSRF attacks.
 
    ```
    // BAD

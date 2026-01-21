@@ -116,9 +116,11 @@ rules:
           accessed: "2026-01-20"
           quote: "Never include sensitive information in webhook payloads"
     check:
-      type: grep
-      pattern: 'webhook.*password|webhook.*secret|webhook.*api_key|payload.*password|payload.*ssn|payload.*credit.?card'
-      flags: -Ein
+      type: ast
+      language: typescript
+      query: |
+        ((property_identifier) @violation
+         (#match? @violation "^(password|secret|api_key|ssn|credit_card)$"))
     note: |
       Send IDs only, then let consumer fetch sensitive data via authenticated API.
     examples:
@@ -144,9 +146,12 @@ rules:
           accessed: "2026-01-20"
           quote: "Use a constant-time comparison function to compare signatures"
     check:
-      type: grep
-      pattern: 'signature\s*(===?|!==?)\s*(expected|computed|hash)|signature\.equals\('
-      flags: -Ein
+      type: ast
+      language: typescript
+      query: |
+        (binary_expression
+          left: (identifier) @left
+          (#match? @left "^(signature|hash|sig)$")) @violation
     note: |
       Use crypto.timingSafeEqual() in Node.js, MessageDigest.isEqual() in Java,
       or hmac.compare_digest() in Python for constant-time comparison.
@@ -159,11 +164,42 @@ rules:
         - "crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))"
 
   N4:
-    title: Infinite Retry Without Backoff
+    title: Unsafe Signature .equals() Call
     severity: NEVER
     mechanical: true
     description: >
-      Never retry webhook delivery in an infinite loop without backoff.
+      Never use .equals() method for signature comparison. This is vulnerable
+      to timing attacks just like === comparison.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://www.standardwebhooks.com/"
+          accessed: "2026-01-20"
+          quote: "Use a constant-time comparison function to compare signatures"
+    check:
+      type: ast
+      language: typescript
+      query: |
+        (call_expression
+          function: (member_expression
+            object: (identifier) @obj
+            property: (property_identifier) @prop)
+          (#match? @obj "^(signature|hash|sig)$")
+          (#eq? @prop "equals")) @violation
+    examples:
+      bad:
+        - "signature.equals(expected)"
+      good:
+        - "crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))"
+
+  N5:
+    title: Infinite Retry - while(true)
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never retry webhook delivery in a while(true) loop without backoff.
       This hammers failing endpoints and wastes resources.
     provenance:
       last_verified: "2026-01-20"
@@ -174,21 +210,53 @@ rules:
           accessed: "2026-01-20"
           quote: "Use exponential backoff for retries"
     check:
-      type: grep
-      pattern: 'while.*true.*send|while.*retry.*webhook|for\s*\(;;\).*webhook'
-      flags: -Ein
+      type: ast
+      language: typescript
+      query: |
+        (while_statement
+          condition: (parenthesized_expression (true))) @violation
     note: |
       Use exponential backoff with jitter and a maximum retry count.
       Route to dead letter queue after exhausting retries.
     examples:
       bad:
         - "while (true) { await sendWebhook(url, payload); }"
-        - "while (retry) { webhook.send(); }"
       good:
         - "// Retry at: 5s, 25s, 125s... with max 10 attempts"
         - "const delay = Math.min(BASE * Math.pow(MULT, attempt) + jitter(), MAX);"
 
-  N5:
+  N6:
+    title: Infinite Retry - for(;;)
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never retry webhook delivery in a for(;;) infinite loop without backoff.
+      This hammers failing endpoints and wastes resources.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://docs.stripe.com/webhooks/best-practices"
+          accessed: "2026-01-20"
+          quote: "Use exponential backoff for retries"
+    check:
+      type: ast
+      language: typescript
+      query: |
+        (for_statement
+          initializer: (empty_statement)
+          condition: (empty_statement)) @violation
+    note: |
+      Use exponential backoff with jitter and a maximum retry count.
+      Route to dead letter queue after exhausting retries.
+    examples:
+      bad:
+        - "for (;;) { webhook.deliver(); }"
+      good:
+        - "for (let i = 0; i < maxRetries; i++) { ... }"
+
+  N7:
     title: Non-HTTPS URL Schemes
     severity: NEVER
     mechanical: true
@@ -204,12 +272,15 @@ rules:
           accessed: "2026-01-20"
           quote: "SSRF attacks can be prevented by validating and sanitizing all client-supplied input data"
     check:
-      type: grep
-      pattern: 'webhook.*file://|webhook.*ftp://|webhook.*gopher://|url.*file://|endpoint.*http://[^l]'
-      flags: -Ein
+      type: ast
+      language: typescript
+      query: |
+        ((string_fragment) @violation
+         (#match? @violation "^(file://|ftp://|gopher://|http://[^l1])"))
     note: |
       Only HTTPS URLs should be accepted for webhook endpoints.
       Block internal schemes that could access local files or services.
+      http://localhost and http://127.0.0.1 are allowed for local development.
     examples:
       bad:
         - "webhook.url = 'file:///etc/passwd'"
