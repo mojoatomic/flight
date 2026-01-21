@@ -42,6 +42,10 @@ provenance:
 file_patterns:
   - "**/*test*.js"
   - "**/*spec*.js"
+  - "**/*test*.ts"
+  - "**/*spec*.ts"
+  - "**/*test*.tsx"
+  - "**/*spec*.tsx"
   - "**/*_test.py"
   - "**/test_*.py"
   - "**/*_test.go"
@@ -114,6 +118,26 @@ rules:
     check:
       type: ast
       language: javascript
+      query: |
+        (call_expression
+          function: (identifier) @func (#match? @func "^(test|it)$")
+          arguments: (arguments
+            (string (string_fragment) @violation (#match? @violation "^(test)?[0-9A-Za-z]?[0-9]$|^test_?[0-9]|^testA$"))))
+
+  N1_ts:
+    title: Enumerated Test Names (TypeScript)
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use enumerated test names (test1, test2, testA). They provide
+      no information about what the test verifies.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+    check:
+      type: ast
+      language: typescript
       query: |
         (call_expression
           function: (identifier) @func (#match? @func "^(test|it)$")
@@ -232,6 +256,23 @@ rules:
         (call_expression
           function: (identifier) @violation (#eq? @violation "sleep"))
 
+  N3_ts:
+    title: Sleep Function Calls (TypeScript)
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never call sleep() directly in tests. Use waitFor or mock timers.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+    check:
+      type: ast
+      language: typescript
+      query: |
+        (call_expression
+          function: (identifier) @violation (#eq? @violation "sleep"))
+
   N3_js_promise:
     title: Promise setTimeout (JavaScript)
     severity: NEVER
@@ -245,6 +286,24 @@ rules:
     check:
       type: ast
       language: javascript
+      query: |
+        (await_expression
+          (new_expression
+            constructor: (identifier) @ctor (#eq? @ctor "Promise")) @violation)
+
+  N3_ts_promise:
+    title: Promise setTimeout (TypeScript)
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use new Promise with setTimeout for delays in tests.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+    check:
+      type: ast
+      language: typescript
       query: |
         (await_expression
           (new_expression
@@ -310,6 +369,29 @@ rules:
     check:
       type: ast
       language: javascript
+      query: |
+        (call_expression
+          function: (identifier) @func (#eq? @func "expect")
+          arguments: (arguments
+            [(member_expression
+               property: (property_identifier) @violation (#match? @violation "^_"))
+             (call_expression
+               function: (member_expression
+                 property: (property_identifier) @violation (#match? @violation "^_")))]))
+
+  N4_ts:
+    title: Testing Private Members (TypeScript)
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never test private methods or properties (_prefixed) in expect().
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+    check:
+      type: ast
+      language: typescript
       query: |
         (call_expression
           function: (identifier) @func (#eq? @func "expect")
@@ -394,6 +476,26 @@ rules:
     check:
       type: ast
       language: javascript
+      query: |
+        (call_expression
+          function: (member_expression
+            property: (property_identifier) @prop (#eq? @prop "then"))
+          arguments: (arguments
+            (arrow_function) @callback)) @violation
+
+  N5_ts:
+    title: Unawaited .then() Callbacks (TypeScript)
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use .then() with callback in tests - use async/await instead.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+    check:
+      type: ast
+      language: typescript
       query: |
         (call_expression
           function: (member_expression
@@ -573,6 +675,30 @@ rules:
     check:
       type: ast
       language: javascript
+      query: |
+        (call_expression
+          function: (identifier) @func (#match? @func "^(test|it)$")
+          arguments: (arguments
+            (arrow_function
+              body: (statement_block
+                [(if_statement) @violation
+                 (for_statement) @violation
+                 (for_in_statement) @violation
+                 (while_statement) @violation]))))
+
+  S4_ts:
+    title: Logic in Tests (TypeScript)
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Avoid if/for/while in test bodies. Use test.each for parameterized tests.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+    check:
+      type: ast
+      language: typescript
       query: |
         (call_expression
           function: (identifier) @func (#match? @func "^(test|it)$")

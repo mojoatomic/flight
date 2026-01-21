@@ -35,7 +35,10 @@ Universal unit test patterns. Language-agnostic, framework-agnostic. Prevents we
 3. **Enumerated Test Names (Python)** - Never use enumerated test names (test1, test2, testA). They provide no information about what the test verifies.
 
 
-4. **Empty Test Bodies** - Never write tests without assertions. Empty tests pass but prove nothing. Every test must have at least one assertion.
+4. **Enumerated Test Names (TypeScript)** - Never use enumerated test names (test1, test2, testA). They provide no information about what the test verifies.
+
+
+5. **Empty Test Bodies** - Never write tests without assertions. Empty tests pass but prove nothing. Every test must have at least one assertion.
 
    ```
    // BAD
@@ -51,10 +54,10 @@ Universal unit test patterns. Language-agnostic, framework-agnostic. Prevents we
    def test_something(self): self.assertEqual(result, expected)
    ```
 
-5. **Empty Test Bodies (Python)** - Never write tests with only pass statement. Empty tests prove nothing.
+6. **Empty Test Bodies (Python)** - Never write tests with only pass statement. Empty tests prove nothing.
 
 
-6. **Hardcoded Sleep/Delays** - Never use hardcoded sleep/delays in tests. They make tests slow and flaky. Use waitFor, mock timers, or event-based waiting instead.
+7. **Hardcoded Sleep/Delays** - Never use hardcoded sleep/delays in tests. They make tests slow and flaky. Use waitFor, mock timers, or event-based waiting instead.
 
    ```
    // BAD
@@ -74,16 +77,22 @@ Universal unit test patterns. Language-agnostic, framework-agnostic. Prevents we
    eventually { assert condition }
    ```
 
-7. **Sleep Function Calls (JavaScript)** - Never call sleep() directly in tests. Use waitFor or mock timers.
+8. **Sleep Function Calls (JavaScript)** - Never call sleep() directly in tests. Use waitFor or mock timers.
 
 
-8. **Promise setTimeout (JavaScript)** - Never use new Promise with setTimeout for delays in tests.
+9. **Promise setTimeout (JavaScript)** - Never use new Promise with setTimeout for delays in tests.
 
 
-9. **time.sleep Calls (Python)** - Never use time.sleep() in tests. Use mock timers or event-based waiting.
+10. **time.sleep Calls (Python)** - Never use time.sleep() in tests. Use mock timers or event-based waiting.
 
 
-10. **Testing Private Methods Directly** - Never test private methods directly. It breaks encapsulation and couples tests to implementation. Test through the public interface.
+11. **Sleep Function Calls (TypeScript)** - Never call sleep() directly in tests. Use waitFor or mock timers.
+
+
+12. **Promise setTimeout (TypeScript)** - Never use new Promise with setTimeout for delays in tests.
+
+
+13. **Testing Private Methods Directly** - Never test private methods directly. It breaks encapsulation and couples tests to implementation. Test through the public interface.
 
    ```
    // BAD
@@ -99,13 +108,16 @@ Universal unit test patterns. Language-agnostic, framework-agnostic. Prevents we
    // Private behavior is tested implicitly through public API
    ```
 
-11. **Testing Private Members (JavaScript)** - Never test private methods or properties (_prefixed) in expect().
+14. **Testing Private Members (JavaScript)** - Never test private methods or properties (_prefixed) in expect().
 
 
-12. **Testing Private Members (Python)** - Never test private methods or attributes (_prefixed) in assert.
+15. **Testing Private Members (Python)** - Never test private methods or attributes (_prefixed) in assert.
 
 
-13. **Unawaited Async Assertions** - Never leave async assertions unawaited. The promise is never awaited and the test passes even if the assertion fails. Always await or return the promise.
+16. **Testing Private Members (TypeScript)** - Never test private methods or properties (_prefixed) in expect().
+
+
+17. **Unawaited Async Assertions** - Never leave async assertions unawaited. The promise is never awaited and the test passes even if the assertion fails. Always await or return the promise.
 
    ```
    // BAD
@@ -127,7 +139,10 @@ Universal unit test patterns. Language-agnostic, framework-agnostic. Prevents we
    
    ```
 
-14. **Unawaited .then() Callbacks (JavaScript)** - Never use .then() with callback in tests - use async/await instead.
+18. **Unawaited .then() Callbacks (JavaScript)** - Never use .then() with callback in tests - use async/await instead.
+
+
+19. **Unawaited .then() Callbacks (TypeScript)** - Never use .then() with callback in tests - use async/await instead.
 
 
 ### SHOULD (validator warns)
@@ -224,6 +239,9 @@ Universal unit test patterns. Language-agnostic, framework-agnostic. Prevents we
 
 
 6. **Logic in Tests (Python)** - Avoid if/for/while in test bodies. Use pytest.mark.parametrize.
+
+
+7. **Logic in Tests (TypeScript)** - Avoid if/for/while in test bodies. Use test.each for parameterized tests.
 
 
 ### GUIDANCE (not mechanically checked)

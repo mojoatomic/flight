@@ -7,7 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Default: common file patterns
-DEFAULT_PATTERNS="**/*test*.js **/*spec*.js **/*_test.py **/test_*.py **/*_test.go **/Test*.java"
+DEFAULT_PATTERNS="**/*test*.js **/*spec*.js **/*test*.ts **/*spec*.ts **/*test*.tsx **/*spec*.tsx **/*_test.py **/test_*.py **/*_test.go **/Test*.java"
 PASS=0
 FAIL=0
 WARN=0
@@ -64,15 +64,15 @@ if [[ $# -gt 0 ]]; then
     FILES=("$@")
 elif [[ "$FLIGHT_HAS_EXCLUSIONS" == true ]]; then
     # Use exclusions-aware file discovery
-    mapfile -t FILES < <(flight_get_files "*test*.js" "*spec*.js" "*_test.py" "test_*.py" "*_test.go" "Test*.java")
+    mapfile -t FILES < <(flight_get_files "*test*.js" "*spec*.js" "*test*.ts" "*spec*.ts" "*test*.tsx" "*spec*.tsx" "*_test.py" "test_*.py" "*_test.go" "Test*.java")
 else
     # Fallback: use find (works on bash 3.2+, no globstar needed)
-    mapfile -t FILES < <(find . -type f \( -name "*test*.js" -o -name "*spec*.js" -o -name "*_test.py" -o -name "test_*.py" -o -name "*_test.go" -o -name "Test*.java" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" 2>/dev/null | sort)
+    mapfile -t FILES < <(find . -type f \( -name "*test*.js" -o -name "*spec*.js" -o -name "*test*.ts" -o -name "*spec*.ts" -o -name "*test*.tsx" -o -name "*spec*.tsx" -o -name "*_test.py" -o -name "test_*.py" -o -name "*_test.go" -o -name "Test*.java" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" 2>/dev/null | sort)
 fi
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
     yellow "No files found matching default patterns"
-    printf '%s\n' "  Patterns: **/*test*.js **/*spec*.js **/*_test.py **/test_*.py **/*_tes..."
+    printf '%s\n' "  Patterns: **/*test*.js **/*spec*.js **/*test*.ts **/*spec*.ts **/*test..."
     printf '\n'
     green "  RESULT: SKIP (no files)"
     exit 0
@@ -92,6 +92,10 @@ check "N1_js: Enumerated Test Names (JavaScript)" \
 
 # N1_py: Enumerated Test Names (Python)
 check "N1_py: Enumerated Test Names (Python)" \
+    # Unknown check type: ast
+
+# N1_ts: Enumerated Test Names (TypeScript)
+check "N1_ts: Enumerated Test Names (TypeScript)" \
     # Unknown check type: ast
 
 # N2: Empty Test Bodies
@@ -118,6 +122,14 @@ check "N3_js_promise: Promise setTimeout (JavaScript)" \
 check "N3_py: time.sleep Calls (Python)" \
     # Unknown check type: ast
 
+# N3_ts: Sleep Function Calls (TypeScript)
+check "N3_ts: Sleep Function Calls (TypeScript)" \
+    # Unknown check type: ast
+
+# N3_ts_promise: Promise setTimeout (TypeScript)
+check "N3_ts_promise: Promise setTimeout (TypeScript)" \
+    # Unknown check type: ast
+
 # N4: Testing Private Methods Directly
 check "N4: Testing Private Methods Directly" \
     grep -En "expect\\([^)]*\\._[a-z]|assert.*\\._[a-z]|expect\\([^)]*\\.__" "${FILES[@]}"
@@ -130,12 +142,20 @@ check "N4_js: Testing Private Members (JavaScript)" \
 check "N4_py: Testing Private Members (Python)" \
     # Unknown check type: ast
 
+# N4_ts: Testing Private Members (TypeScript)
+check "N4_ts: Testing Private Members (TypeScript)" \
+    # Unknown check type: ast
+
 # N5: Unawaited Async Assertions
 check "N5: Unawaited Async Assertions" \
     grep -En "\\.then\\s*\\(\\s*[^)]*expect|\\.then\\s*\\(\\s*[^)]*assert" "${FILES[@]}"
 
 # N5_js: Unawaited .then() Callbacks (JavaScript)
 check "N5_js: Unawaited .then() Callbacks (JavaScript)" \
+    # Unknown check type: ast
+
+# N5_ts: Unawaited .then() Callbacks (TypeScript)
+check "N5_ts: Unawaited .then() Callbacks (TypeScript)" \
     # Unknown check type: ast
 
 printf '\n%s\n' "## SHOULD Rules"
@@ -169,6 +189,10 @@ warn "S4_js: Logic in Tests (JavaScript)" \
 
 # S4_py: Logic in Tests (Python)
 warn "S4_py: Logic in Tests (Python)" \
+    # Unknown check type: ast
+
+# S4_ts: Logic in Tests (TypeScript)
+warn "S4_ts: Logic in Tests (TypeScript)" \
     # Unknown check type: ast
 
 printf '\n%s\n' "═══════════════════════════════════════════"
