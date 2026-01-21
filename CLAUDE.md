@@ -140,9 +140,27 @@ npm run preflight            # Local CI (validate + lint)
 
 After Task 001 sets up `npm run preflight`, use it after every task:
 - Runs `.flight/validate-all.sh` (Flight domain validation)
+  - Bash validators for grep-based rules
+  - **flight-lint** for AST-based rules (if built)
 - Runs `npm run lint` (ESLint)
 
 This catches issues before remote CI or code review.
+
+### AST Validation (flight-lint)
+
+Some rules use AST queries (tree-sitter) for precise detection without false positives.
+The bash validators show `# Unknown check type: ast` for these - they require flight-lint.
+
+```bash
+# Build flight-lint (one-time setup)
+cd flight-lint && npm install && npm run build && cd ..
+
+# validate-all.sh automatically runs flight-lint when:
+# 1. flight-lint is built
+# 2. .rules.json files contain AST rules
+```
+
+If you see warnings about AST rules being skipped, build flight-lint first.
 
 ---
 
