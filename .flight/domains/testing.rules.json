@@ -1,7 +1,6 @@
 {
   "domain": "testing",
   "version": "1.1.0",
-  "language": "javascript",
   "file_patterns": [
     "**/*test*.js",
     "**/*spec*.js",
@@ -24,6 +23,141 @@
     "next_audit_due": "2026-07-20"
   },
   "rules": [
+    {
+      "id": "N1_js",
+      "title": "Enumerated Test Names (JavaScript)",
+      "severity": "NEVER",
+      "type": "ast",
+      "language": "javascript",
+      "pattern": null,
+      "query": "(call_expression\n  function: (identifier) @func (#match? @func \"^(test|it)$\")\n  arguments: (arguments\n    (string (string_fragment) @violation (#match? @violation \"^(test)?[0-9A-Za-z]?[0-9]$|^test_?[0-9]|^testA$\"))))",
+      "message": "Never use enumerated test names (test1, test2, testA). They provide no information about what the test verifies.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N1_py",
+      "title": "Enumerated Test Names (Python)",
+      "severity": "NEVER",
+      "type": "ast",
+      "language": "python",
+      "pattern": null,
+      "query": "(function_definition\n  name: (identifier) @violation (#match? @violation \"^test_?[0-9]+$|^test[A-Z]$\"))",
+      "message": "Never use enumerated test names (test1, test2, testA). They provide no information about what the test verifies.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N2_py",
+      "title": "Empty Test Bodies (Python)",
+      "severity": "NEVER",
+      "type": "ast",
+      "language": "python",
+      "pattern": null,
+      "query": "(function_definition\n  name: (identifier) @name (#match? @name \"^test\")\n  body: (block\n    (pass_statement) @violation))",
+      "message": "Never write tests with only pass statement. Empty tests prove nothing.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N3_js",
+      "title": "Sleep Function Calls (JavaScript)",
+      "severity": "NEVER",
+      "type": "ast",
+      "language": "javascript",
+      "pattern": null,
+      "query": "(call_expression\n  function: (identifier) @violation (#eq? @violation \"sleep\"))",
+      "message": "Never call sleep() directly in tests. Use waitFor or mock timers.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N3_js_promise",
+      "title": "Promise setTimeout (JavaScript)",
+      "severity": "NEVER",
+      "type": "ast",
+      "language": "javascript",
+      "pattern": null,
+      "query": "(await_expression\n  (new_expression\n    constructor: (identifier) @ctor (#eq? @ctor \"Promise\")) @violation)",
+      "message": "Never use new Promise with setTimeout for delays in tests.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N3_py",
+      "title": "time.sleep Calls (Python)",
+      "severity": "NEVER",
+      "type": "ast",
+      "language": "python",
+      "pattern": null,
+      "query": "(call\n  function: (attribute\n    object: (identifier) @obj (#eq? @obj \"time\")\n    attribute: (identifier) @attr (#eq? @attr \"sleep\"))) @violation",
+      "message": "Never use time.sleep() in tests. Use mock timers or event-based waiting.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N4_js",
+      "title": "Testing Private Members (JavaScript)",
+      "severity": "NEVER",
+      "type": "ast",
+      "language": "javascript",
+      "pattern": null,
+      "query": "(call_expression\n  function: (identifier) @func (#eq? @func \"expect\")\n  arguments: (arguments\n    [(member_expression\n       property: (property_identifier) @violation (#match? @violation \"^_\"))\n     (call_expression\n       function: (member_expression\n         property: (property_identifier) @violation (#match? @violation \"^_\")))]))",
+      "message": "Never test private methods or properties (_prefixed) in expect().",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N4_py",
+      "title": "Testing Private Members (Python)",
+      "severity": "NEVER",
+      "type": "ast",
+      "language": "python",
+      "pattern": null,
+      "query": "(assert_statement\n  [(attribute\n     attribute: (identifier) @violation (#match? @violation \"^_\"))\n   (comparison_operator\n     [(attribute\n        attribute: (identifier) @violation (#match? @violation \"^_\"))\n      (call\n        function: (attribute\n          attribute: (identifier) @violation (#match? @violation \"^_\")))])])",
+      "message": "Never test private methods or attributes (_prefixed) in assert.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N5_js",
+      "title": "Unawaited .then() Callbacks (JavaScript)",
+      "severity": "NEVER",
+      "type": "ast",
+      "language": "javascript",
+      "pattern": null,
+      "query": "(call_expression\n  function: (member_expression\n    property: (property_identifier) @prop (#eq? @prop \"then\"))\n  arguments: (arguments\n    (arrow_function) @callback)) @violation",
+      "message": "Never use .then() with callback in tests - use async/await instead.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
     {
       "id": "N1",
       "title": "Enumerated Test Names",
@@ -88,6 +222,36 @@
       "pattern": "\\.then\\s*\\(\\s*[^)]*expect|\\.then\\s*\\(\\s*[^)]*assert",
       "query": null,
       "message": "Never leave async assertions unawaited. The promise is never awaited and the test passes even if the assertion fails. Always await or return the promise.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "S4_js",
+      "title": "Logic in Tests (JavaScript)",
+      "severity": "SHOULD",
+      "type": "ast",
+      "language": "javascript",
+      "pattern": null,
+      "query": "(call_expression\n  function: (identifier) @func (#match? @func \"^(test|it)$\")\n  arguments: (arguments\n    (arrow_function\n      body: (statement_block\n        [(if_statement) @violation\n         (for_statement) @violation\n         (for_in_statement) @violation\n         (while_statement) @violation]))))",
+      "message": "Avoid if/for/while in test bodies. Use test.each for parameterized tests.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "S4_py",
+      "title": "Logic in Tests (Python)",
+      "severity": "SHOULD",
+      "type": "ast",
+      "language": "python",
+      "pattern": null,
+      "query": "(function_definition\n  name: (identifier) @name (#match? @name \"^test\")\n  body: (block\n    [(if_statement) @violation\n     (for_statement) @violation\n     (while_statement) @violation]))",
+      "message": "Avoid if/for/while in test bodies. Use pytest.mark.parametrize.",
       "provenance": {
         "last_verified": "2026-01-20",
         "confidence": "high",

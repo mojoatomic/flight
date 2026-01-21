@@ -86,21 +86,57 @@ printf '\n%s\n' "## NEVER Rules"
 check "N1: Enumerated Test Names" \
     grep -En "test\\(['\"]test[0-9]|it\\(['\"][0-9]|def test[0-9]+|func Test[0-9]+\\(" "${FILES[@]}"
 
+# N1_js: Enumerated Test Names (JavaScript)
+check "N1_js: Enumerated Test Names (JavaScript)" \
+    # Unknown check type: ast
+
+# N1_py: Enumerated Test Names (Python)
+check "N1_py: Enumerated Test Names (Python)" \
+    # Unknown check type: ast
+
 # N2: Empty Test Bodies
 check "N2: Empty Test Bodies" \
     grep -En "it\\([^)]+,\\s*\\(\\)\\s*=>\\s*\\{\\s*\\}\\)|it\\(['\"]['\"],|def test[^:]+:\\s*pass\$|func Test[^{]+\\{\\s*\\}|@Test[^{]+\\{\\s*\\}" "${FILES[@]}"
+
+# N2_py: Empty Test Bodies (Python)
+check "N2_py: Empty Test Bodies (Python)" \
+    # Unknown check type: ast
 
 # N3: Hardcoded Sleep/Delays
 check "N3: Hardcoded Sleep/Delays" \
     grep -En "sleep\\s*\\(|time\\.sleep|Thread\\.sleep|\\.sleep\\(|usleep|nanosleep|await\\s+new\\s+Promise.*setTimeout" "${FILES[@]}"
 
+# N3_js: Sleep Function Calls (JavaScript)
+check "N3_js: Sleep Function Calls (JavaScript)" \
+    # Unknown check type: ast
+
+# N3_js_promise: Promise setTimeout (JavaScript)
+check "N3_js_promise: Promise setTimeout (JavaScript)" \
+    # Unknown check type: ast
+
+# N3_py: time.sleep Calls (Python)
+check "N3_py: time.sleep Calls (Python)" \
+    # Unknown check type: ast
+
 # N4: Testing Private Methods Directly
 check "N4: Testing Private Methods Directly" \
     grep -En "expect\\([^)]*\\._[a-z]|assert.*\\._[a-z]|expect\\([^)]*\\.__" "${FILES[@]}"
 
+# N4_js: Testing Private Members (JavaScript)
+check "N4_js: Testing Private Members (JavaScript)" \
+    # Unknown check type: ast
+
+# N4_py: Testing Private Members (Python)
+check "N4_py: Testing Private Members (Python)" \
+    # Unknown check type: ast
+
 # N5: Unawaited Async Assertions
 check "N5: Unawaited Async Assertions" \
     grep -En "\\.then\\s*\\(\\s*[^)]*expect|\\.then\\s*\\(\\s*[^)]*assert" "${FILES[@]}"
+
+# N5_js: Unawaited .then() Callbacks (JavaScript)
+check "N5_js: Unawaited .then() Callbacks (JavaScript)" \
+    # Unknown check type: ast
 
 printf '\n%s\n' "## SHOULD Rules"
 
@@ -126,6 +162,14 @@ warn "S3: Non-Descriptive Test Names" \
 # S4: Logic in Tests
 warn "S4: Logic in Tests" \
     bash -c 'grep -En "^\s+(if|for|while)\s*\(" "$@" | grep -v "forEach\|test\.each\|pytest\.mark"' _ "${FILES[@]}"
+
+# S4_js: Logic in Tests (JavaScript)
+warn "S4_js: Logic in Tests (JavaScript)" \
+    # Unknown check type: ast
+
+# S4_py: Logic in Tests (Python)
+warn "S4_py: Logic in Tests (Python)" \
+    # Unknown check type: ast
 
 printf '\n%s\n' "═══════════════════════════════════════════"
 printf '  PASS: %d  FAIL: %d  WARN: %d\n' "$PASS" "$FAIL" "$WARN"

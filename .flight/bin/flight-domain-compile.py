@@ -103,7 +103,18 @@ class DomainSpec:
     def rules_by_severity(self, severity: str) -> list:
         """Get rules filtered by severity, sorted by ID."""
         rules = [r for r in self.rules.values() if r.severity == severity]
-        return sorted(rules, key=lambda r: (r.id[0], int(r.id[1:])))
+
+        def sort_key(r):
+            """Sort by prefix letter, then numeric part, then suffix."""
+            # Parse IDs like "N1", "N1_js", "N10_py"
+            import re
+            match = re.match(r'^([A-Z])(\d+)(.*)$', r.id)
+            if match:
+                prefix, num, suffix = match.groups()
+                return (prefix, int(num), suffix)
+            return (r.id, 0, '')
+
+        return sorted(rules, key=sort_key)
 
     def mechanical_rules(self) -> list:
         """Get all rules with mechanical=true."""
@@ -967,10 +978,19 @@ def convert_check_to_rule(rule: Rule) -> dict | None:
         'title': rule.title,
         'severity': rule.severity,
         'type': 'ast' if is_ast else 'grep',
-        'pattern': None if is_ast else check.get('pattern', ''),
-        'query': check.get('query', '').strip() if is_ast else None,
-        'message': rule.description.strip() if rule.description else rule.title,
     }
+
+    # AST rules require a language field
+    if is_ast:
+        rule_language = check.get('language')
+        if rule_language:
+            json_rule['language'] = rule_language
+        # Note: language is required for AST rules, but we don't error here
+        # The flight-lint loader will validate this
+
+    json_rule['pattern'] = None if is_ast else check.get('pattern', '')
+    json_rule['query'] = check.get('query', '').strip() if is_ast else None
+    json_rule['message'] = rule.description.strip() if rule.description else rule.title
 
     # Add rule-level provenance if present
     if rule.provenance:
@@ -1007,12 +1027,10 @@ def generate_rules_json(spec: DomainSpec) -> str:
 
     rules_list.sort(key=sort_key)
 
-    language = infer_language_from_domain(spec.domain, spec.file_patterns)
-
+    # Note: language is now per-rule for AST rules, not at file level
     rules_file = {
         'domain': spec.domain,
         'version': spec.version,
-        'language': language,
         'file_patterns': spec.file_patterns,
     }
 
@@ -1043,7 +1061,8 @@ def validate_rules_json(json_content: str) -> bool:
     """
     rules_data = json.loads(json_content)
 
-    required_fields = ['domain', 'version', 'language', 'file_patterns', 'rules']
+    # Note: language is now per-rule for AST rules, not at file level
+    required_fields = ['domain', 'version', 'file_patterns', 'rules']
     for field_name in required_fields:
         if field_name not in rules_data:
             raise ValueError(f"Missing required field: {field_name}")

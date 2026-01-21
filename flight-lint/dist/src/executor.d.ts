@@ -9,12 +9,12 @@ interface QueryMatch {
     readonly text: string;
 }
 /**
- * Check if a file language is compatible with a rules language.
+ * Check if a file language is compatible with a rule's target language.
  * @param fileLanguage - The language of the file being linted
- * @param rulesLanguage - The language specified in the rules file
- * @returns True if the file can be linted with the rules
+ * @param ruleLanguage - The language specified in the rule (undefined for grep rules)
+ * @returns True if the rule should be applied to this file
  */
-export declare function isLanguageCompatible(fileLanguage: string, rulesLanguage: string): boolean;
+export declare function isRuleCompatibleWithFile(fileLanguage: string, ruleLanguage: string | undefined): boolean;
 /**
  * Execute a single rule's query against a parsed syntax tree.
  * @param tree - The parsed syntax tree
@@ -26,16 +26,18 @@ export declare function isLanguageCompatible(fileLanguage: string, rulesLanguage
 export declare function executeRule(tree: Parser.Tree, rule: Rule, language: any): QueryMatch[];
 /**
  * Lint a single file with the given rules.
+ * Only rules compatible with the file's language are executed.
  * @param filePath - Path to the file to lint
  * @param rules - Rules to apply
- * @param language - Language of the file
+ * @param fileLanguage - Language of the file
  * @returns Array of lint results
  */
-export declare function lintFile(filePath: string, rules: readonly Rule[], language: string): Promise<LintResult[]>;
+export declare function lintFile(filePath: string, rules: readonly Rule[], fileLanguage: string): Promise<LintResult[]>;
 /**
  * Lint multiple files with rules from a rules file.
+ * Language filtering is done per-rule, not per-file.
  * @param files - Array of file paths to lint
- * @param rulesFile - The rules file containing rules and language info
+ * @param rulesFile - The rules file containing rules
  * @returns Summary of lint results
  */
 export declare function lintFiles(files: readonly string[], rulesFile: RulesFile): Promise<LintSummary>;

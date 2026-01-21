@@ -49,8 +49,8 @@ function validateRulesFile(parsedData, filePath) {
         throw new Error(`Rules file must be an object: ${filePath}`);
     }
     const jsonObject = parsedData;
-    // Validate required string fields
-    const requiredStringFields = ['domain', 'version', 'language'];
+    // Validate required string fields (language is now per-rule, not file-level)
+    const requiredStringFields = ['domain', 'version'];
     for (const field of requiredStringFields) {
         if (typeof jsonObject[field] !== 'string') {
             throw new Error(`Missing or invalid '${field}' in: ${filePath}`);
@@ -72,7 +72,6 @@ function validateRulesFile(parsedData, filePath) {
     return {
         domain: jsonObject.domain,
         version: jsonObject.version,
-        language: jsonObject.language,
         filePatterns: jsonObject[JSON_KEYS.filePatterns],
         excludePatterns: rawExcludePatterns,
         provenance: rawProvenance ? mapDomainProvenance(rawProvenance) : undefined,
@@ -136,11 +135,17 @@ function validateRule(ruleData, ruleIndex, filePath) {
     }
     const rawProvenance = ruleObject.provenance;
     const ruleType = ruleObject.type;
+    const ruleLanguage = ruleObject.language;
+    // Validate: AST rules should have a language field
+    if (ruleType === 'ast' && !ruleLanguage) {
+        throw new Error(`Rule ${ruleIndex} (${ruleObject.id}) is type 'ast' but missing 'language' in: ${filePath}`);
+    }
     return {
         id: ruleObject.id,
         title: ruleObject.title,
         severity: severityValue,
         type: ruleType,
+        language: ruleLanguage,
         query: queryValue,
         message: ruleObject.message,
         provenance: rawProvenance ? mapRuleProvenance(rawProvenance) : undefined,
