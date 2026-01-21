@@ -134,16 +134,13 @@ done' _ "${FILES[@]}"
 check "N9: Negated Boolean Names" \
     grep -En "(is|has|can|should|will)(Not|No)[A-Z]" "${FILES[@]}"
 
-# N10: Inconsistent Naming Style
-check "N10: Inconsistent Naming Style" \
-    bash -c 'for f in "$@"; do
-  camel=$(grep -oE '"'"'\b[a-z]+[A-Z][a-zA-Z]*\b'"'"' "$f" 2>/dev/null | wc -l)
-  snake=$(grep -oE '"'"'\b[a-z]+_[a-z]+\b'"'"' "$f" 2>/dev/null | wc -l)
-  # Only flag if significant usage of both styles
-  if [ "$camel" -gt 5 ] && [ "$snake" -gt 5 ]; then
-    echo "$f: mixed naming styles (camelCase: $camel, snake_case: $snake)"
-  fi
-done' _ "${FILES[@]}"
+# N10_js: snake_case Declaration in JavaScript/TypeScript
+check "N10_js: snake_case Declaration in JavaScript/TypeScript" \
+    # Unknown check type: ast
+
+# N10_py: camelCase Declaration in Python
+check "N10_py: camelCase Declaration in Python" \
+    # Unknown check type: ast
 
 printf '\n%s\n' "## MUST Rules"
 

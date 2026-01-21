@@ -1,7 +1,6 @@
 {
   "domain": "code-hygiene",
   "version": "1.1.0",
-  "language": "javascript",
   "file_patterns": [
     "**/*.js",
     "**/*.ts",
@@ -29,6 +28,36 @@
     "next_audit_due": "2026-07-16"
   },
   "rules": [
+    {
+      "id": "N10_js",
+      "title": "snake_case Declaration in JavaScript/TypeScript",
+      "severity": "NEVER",
+      "type": "ast",
+      "language": "typescript",
+      "pattern": null,
+      "query": "; Flag snake_case variable declarations\n(variable_declarator\n  name: (identifier) @violation\n  (#match? @violation \"^[a-z]+_[a-z]\"))\n\n; Flag snake_case function declarations\n(function_declaration\n  name: (identifier) @violation\n  (#match? @violation \"^[a-z]+_[a-z]\"))\n\n; Flag snake_case method definitions\n(method_definition\n  name: (property_identifier) @violation\n  (#match? @violation \"^[a-z]+_[a-z]\"))\n\n; Flag snake_case arrow function variable declarations\n(lexical_declaration\n  (variable_declarator\n    name: (identifier) @violation\n    value: (arrow_function))\n  (#match? @violation \"^[a-z]+_[a-z]\"))",
+      "message": "JavaScript and TypeScript declarations should use camelCase, not snake_case. This checks variable declarations, function names, and method names. Property access and object literals (e.g., API responses) are NOT checked.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N10_py",
+      "title": "camelCase Declaration in Python",
+      "severity": "NEVER",
+      "type": "ast",
+      "language": "python",
+      "pattern": null,
+      "query": "; Flag camelCase function definitions\n(function_definition\n  name: (identifier) @violation\n  (#match? @violation \"^[a-z]+[A-Z]\"))\n\n; Flag camelCase in simple assignments (top-level variables)\n(assignment\n  left: (identifier) @violation\n  (#match? @violation \"^[a-z]+[A-Z]\"))",
+      "message": "Python declarations should use snake_case, not camelCase (PEP 8). This checks function definitions and variable assignments. Class names (PascalCase) are NOT flagged.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
     {
       "id": "N1",
       "title": "Generic Variable Names",
