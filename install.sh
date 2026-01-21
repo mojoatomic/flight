@@ -21,6 +21,13 @@ cp -r "$TMP_DIR/.flight" .
 cp -r "$TMP_DIR/.claude" .
 cp "$TMP_DIR/update.sh" .
 
+# Copy flight-lint (AST validation tool)
+if [[ -d "$TMP_DIR/flight-lint" ]]; then
+    cp -r "$TMP_DIR/flight-lint" .
+    echo "Building flight-lint..."
+    (cd flight-lint && npm install && npm run build)
+fi
+
 # Copy project files only if they don't exist
 [[ ! -f CLAUDE.md ]] && cp "$TMP_DIR/CLAUDE.md" .
 [[ ! -f PROMPT.md ]] && cp "$TMP_DIR/PROMPT.md" . 2>/dev/null || true

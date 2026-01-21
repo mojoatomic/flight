@@ -42,6 +42,27 @@ if [[ -d "$TMP_DIR/.flight/bin" ]]; then
     cp -r "$TMP_DIR/.flight/bin/"* .flight/bin/ 2>/dev/null || true
 fi
 
+# Update flight-lint (AST validation tool)
+if [[ -d "$TMP_DIR/flight-lint" ]]; then
+    if [[ -d "flight-lint/node_modules" ]]; then
+        # Preserve existing node_modules and dist
+        mv flight-lint/node_modules /tmp/flight-lint-node_modules-$$ 2>/dev/null || true
+        mv flight-lint/dist /tmp/flight-lint-dist-$$ 2>/dev/null || true
+        rm -rf flight-lint
+        cp -r "$TMP_DIR/flight-lint" .
+        mv /tmp/flight-lint-node_modules-$$ flight-lint/node_modules 2>/dev/null || true
+        mv /tmp/flight-lint-dist-$$ flight-lint/dist 2>/dev/null || true
+    else
+        rm -rf flight-lint
+        cp -r "$TMP_DIR/flight-lint" .
+    fi
+    # Build if not already built
+    if [[ ! -d "flight-lint/dist" ]]; then
+        echo "Building flight-lint..."
+        (cd flight-lint && npm install && npm run build)
+    fi
+fi
+
 # Update examples, exercises, templates (learning resources)
 [[ -d "$TMP_DIR/.flight/examples" ]] && cp -r "$TMP_DIR/.flight/examples" .flight/
 [[ -d "$TMP_DIR/.flight/exercises" ]] && cp -r "$TMP_DIR/.flight/exercises" .flight/
