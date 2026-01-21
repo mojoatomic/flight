@@ -1,7 +1,6 @@
 {
   "domain": "sms-twilio",
   "version": "1.1.0",
-  "language": "javascript",
   "file_patterns": [
     "**/sms*.js",
     "**/sms*.ts",
@@ -44,9 +43,10 @@
       "id": "N10",
       "title": "No Hardcoded Phone Numbers",
       "severity": "NEVER",
-      "type": "grep",
-      "pattern": "\"\\+1[0-9]{10}\"|\\x27\\+1[0-9]{10}\\x27",
-      "query": null,
+      "type": "ast",
+      "language": "typescript",
+      "pattern": null,
+      "query": "((string_fragment) @violation\n (#match? @violation \"^\\\\+1[0-9]{10}$\"))",
       "message": "Never hardcode phone numbers in source code. Use environment variables or configuration for phone numbers.",
       "provenance": {
         "last_verified": "2026-01-20",
@@ -58,9 +58,10 @@
       "id": "N11",
       "title": "No Hardcoded Twilio Credentials",
       "severity": "NEVER",
-      "type": "grep",
-      "pattern": "ACCOUNT_SID\\s*=\\s*['\"]AC|AUTH_TOKEN\\s*=\\s*['\"][a-f0-9]{32}",
-      "query": null,
+      "type": "ast",
+      "language": "typescript",
+      "pattern": null,
+      "query": "((string_fragment) @violation\n (#match? @violation \"^(AC[a-f0-9]{32}|[a-f0-9]{32})$\"))",
       "message": "Never hardcode Twilio credentials (Account SID, Auth Token) in source code. Use environment variables.",
       "provenance": {
         "last_verified": "2026-01-20",

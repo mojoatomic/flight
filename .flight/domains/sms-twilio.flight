@@ -426,9 +426,11 @@ rules:
           accessed: "2026-01-20"
           quote: "Sensitive data should never be hardcoded"
     check:
-      type: grep
-      pattern: '"\+1[0-9]{10}"|\x27\+1[0-9]{10}\x27'
-      flags: -Ein
+      type: ast
+      language: typescript
+      query: |
+        ((string_fragment) @violation
+         (#match? @violation "^\\+1[0-9]{10}$"))
     examples:
       bad:
         - 'const phone = "+15551234567";'
@@ -451,12 +453,14 @@ rules:
           accessed: "2026-01-20"
           quote: "Never commit credentials to source control"
     check:
-      type: grep
-      pattern: 'ACCOUNT_SID\s*=\s*[''"]AC|AUTH_TOKEN\s*=\s*[''"][a-f0-9]{32}'
-      flags: -Ein
+      type: ast
+      language: typescript
+      query: |
+        ((string_fragment) @violation
+         (#match? @violation "^(AC[a-f0-9]{32}|[a-f0-9]{32})$"))
     examples:
       bad:
-        - 'const ACCOUNT_SID = "AC1234567890abcdef";'
+        - 'const ACCOUNT_SID = "AC1234567890abcdef1234567890abcdef12";'
         - 'const AUTH_TOKEN = "abcdef1234567890abcdef1234567890";'
       good:
         - "const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;"

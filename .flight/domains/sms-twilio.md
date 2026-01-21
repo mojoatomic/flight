@@ -152,7 +152,7 @@ SMS consent management, opt-in/opt-out handling, and Twilio error code interpret
 
    ```
    // BAD
-   const ACCOUNT_SID = "AC1234567890abcdef";
+   const ACCOUNT_SID = "AC1234567890abcdef1234567890abcdef12";
    // BAD
    const AUTH_TOKEN = "abcdef1234567890abcdef1234567890";
 
