@@ -6,6 +6,8 @@ import { readFile } from 'node:fs/promises';
 
 const languageModules = {
   javascript: () => import('tree-sitter-javascript'),
+  typescript: () => import('tree-sitter-typescript').then(m => ({ default: m.default.typescript })),
+  tsx: () => import('tree-sitter-typescript').then(m => ({ default: m.default.tsx })),
   python: () => import('tree-sitter-python'),
 };
 
