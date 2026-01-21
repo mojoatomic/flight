@@ -42,6 +42,10 @@ provenance:
 file_patterns:
   - "**/*test*.js"
   - "**/*spec*.js"
+  - "**/*test*.ts"
+  - "**/*spec*.ts"
+  - "**/*test*.tsx"
+  - "**/*spec*.tsx"
   - "**/*_test.py"
   - "**/test_*.py"
   - "**/*_test.go"
@@ -100,6 +104,64 @@ rules:
         - "def test_returns_empty_list_when_no_matches(self): ..."
         - "func TestUserService_ReturnsError_WhenNotFound(t *testing.T) { ... }"
 
+  N1_js:
+    title: Enumerated Test Names (JavaScript)
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use enumerated test names (test1, test2, testA). They provide
+      no information about what the test verifies.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+    check:
+      type: ast
+      language: javascript
+      query: |
+        (call_expression
+          function: (identifier) @func (#match? @func "^(test|it)$")
+          arguments: (arguments
+            (string (string_fragment) @violation (#match? @violation "^(test)?[0-9A-Za-z]?[0-9]$|^test_?[0-9]|^testA$"))))
+
+  N1_ts:
+    title: Enumerated Test Names (TypeScript)
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use enumerated test names (test1, test2, testA). They provide
+      no information about what the test verifies.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+    check:
+      type: ast
+      language: typescript
+      query: |
+        (call_expression
+          function: (identifier) @func (#match? @func "^(test|it)$")
+          arguments: (arguments
+            (string (string_fragment) @violation (#match? @violation "^(test)?[0-9A-Za-z]?[0-9]$|^test_?[0-9]|^testA$"))))
+
+  N1_py:
+    title: Enumerated Test Names (Python)
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use enumerated test names (test1, test2, testA). They provide
+      no information about what the test verifies.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+    check:
+      type: ast
+      language: python
+      query: |
+        (function_definition
+          name: (identifier) @violation (#match? @violation "^test_?[0-9]+$|^test[A-Z]$"))
+
   N2:
     title: Empty Test Bodies
     severity: NEVER
@@ -127,6 +189,25 @@ rules:
       good:
         - "it('works', () => { expect(result).toBe(true) })"
         - "def test_something(self): self.assertEqual(result, expected)"
+
+  N2_py:
+    title: Empty Test Bodies (Python)
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never write tests with only pass statement. Empty tests prove nothing.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+    check:
+      type: ast
+      language: python
+      query: |
+        (function_definition
+          name: (identifier) @name (#match? @name "^test")
+          body: (block
+            (pass_statement) @violation))
 
   N3:
     title: Hardcoded Sleep/Delays
@@ -158,6 +239,95 @@ rules:
         - "mock_time.advance(seconds=2)"
         - "eventually { assert condition }"
 
+  N3_js:
+    title: Sleep Function Calls (JavaScript)
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never call sleep() directly in tests. Use waitFor or mock timers.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+    check:
+      type: ast
+      language: javascript
+      query: |
+        (call_expression
+          function: (identifier) @violation (#eq? @violation "sleep"))
+
+  N3_ts:
+    title: Sleep Function Calls (TypeScript)
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never call sleep() directly in tests. Use waitFor or mock timers.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+    check:
+      type: ast
+      language: typescript
+      query: |
+        (call_expression
+          function: (identifier) @violation (#eq? @violation "sleep"))
+
+  N3_js_promise:
+    title: Promise setTimeout (JavaScript)
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use new Promise with setTimeout for delays in tests.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+    check:
+      type: ast
+      language: javascript
+      query: |
+        (await_expression
+          (new_expression
+            constructor: (identifier) @ctor (#eq? @ctor "Promise")) @violation)
+
+  N3_ts_promise:
+    title: Promise setTimeout (TypeScript)
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use new Promise with setTimeout for delays in tests.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+    check:
+      type: ast
+      language: typescript
+      query: |
+        (await_expression
+          (new_expression
+            constructor: (identifier) @ctor (#eq? @ctor "Promise")) @violation)
+
+  N3_py:
+    title: time.sleep Calls (Python)
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use time.sleep() in tests. Use mock timers or event-based waiting.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+    check:
+      type: ast
+      language: python
+      query: |
+        (call
+          function: (attribute
+            object: (identifier) @obj (#eq? @obj "time")
+            attribute: (identifier) @attr (#eq? @attr "sleep"))) @violation
+
   N4:
     title: Testing Private Methods Directly
     severity: NEVER
@@ -185,6 +355,76 @@ rules:
       good:
         - "expect(obj.publicMethod()).toBe(...)"
         - "// Private behavior is tested implicitly through public API"
+
+  N4_js:
+    title: Testing Private Members (JavaScript)
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never test private methods or properties (_prefixed) in expect().
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+    check:
+      type: ast
+      language: javascript
+      query: |
+        (call_expression
+          function: (identifier) @func (#eq? @func "expect")
+          arguments: (arguments
+            [(member_expression
+               property: (property_identifier) @violation (#match? @violation "^_"))
+             (call_expression
+               function: (member_expression
+                 property: (property_identifier) @violation (#match? @violation "^_")))]))
+
+  N4_ts:
+    title: Testing Private Members (TypeScript)
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never test private methods or properties (_prefixed) in expect().
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+    check:
+      type: ast
+      language: typescript
+      query: |
+        (call_expression
+          function: (identifier) @func (#eq? @func "expect")
+          arguments: (arguments
+            [(member_expression
+               property: (property_identifier) @violation (#match? @violation "^_"))
+             (call_expression
+               function: (member_expression
+                 property: (property_identifier) @violation (#match? @violation "^_")))]))
+
+  N4_py:
+    title: Testing Private Members (Python)
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never test private methods or attributes (_prefixed) in assert.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+    check:
+      type: ast
+      language: python
+      query: |
+        (assert_statement
+          [(attribute
+             attribute: (identifier) @violation (#match? @violation "^_"))
+           (comparison_operator
+             [(attribute
+                attribute: (identifier) @violation (#match? @violation "^_"))
+              (call
+                function: (attribute
+                  attribute: (identifier) @violation (#match? @violation "^_")))])])
 
   N5:
     title: Unawaited Async Assertions
@@ -222,6 +462,46 @@ rules:
           test('fetches data', () => {
             return fetchData().then(data => expect(data).toBeDefined())
           })
+
+  N5_js:
+    title: Unawaited .then() Callbacks (JavaScript)
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use .then() with callback in tests - use async/await instead.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+    check:
+      type: ast
+      language: javascript
+      query: |
+        (call_expression
+          function: (member_expression
+            property: (property_identifier) @prop (#eq? @prop "then"))
+          arguments: (arguments
+            (arrow_function) @callback)) @violation
+
+  N5_ts:
+    title: Unawaited .then() Callbacks (TypeScript)
+    severity: NEVER
+    mechanical: true
+    description: >
+      Never use .then() with callback in tests - use async/await instead.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+    check:
+      type: ast
+      language: typescript
+      query: |
+        (call_expression
+          function: (member_expression
+            property: (property_identifier) @prop (#eq? @prop "then"))
+          arguments: (arguments
+            (arrow_function) @callback)) @violation
 
   # =========================================================================
   # SHOULD - Warnings (validator warns but doesn't fail)
@@ -381,6 +661,75 @@ rules:
           ])('validateEmail(%s) returns %s', (input, expected) => {
             expect(validateEmail(input)).toBe(expected)
           })
+
+  S4_js:
+    title: Logic in Tests (JavaScript)
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Avoid if/for/while in test bodies. Use test.each for parameterized tests.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+    check:
+      type: ast
+      language: javascript
+      query: |
+        (call_expression
+          function: (identifier) @func (#match? @func "^(test|it)$")
+          arguments: (arguments
+            (arrow_function
+              body: (statement_block
+                [(if_statement) @violation
+                 (for_statement) @violation
+                 (for_in_statement) @violation
+                 (while_statement) @violation]))))
+
+  S4_ts:
+    title: Logic in Tests (TypeScript)
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Avoid if/for/while in test bodies. Use test.each for parameterized tests.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+    check:
+      type: ast
+      language: typescript
+      query: |
+        (call_expression
+          function: (identifier) @func (#match? @func "^(test|it)$")
+          arguments: (arguments
+            (arrow_function
+              body: (statement_block
+                [(if_statement) @violation
+                 (for_statement) @violation
+                 (for_in_statement) @violation
+                 (while_statement) @violation]))))
+
+  S4_py:
+    title: Logic in Tests (Python)
+    severity: SHOULD
+    mechanical: true
+    description: >
+      Avoid if/for/while in test bodies. Use pytest.mark.parametrize.
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+    check:
+      type: ast
+      language: python
+      query: |
+        (function_definition
+          name: (identifier) @name (#match? @name "^test")
+          body: (block
+            [(if_statement) @violation
+             (for_statement) @violation
+             (while_statement) @violation]))
 
   # =========================================================================
   # GUIDANCE - Best practices (not mechanically checked)

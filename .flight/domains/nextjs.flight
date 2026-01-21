@@ -175,9 +175,16 @@ rules:
       Don't use useEffect to fetch initial page data. Server components can
       fetch data directly, avoiding the extra round trip.
     check:
-      type: grep
-      pattern: 'useEffect.*fetch\(|useEffect.*axios|useEffect.*useSWR'
-      flags: -lE
+      type: ast
+      language: typescript
+      query: |
+        (call_expression
+          function: (identifier) @fn
+          arguments: (arguments
+            (arrow_function
+              body: (statement_block) @body))
+          (#eq? @fn "useEffect")
+          (#match? @body "\\bfetch\\s*\\(|\\baxios\\.")) @violation
     note: |
       Client-side fetch in useEffect means: render empty → fetch → re-render.
       Server component fetch means: fetch → render with data. One round trip saved.
@@ -297,9 +304,24 @@ rules:
       Hardcoded route strings with multiple segments are fragile.
       Use centralized route constants for maintainability.
     check:
-      type: grep
-      pattern: "href=['\"][^'\"]+/[^'\"]+/[^'\"]+['\"]|push\\(['\"][^'\"]+/[^'\"]+/[^'\"]+['\"]\\)"
-      flags: -En
+      type: ast
+      language: typescript
+      query: |
+        ; Match JSX href attributes with multi-segment paths
+        (jsx_attribute
+          (property_identifier) @attr
+          (string (string_fragment) @path)
+          (#eq? @attr "href")
+          (#match? @path "^/[^/]+/[^/]+/")) @violation
+
+        ; Match router.push() calls with multi-segment paths
+        (call_expression
+          function: (member_expression
+            property: (property_identifier) @method)
+          arguments: (arguments
+            (string (string_fragment) @path2))
+          (#eq? @method "push")
+          (#match? @path2 "^/[^/]+/[^/]+/")) @violation
     note: |
       When routes change, hardcoded strings break silently.
       Centralized constants give you type safety and single-point updates.
@@ -332,9 +354,15 @@ rules:
       Console statements in production code indicate incomplete development
       or forgotten debugging. Remove before deploying.
     check:
-      type: grep
-      pattern: 'console\.log'
-      flags: -rn
+      type: ast
+      language: typescript
+      query: |
+        (call_expression
+          function: (member_expression
+            object: (identifier) @obj
+            property: (property_identifier) @prop)
+          (#eq? @obj "console")
+          (#eq? @prop "log")) @violation
     note: |
       Console.log in server components runs on server logs.
       In client components it clutters browser console.

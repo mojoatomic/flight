@@ -192,11 +192,11 @@ done' _ "${FILES[@]}"
 
 # N10: No Hardcoded Phone Numbers
 check "N10: No Hardcoded Phone Numbers" \
-    grep -Ein "\"\\+1[0-9]{10}\"|\\x27\\+1[0-9]{10}\\x27" "${FILES[@]}"
+    # Unknown check type: ast
 
 # N11: No Hardcoded Twilio Credentials
 check "N11: No Hardcoded Twilio Credentials" \
-    grep -Ein "ACCOUNT_SID\\s*=\\s*['\"]AC|AUTH_TOKEN\\s*=\\s*['\"][a-f0-9]{32}" "${FILES[@]}"
+    # Unknown check type: ast
 
 printf '\n%s\n' "## SHOULD Rules"
 

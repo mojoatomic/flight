@@ -35,11 +35,15 @@ export async function getLanguage(languageName: string): Promise<TreeSitterLangu
       languageModule = (await import('tree-sitter-javascript')) as LanguageModule;
       break;
     case 'typescript':
-    case 'tsx':
       // tree-sitter-typescript exports TypeScript and TSX as separate submodules
       // ESM requires full path to the .js file
       // @ts-expect-error - tree-sitter-typescript lacks TypeScript declarations
       languageModule = (await import('tree-sitter-typescript/bindings/node/typescript.js')) as LanguageModule;
+      break;
+    case 'tsx':
+      // TSX requires the TSX-specific parser for JSX syntax support
+      // @ts-expect-error - tree-sitter-typescript lacks TypeScript declarations
+      languageModule = (await import('tree-sitter-typescript/bindings/node/tsx.js')) as LanguageModule;
       break;
     case 'python':
       languageModule = (await import('tree-sitter-python')) as LanguageModule;

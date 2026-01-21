@@ -27,15 +27,16 @@ describe('loader', () => {
   const validRulesContent = {
     domain: 'test-domain',
     version: '1.0.0',
-    language: 'javascript',
     file_patterns: ['**/*.js'],
     rules: [
       {
         id: 'N1',
         title: 'Test Rule',
         severity: 'NEVER',
-        query: '(identifier) @match',
-        message: 'Found identifier'
+        type: 'grep',
+        pattern: 'TODO',
+        query: null,
+        message: 'Found TODO'
       }
     ]
   };
@@ -48,7 +49,6 @@ describe('loader', () => {
 
       assert.strictEqual(rulesFile.domain, 'test-domain');
       assert.strictEqual(rulesFile.version, '1.0.0');
-      assert.strictEqual(rulesFile.language, 'javascript');
       assert.strictEqual(rulesFile.rules.length, 1);
       assert.strictEqual(rulesFile.rules[0]?.id, 'N1');
       assert.strictEqual(rulesFile.rules[0]?.severity, 'NEVER');
@@ -174,6 +174,56 @@ describe('loader', () => {
       const rulesFile = await loadRulesFile(filePath);
 
       assert.strictEqual(rulesFile.provenance?.lastFullAudit, '2026-01-20');
+    });
+
+    it('loads AST rules with rule-level language', async () => {
+      const astRuleContent = {
+        domain: 'ast-test',
+        version: '1.0.0',
+        file_patterns: ['**/*.js'],
+        rules: [
+          {
+            id: 'A1',
+            title: 'AST Rule',
+            severity: 'NEVER',
+            type: 'ast',
+            language: 'javascript',
+            query: '(identifier) @match',
+            message: 'Found identifier'
+          }
+        ]
+      };
+      const filePath = await createTestFile('ast-rules.json', JSON.stringify(astRuleContent));
+
+      const rulesFile = await loadRulesFile(filePath);
+
+      assert.strictEqual(rulesFile.rules.length, 1);
+      assert.strictEqual(rulesFile.rules[0]?.type, 'ast');
+      assert.strictEqual(rulesFile.rules[0]?.language, 'javascript');
+    });
+
+    it('throws when AST rule is missing language', async () => {
+      const astRuleContent = {
+        domain: 'ast-test',
+        version: '1.0.0',
+        file_patterns: ['**/*.js'],
+        rules: [
+          {
+            id: 'A1',
+            title: 'AST Rule',
+            severity: 'NEVER',
+            type: 'ast',
+            query: '(identifier) @match',
+            message: 'Found identifier'
+          }
+        ]
+      };
+      const filePath = await createTestFile('ast-no-lang.json', JSON.stringify(astRuleContent));
+
+      await assert.rejects(
+        loadRulesFile(filePath),
+        /type 'ast' but missing 'language'/
+      );
     });
   });
 });

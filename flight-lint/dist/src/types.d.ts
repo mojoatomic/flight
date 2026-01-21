@@ -51,14 +51,16 @@ export interface RuleProvenance {
 export type RuleType = 'ast' | 'grep';
 /**
  * A single lint rule definition.
- * Rules with type 'ast' require a query string.
- * Rules with type 'grep' have query set to null.
+ * Rules with type 'ast' require a query string and a language field.
+ * Rules with type 'grep' have query set to null and no language field.
  */
 export interface Rule {
     readonly id: string;
     readonly title: string;
     readonly severity: Severity;
     readonly type?: RuleType;
+    /** Target language for AST rules. Required for 'ast' type, absent for 'grep' type. */
+    readonly language?: string;
     readonly query: string | null;
     readonly message: string;
     readonly provenance?: RuleProvenance;
@@ -73,11 +75,11 @@ export interface DomainProvenance {
 }
 /**
  * Complete structure of a .rules.json file.
+ * Note: language is specified per-rule for AST rules, not at file level.
  */
 export interface RulesFile {
     readonly domain: string;
     readonly version: string;
-    readonly language: string;
     readonly filePatterns: readonly string[];
     readonly excludePatterns?: readonly string[];
     readonly provenance?: DomainProvenance;

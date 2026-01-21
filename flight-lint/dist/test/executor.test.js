@@ -3,12 +3,13 @@ import assert from 'node:assert';
 import { writeFile, unlink, mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { parseFile, getLanguage } from '../src/parser.js';
-import { executeRule, lintFile, lintFiles, isLanguageCompatible } from '../src/executor.js';
+import { executeRule, lintFile, lintFiles, isRuleCompatibleWithFile } from '../src/executor.js';
 // Shared test rules - defined once to avoid duplication
 // Query node types use tree-sitter naming conventions
-const VAR_FINDER_QUERY = '(variable_declarator name: (identifier) @match)';
-const FUNC_FINDER_QUERY = '(function_declaration name: (identifier) @match)';
-const CLASS_FINDER_QUERY = '(class_declaration name: (identifier) @match)';
+// Note: executeRule only reports captures named '@violation'
+const VAR_FINDER_QUERY = '(variable_declarator name: (identifier) @violation)';
+const FUNC_FINDER_QUERY = '(function_declaration name: (identifier) @violation)';
+const CLASS_FINDER_QUERY = '(class_declaration name: (identifier) @violation)';
 function createVarFinderRule(overrides = {}) {
     return {
         id: 'find-vars',
@@ -62,26 +63,30 @@ describe('executor', () => {
             // Ignore cleanup errors
         }
     });
-    describe('isLanguageCompatible', () => {
+    describe('isRuleCompatibleWithFile', () => {
         it('returns true for exact language match', () => {
-            assert.strictEqual(isLanguageCompatible('javascript', 'javascript'), true);
-            assert.strictEqual(isLanguageCompatible('typescript', 'typescript'), true);
+            assert.strictEqual(isRuleCompatibleWithFile('javascript', 'javascript'), true);
+            assert.strictEqual(isRuleCompatibleWithFile('typescript', 'typescript'), true);
         });
         it('returns true for javascript rules on jsx files', () => {
-            assert.strictEqual(isLanguageCompatible('jsx', 'javascript'), true);
+            assert.strictEqual(isRuleCompatibleWithFile('jsx', 'javascript'), true);
         });
         it('returns true for typescript rules on tsx files', () => {
-            assert.strictEqual(isLanguageCompatible('tsx', 'typescript'), true);
+            assert.strictEqual(isRuleCompatibleWithFile('tsx', 'typescript'), true);
         });
         it('returns false for incompatible languages', () => {
-            assert.strictEqual(isLanguageCompatible('typescript', 'javascript'), false);
-            assert.strictEqual(isLanguageCompatible('javascript', 'typescript'), false);
+            assert.strictEqual(isRuleCompatibleWithFile('typescript', 'javascript'), false);
+            assert.strictEqual(isRuleCompatibleWithFile('javascript', 'typescript'), false);
         });
         it('returns true for self-match when not in compatibility map', () => {
-            assert.strictEqual(isLanguageCompatible('python', 'python'), true);
+            assert.strictEqual(isRuleCompatibleWithFile('python', 'python'), true);
         });
         it('returns false for different unknown languages', () => {
-            assert.strictEqual(isLanguageCompatible('python', 'rust'), false);
+            assert.strictEqual(isRuleCompatibleWithFile('python', 'rust'), false);
+        });
+        it('returns true when rule has no language (grep rules apply to all files)', () => {
+            assert.strictEqual(isRuleCompatibleWithFile('javascript', undefined), true);
+            assert.strictEqual(isRuleCompatibleWithFile('python', undefined), true);
         });
     });
     describe('executeRule', () => {
@@ -175,9 +180,8 @@ let beta = 2;`);
             const rulesFile = {
                 domain: 'test-domain',
                 version: '1.0.0',
-                language: 'javascript',
                 filePatterns: ['**/*.js'],
-                rules: [createVarFinderRule()],
+                rules: [createVarFinderRule({ language: 'javascript' })],
             };
             const filesToLint = [
                 path.join(TEST_DIR, 'src/app.js'),
@@ -188,47 +192,51 @@ let beta = 2;`);
             assert.strictEqual(summary.fileCount, 2);
             assert.strictEqual(summary.results.length, 2);
         });
-        it('skips files with incompatible language', async () => {
+        it('skips rules with incompatible language', async () => {
             await createTestFile('src/app.ts', 'let typedCount: number = 0;');
             await createTestFile('src/utils.js', 'let jsCount = 0;');
+            // Rule is for TypeScript, so it should only match .ts files
             const rulesFile = {
                 domain: 'typescript-only',
                 version: '1.0.0',
-                language: 'typescript',
-                filePatterns: ['**/*.ts'],
-                rules: [createVarFinderRule()],
+                filePatterns: ['**/*.ts', '**/*.js'],
+                rules: [createVarFinderRule({ language: 'typescript' })],
             };
             const filesToLint = [
                 path.join(TEST_DIR, 'src/app.ts'),
                 path.join(TEST_DIR, 'src/utils.js'),
             ];
             const summary = await lintFiles(filesToLint, rulesFile);
-            assert.strictEqual(summary.fileCount, 1);
+            // Both files are linted, but only TS file matches the rule
+            assert.strictEqual(summary.fileCount, 2);
             assert.strictEqual(summary.results.length, 1);
             assert.ok(summary.results[0]?.filePath.endsWith('app.ts'));
         });
-        it('returns empty results when no files match language', async () => {
-            await createTestFile('src/app.js', 'let count = 0;');
+        it('rules without language match all files', async () => {
+            await createTestFile('src/app.js', 'let jsCount = 0;');
+            await createTestFile('src/app.ts', 'let tsCount = 0;');
+            // Rule without language applies to all files (like grep rules)
             const rulesFile = {
-                domain: 'typescript-only',
+                domain: 'universal-rule',
                 version: '1.0.0',
-                language: 'typescript',
-                filePatterns: ['**/*.ts'],
-                rules: [createVarFinderRule()],
+                filePatterns: ['**/*.ts', '**/*.js'],
+                rules: [createVarFinderRule()], // No language = matches all
             };
-            const filesToLint = [path.join(TEST_DIR, 'src/app.js')];
+            const filesToLint = [
+                path.join(TEST_DIR, 'src/app.js'),
+                path.join(TEST_DIR, 'src/app.ts'),
+            ];
             const summary = await lintFiles(filesToLint, rulesFile);
-            assert.strictEqual(summary.fileCount, 0);
-            assert.strictEqual(summary.results.length, 0);
+            assert.strictEqual(summary.fileCount, 2);
+            assert.strictEqual(summary.results.length, 2);
         });
-        it('includes tsx files when language is typescript', async () => {
+        it('includes tsx files when rule language is typescript', async () => {
             await createTestFile('src/Component.tsx', 'let componentState = null;');
             const rulesFile = {
                 domain: 'typescript-rules',
                 version: '1.0.0',
-                language: 'typescript',
                 filePatterns: ['**/*.tsx'],
-                rules: [createVarFinderRule()],
+                rules: [createVarFinderRule({ language: 'typescript' })],
             };
             const filesToLint = [path.join(TEST_DIR, 'src/Component.tsx')];
             const summary = await lintFiles(filesToLint, rulesFile);

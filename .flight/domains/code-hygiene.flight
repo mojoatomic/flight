@@ -423,53 +423,154 @@ rules:
         - "if (isValid)"
         - "if (!isEmpty)"
 
-  N10:
-    title: Inconsistent Naming Style
+  N10_js:
+    title: snake_case Declaration in JavaScript/TypeScript
     severity: NEVER
     mechanical: true
     provenance:
-      last_verified: "2026-01-16"
+      last_verified: "2026-01-20"
       confidence: high
-      re_verify_after: "2027-01-16"
+      re_verify_after: "2027-01-20"
       sources:
+        - url: "https://google.github.io/styleguide/tsguide.html#naming-style"
+          accessed: "2026-01-20"
+          quote: "Use camelCase for variable and function names"
         - url: "https://www.oreilly.com/library/view/code-complete-2nd/0735619670/"
           accessed: "2026-01-16"
           quote: "Adopt naming conventions that are consistent throughout a project"
     description: >
-      Do not mix camelCase and snake_case in the same file. Pick one style
-      based on language conventions and use it consistently.
+      JavaScript and TypeScript declarations should use camelCase, not snake_case.
+      This checks variable declarations, function names, and method names.
+      Property access and object literals (e.g., API responses) are NOT checked.
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          camel=$(grep -oE '\b[a-z]+[A-Z][a-zA-Z]*\b' "$f" 2>/dev/null | wc -l)
-          snake=$(grep -oE '\b[a-z]+_[a-z]+\b' "$f" 2>/dev/null | wc -l)
-          # Only flag if significant usage of both styles
-          if [ "$camel" -gt 5 ] && [ "$snake" -gt 5 ]; then
-            echo "$f: mixed naming styles (camelCase: $camel, snake_case: $snake)"
-          fi
-        done
+      type: ast
+      language: typescript
+      query: |
+        ; Flag snake_case variable declarations
+        (variable_declarator
+          name: (identifier) @violation
+          (#match? @violation "^[a-z]+_[a-z]"))
+
+        ; Flag snake_case function declarations
+        (function_declaration
+          name: (identifier) @violation
+          (#match? @violation "^[a-z]+_[a-z]"))
+
+        ; Flag snake_case method definitions
+        (method_definition
+          name: (property_identifier) @violation
+          (#match? @violation "^[a-z]+_[a-z]"))
+
+        ; Flag snake_case arrow function variable declarations
+        (lexical_declaration
+          (variable_declarator
+            name: (identifier) @violation
+            value: (arrow_function))
+          (#match? @violation "^[a-z]+_[a-z]"))
     note: |
-      Inconsistent naming makes code harder to read and suggests careless
-      development. Follow language conventions consistently.
+      JavaScript/TypeScript convention is camelCase for identifiers.
+      This rule only checks DECLARATIONS, not property access or object literals.
+      Files that map to external APIs (databases, REST responses) can safely
+      use snake_case in object literals without triggering this rule.
+    examples:
+      bad:
+        - "const user_name = 'alice';"
+        - "function get_user_by_id(id) { ... }"
+        - "const fetch_data = async () => { ... };"
+      good:
+        - "const userName = 'alice';"
+        - "function getUserById(id) { ... }"
+        - "const fetchData = async () => { ... };"
+        - "// Object literals with external data are OK:"
+        - "const response = { user_id: 123, created_at: date };"
+
+  N10_py:
+    title: camelCase Declaration in Python
+    severity: NEVER
+    mechanical: true
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+      sources:
+        - url: "https://peps.python.org/pep-0008/#function-and-variable-names"
+          accessed: "2026-01-20"
+          quote: "Function names should be lowercase, with words separated by underscores"
+        - url: "https://www.oreilly.com/library/view/code-complete-2nd/0735619670/"
+          accessed: "2026-01-16"
+          quote: "Adopt naming conventions that are consistent throughout a project"
+    description: >
+      Python declarations should use snake_case, not camelCase (PEP 8).
+      This checks function definitions and variable assignments.
+      Class names (PascalCase) are NOT flagged.
+    check:
+      type: ast
+      language: python
+      query: |
+        ; Flag camelCase function definitions
+        (function_definition
+          name: (identifier) @violation
+          (#match? @violation "^[a-z]+[A-Z]"))
+
+        ; Flag camelCase in simple assignments (top-level variables)
+        (assignment
+          left: (identifier) @violation
+          (#match? @violation "^[a-z]+[A-Z]"))
+    note: |
+      Python convention (PEP 8) is snake_case for functions and variables.
+      Class names should be PascalCase (not flagged by this rule).
+      This rule only checks DECLARATIONS, not attribute access.
+    examples:
+      bad:
+        - "def getUserById(user_id): ..."
+        - "userName = 'alice'"
+      good:
+        - "def get_user_by_id(user_id): ..."
+        - "user_name = 'alice'"
+        - "class UserManager:  # PascalCase for classes is correct"
+
+  N11:
+    title: No Imports in /tmp Scripts
+    severity: NEVER
+    mechanical: false
+    provenance:
+      last_verified: "2026-01-20"
+      confidence: high
+      re_verify_after: "2027-01-20"
+    description: >
+      Scripts in /tmp cannot import project dependencies. Run from the
+      project directory or use the project's existing tooling.
+    note: |
+      Scripts written to /tmp don't have access to node_modules or other
+      project dependencies. This is a common AI coding assistant mistake.
+
+      WRONG: cat > /tmp/debug.mjs << 'EOF'
+             import Parser from 'tree-sitter'
+
+      RIGHT: cd project-dir && node -e "const Parser = require('tree-sitter')..."
+      RIGHT: Use existing test fixtures in the project
+      RIGHT: Write script to project directory where dependencies are available
     examples:
       bad:
         - |
-          // Mixed in same file
-          const user_name = "alice";
-          const userEmail = "alice@example.com";
-          const UserAge = 30;
+          cat > /tmp/debug.mjs << 'EOF'
+          import Parser from 'tree-sitter';
+          // This will fail - tree-sitter not in /tmp/node_modules
+          EOF
       good:
         - |
-          // JavaScript - consistent camelCase
-          const userName = "alice";
-          const userEmail = "alice@example.com";
-          const userAge = 30;
+          # Run from project directory
+          cd flight-lint && node -e "
+            const Parser = require('tree-sitter');
+            console.log(Parser);
+          "
         - |
-          # Python - consistent snake_case
-          user_name = "alice"
-          user_email = "alice@example.com"
-          user_age = 30
+          # Or write to project directory
+          cat > ./debug-script.mjs << 'EOF'
+          import Parser from 'tree-sitter';
+          EOF
+          node debug-script.mjs
+          rm debug-script.mjs
 
   # =========================================================================
   # MUST - Important patterns (validator warns)
@@ -888,6 +989,10 @@ anti_patterns:
   - pattern: "mixed camel_Case"
     description: "Inconsistent naming"
     fix: "Pick one style per file"
+
+  - pattern: "cat > /tmp/*.mjs ... import"
+    description: "/tmp scripts can't import project deps"
+    fix: "Run from project dir or use existing tooling"
 
 # ===========================================================================
 # SOURCES

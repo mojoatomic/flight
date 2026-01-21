@@ -241,27 +241,79 @@ Universal code quality patterns that apply to ALL languages. These are AI-genera
    if (!isEmpty)
    ```
 
-10. **Inconsistent Naming Style** - Do not mix camelCase and snake_case in the same file. Pick one style based on language conventions and use it consistently.
+10. **snake_case Declaration in JavaScript/TypeScript** - JavaScript and TypeScript declarations should use camelCase, not snake_case. This checks variable declarations, function names, and method names. Property access and object literals (e.g., API responses) are NOT checked.
 
    ```
    // BAD
-   // Mixed in same file
-   const user_name = "alice";
-   const userEmail = "alice@example.com";
-   const UserAge = 30;
+   const user_name = 'alice';
+   // BAD
+   function get_user_by_id(id) { ... }
+   // BAD
+   const fetch_data = async () => { ... };
+
+   // GOOD
+   const userName = 'alice';
+   // GOOD
+   function getUserById(id) { ... }
+   // GOOD
+   const fetchData = async () => { ... };
+   // GOOD
+   // Object literals with external data are OK:
+   // GOOD
+   const response = { user_id: 123, created_at: date };
+   ```
+
+11. **camelCase Declaration in Python** - Python declarations should use snake_case, not camelCase (PEP 8). This checks function definitions and variable assignments. Class names (PascalCase) are NOT flagged.
+
+   ```
+   // BAD
+   def getUserById(user_id): ...
+   // BAD
+   userName = 'alice'
+
+   // GOOD
+   def get_user_by_id(user_id): ...
+   // GOOD
+   user_name = 'alice'
+   // GOOD
+   class UserManager:  # PascalCase for classes is correct
+   ```
+
+12. **No Imports in /tmp Scripts** - Scripts in /tmp cannot import project dependencies. Run from the project directory or use the project's existing tooling.
+
+
+   > Scripts written to /tmp don't have access to node_modules or other
+project dependencies. This is a common AI coding assistant mistake.
+
+WRONG: cat > /tmp/debug.mjs << 'EOF'
+       import Parser from 'tree-sitter'
+
+RIGHT: cd project-dir && node -e "const Parser = require('tree-sitter')..."
+RIGHT: Use existing test fixtures in the project
+RIGHT: Write script to project directory where dependencies are available
+
+   ```
+   // BAD
+   cat > /tmp/debug.mjs << 'EOF'
+   import Parser from 'tree-sitter';
+   // This will fail - tree-sitter not in /tmp/node_modules
+   EOF
    
 
    // GOOD
-   // JavaScript - consistent camelCase
-   const userName = "alice";
-   const userEmail = "alice@example.com";
-   const userAge = 30;
+   # Run from project directory
+   cd flight-lint && node -e "
+     const Parser = require('tree-sitter');
+     console.log(Parser);
+   "
    
    // GOOD
-   # Python - consistent snake_case
-   user_name = "alice"
-   user_email = "alice@example.com"
-   user_age = 30
+   # Or write to project directory
+   cat > ./debug-script.mjs << 'EOF'
+   import Parser from 'tree-sitter';
+   EOF
+   node debug-script.mjs
+   rm debug-script.mjs
    
    ```
 
@@ -513,3 +565,4 @@ Java:
 | throw Error('Failed') |  | Include what failed and why |
 | function user() |  | function getUser() |
 | mixed camel_Case |  | Pick one style per file |
+| cat > /tmp/*.mjs ... import |  | Run from project dir or use existing tooling |

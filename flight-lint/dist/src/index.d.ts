@@ -6,5 +6,5 @@ export { getLanguage, parseFile, detectLanguage } from './parser.js';
 export { loadRulesFile } from './loader.js';
 export { discoverFiles } from './discovery.js';
 export { formatResults, getExitCode, groupBySeverity, groupByRule } from './reporter.js';
-export { executeRule, lintFile, lintFiles, isLanguageCompatible } from './executor.js';
+export { executeRule, lintFile, lintFiles, isRuleCompatibleWithFile } from './executor.js';
 //# sourceMappingURL=index.d.ts.map

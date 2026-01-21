@@ -126,9 +126,12 @@ rules:
           accessed: "2026-01-20"
           quote: "Auth Helpers package is deprecated, migrate to @supabase/ssr"
     check:
-      type: grep
-      pattern: '@supabase/auth-helpers-nextjs|@supabase/auth-helpers-react|@supabase/auth-helpers-shared'
-      flags: -En
+      type: ast
+      language: typescript
+      query: |
+        (import_statement
+          source: (string (string_fragment) @violation
+            (#match? @violation "@supabase/auth-helpers")))
     note: |
       The auth-helpers packages are deprecated as of 2024. They don't properly
       handle cookies in Next.js App Router. Migrate to @supabase/ssr:
@@ -201,9 +204,17 @@ rules:
           accessed: "2026-01-20"
           quote: "Store API keys in environment variables"
     check:
-      type: grep
-      pattern: "createClient\\(['\"][^'\"]*supabase[^'\"]*['\"]\\s*,\\s*['\"]ey"
-      flags: -En
+      type: ast
+      language: typescript
+      query: |
+        (call_expression
+          function: (identifier) @fn
+          arguments: (arguments
+            (string (string_fragment) @url)
+            (string (string_fragment) @key))
+          (#eq? @fn "createClient")
+          (#match? @url "supabase")
+          (#match? @key "^ey")) @violation
     note: |
       Hardcoded credentials are a security risk. They get committed to git,
       logged, and exposed. Always use environment variables:

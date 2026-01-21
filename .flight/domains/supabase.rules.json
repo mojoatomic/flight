@@ -1,7 +1,6 @@
 {
   "domain": "supabase",
   "version": "1.1.0",
-  "language": "typescript",
   "file_patterns": [
     "**/*.ts",
     "**/*.tsx"
@@ -23,9 +22,10 @@
       "id": "N2",
       "title": "Deprecated @supabase/auth-helpers-nextjs",
       "severity": "NEVER",
-      "type": "grep",
-      "pattern": "@supabase/auth-helpers-nextjs|@supabase/auth-helpers-react|@supabase/auth-helpers-shared",
-      "query": null,
+      "type": "ast",
+      "language": "typescript",
+      "pattern": null,
+      "query": "(import_statement\n  source: (string (string_fragment) @violation\n    (#match? @violation \"@supabase/auth-helpers\")))",
       "message": "@supabase/auth-helpers-nextjs is deprecated. Use @supabase/ssr instead. The auth-helpers package has known issues with Next.js 13+ App Router.",
       "provenance": {
         "last_verified": "2026-01-20",
@@ -37,9 +37,10 @@
       "id": "N4",
       "title": "Hardcoded Supabase Credentials",
       "severity": "NEVER",
-      "type": "grep",
-      "pattern": "createClient\\(['\"][^'\"]*supabase[^'\"]*['\"]\\s*,\\s*['\"]ey",
-      "query": null,
+      "type": "ast",
+      "language": "typescript",
+      "pattern": null,
+      "query": "(call_expression\n  function: (identifier) @fn\n  arguments: (arguments\n    (string (string_fragment) @url)\n    (string (string_fragment) @key))\n  (#eq? @fn \"createClient\")\n  (#match? @url \"supabase\")\n  (#match? @key \"^ey\")) @violation",
       "message": "Never hardcode Supabase URLs or keys. Use environment variables. Hardcoded credentials get committed and leaked.",
       "provenance": {
         "last_verified": "2026-01-20",

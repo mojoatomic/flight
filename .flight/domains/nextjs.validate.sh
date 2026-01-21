@@ -104,7 +104,7 @@ done' _ "${FILES[@]}"
 
 # N3: useEffect Fetch for Initial Page Data
 check "N3: useEffect Fetch for Initial Page Data" \
-    grep -lE "useEffect.*fetch\\(|useEffect.*axios|useEffect.*useSWR" "${FILES[@]}"
+    # Unknown check type: ast
 
 # N4: process.env in Client Components
 check "N4: process.env in Client Components" \
@@ -128,11 +128,11 @@ done' _ "${FILES[@]}"
 
 # N6: Hardcoded Multi-segment Routes
 check "N6: Hardcoded Multi-segment Routes" \
-    grep -En "href=['\"][^'\"]+/[^'\"]+/[^'\"]+['\"]|push\\(['\"][^'\"]+/[^'\"]+/[^'\"]+['\"]\\)" "${FILES[@]}"
+    # Unknown check type: ast
 
 # N7: console.log in App Directory
 check "N7: console.log in App Directory" \
-    grep -rn "console\\.log" "${FILES[@]}"
+    # Unknown check type: ast
 
 # N8: Fat Route Handlers (>50 lines)
 check "N8: Fat Route Handlers (>50 lines)" \

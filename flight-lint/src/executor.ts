@@ -23,18 +23,25 @@ interface QueryMatch {
 }
 
 /**
- * Check if a file language is compatible with a rules language.
+ * Check if a file language is compatible with a rule's target language.
  * @param fileLanguage - The language of the file being linted
- * @param rulesLanguage - The language specified in the rules file
- * @returns True if the file can be linted with the rules
+ * @param ruleLanguage - The language specified in the rule (undefined for grep rules)
+ * @returns True if the rule should be applied to this file
  */
-export function isLanguageCompatible(fileLanguage: string, rulesLanguage: string): boolean {
-  const compatibleLanguages = LANGUAGE_COMPATIBILITY[rulesLanguage];
+export function isRuleCompatibleWithFile(fileLanguage: string, ruleLanguage: string | undefined): boolean {
+  // Rules without a language field (grep rules) apply to all files
+  if (!ruleLanguage) {
+    return true;
+  }
+
+  // Check compatibility map (e.g., javascript rules work on jsx files)
+  const compatibleLanguages = LANGUAGE_COMPATIBILITY[ruleLanguage];
   if (compatibleLanguages) {
     return compatibleLanguages.includes(fileLanguage);
   }
-  // If rulesLanguage not in map, require exact match
-  return fileLanguage === rulesLanguage;
+
+  // If ruleLanguage not in map, require exact match
+  return fileLanguage === ruleLanguage;
 }
 
 /**
@@ -94,23 +101,29 @@ export function executeRule(
 
 /**
  * Lint a single file with the given rules.
+ * Only rules compatible with the file's language are executed.
  * @param filePath - Path to the file to lint
  * @param rules - Rules to apply
- * @param language - Language of the file
+ * @param fileLanguage - Language of the file
  * @returns Array of lint results
  */
 export async function lintFile(
   filePath: string,
   rules: readonly Rule[],
-  language: string
+  fileLanguage: string
 ): Promise<LintResult[]> {
   const sourceContent = await readFile(filePath, 'utf-8');
-  const tree = await parseFile(sourceContent, language);
-  const treeSitterLanguage = await getLanguage(language);
+  const tree = await parseFile(sourceContent, fileLanguage);
+  const treeSitterLanguage = await getLanguage(fileLanguage);
 
   const lintResults: LintResult[] = [];
 
   for (const rule of rules) {
+    // Skip rules that don't match this file's language
+    if (!isRuleCompatibleWithFile(fileLanguage, rule.language)) {
+      continue;
+    }
+
     const matches = executeRule(tree, rule, treeSitterLanguage);
 
     for (const match of matches) {
@@ -130,8 +143,9 @@ export async function lintFile(
 
 /**
  * Lint multiple files with rules from a rules file.
+ * Language filtering is done per-rule, not per-file.
  * @param files - Array of file paths to lint
- * @param rulesFile - The rules file containing rules and language info
+ * @param rulesFile - The rules file containing rules
  * @returns Summary of lint results
  */
 export async function lintFiles(
@@ -144,13 +158,8 @@ export async function lintFiles(
   for (const filePath of files) {
     const fileLanguage = detectLanguage(filePath);
 
-    // Skip files with unrecognized extensions
+    // Skip files with unrecognized extensions (no tree-sitter parser available)
     if (fileLanguage === null) {
-      continue;
-    }
-
-    if (!isLanguageCompatible(fileLanguage, rulesFile.language)) {
-      // Skip files that don't match the rules language
       continue;
     }
 
