@@ -348,10 +348,14 @@ Flight now supports AST-based validation using tree-sitter. This eliminates fals
 ### Quick Start
 
 ```bash
-# Build flight-lint
+# Build flight-lint (install.sh does this automatically)
 cd flight-lint && npm install && npm run build && cd ..
+```
 
-# Run validation
+**Note:** `validate-all.sh` runs flight-lint automatically when AST rules exist. Manual execution is rarely needed:
+
+```bash
+# Manual execution (standalone)
 ./flight-lint/bin/flight-lint --auto .
 ```
 
@@ -594,7 +598,7 @@ If MCP tools aren't available, fall back to web search.
 | `.flight/domains/*.validate.sh` | Executable validators (generated from .flight) |
 | `.flight/bin/flight-domain-compile.py` | Domain compiler (generates .md + .sh) |
 | `.flight/templates/domain-schema-v2.flight` | Schema v2 template with provenance |
-| `.flight/validate-all.sh` | Auto-detect and run all relevant validators |
+| `.flight/validate-all.sh` | Runs bash validators + flight-lint (AST) automatically |
 | `.flight/known-landmines.md` | Temporal issues discovered during research |
 | `update.sh` | Update Flight (preserves customizations) |
 | `PRIME.md` | Output of /flight-prime |
