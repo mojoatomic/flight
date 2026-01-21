@@ -46,15 +46,12 @@ export async function getLanguage(languageName: string): Promise<TreeSitterLangu
       languageModule = (await import('tree-sitter-typescript/bindings/node/tsx.js')) as LanguageModule;
       break;
     case 'python':
-      // @ts-expect-error - tree-sitter-python lacks TypeScript declarations
       languageModule = (await import('tree-sitter-python')) as LanguageModule;
       break;
     case 'go':
-      // @ts-expect-error - tree-sitter-go lacks TypeScript declarations
       languageModule = (await import('tree-sitter-go')) as LanguageModule;
       break;
     case 'rust':
-      // @ts-expect-error - tree-sitter-rust lacks TypeScript declarations
       languageModule = (await import('tree-sitter-rust')) as LanguageModule;
       break;
     default:
