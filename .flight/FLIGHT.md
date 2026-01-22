@@ -449,20 +449,22 @@ The agent sees violations immediately after editing, then is blocked from comple
      "hooks": {
        "PostToolUse": [
          {
-           "matcher": "Write|Edit|MultiEdit",
-           "command": ["./.flight/hooks/post-tool-validate.sh"],
+           "matcher": {"tools": ["Write", "Edit", "MultiEdit"]},
+           "hooks": [{"type": "command", "command": "./.flight/hooks/post-tool-validate.sh"}],
            "timeout": 30000
          }
        ],
        "Stop": [
          {
-           "command": ["./.flight/hooks/stop-validate.sh"],
+           "matcher": {},
+           "hooks": [{"type": "command", "command": "./.flight/hooks/stop-validate.sh"}],
            "timeout": 60000
          }
        ],
        "SubagentStop": [
          {
-           "command": ["./.flight/hooks/stop-validate.sh"],
+           "matcher": {},
+           "hooks": [{"type": "command", "command": "./.flight/hooks/stop-validate.sh"}],
            "timeout": 60000
          }
        ]

@@ -24,6 +24,9 @@ if [[ -d "$TMP_DIR/.claude/skills" ]]; then
     cp -r "$TMP_DIR/.claude/skills/"* .claude/skills/ 2>/dev/null || true
 fi
 
+# Update settings.json (hooks configuration)
+[[ -f "$TMP_DIR/.claude/settings.json" ]] && cp "$TMP_DIR/.claude/settings.json" .claude/settings.json
+
 # Update FLIGHT.md (core methodology)
 [[ -f "$TMP_DIR/.flight/FLIGHT.md" ]] && cp "$TMP_DIR/.flight/FLIGHT.md" .flight/FLIGHT.md
 
@@ -85,6 +88,7 @@ chmod +x .flight/inject-flight-protocol.sh 2>/dev/null || true
 echo "Flight updated"
 echo ""
 echo "Updated:"
+echo "  - .claude/settings.json (hooks configuration)"
 echo "  - .claude/skills/* (all Flight skills)"
 echo "  - .flight/FLIGHT.md (core methodology)"
 echo "  - .flight/validate-all.sh, exclusions.sh"
