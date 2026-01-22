@@ -450,27 +450,30 @@ The agent sees violations immediately after editing, then is blocked from comple
        "PostToolUse": [
          {
            "matcher": {"tools": ["Write", "Edit", "MultiEdit"]},
-           "hooks": [{"type": "command", "command": "./.flight/hooks/post-tool-validate.sh"}],
+           "hooks": [{"type": "command", "command": "cd $(git rev-parse --show-toplevel) && ./.flight/hooks/post-tool-validate.sh"}],
            "timeout": 30000
          }
        ],
        "Stop": [
          {
            "matcher": {},
-           "hooks": [{"type": "command", "command": "./.flight/hooks/stop-validate.sh"}],
+           "hooks": [{"type": "command", "command": "cd $(git rev-parse --show-toplevel) && ./.flight/hooks/stop-validate.sh"}],
            "timeout": 60000
          }
        ],
        "SubagentStop": [
          {
            "matcher": {},
-           "hooks": [{"type": "command", "command": "./.flight/hooks/stop-validate.sh"}],
+           "hooks": [{"type": "command", "command": "cd $(git rev-parse --show-toplevel) && ./.flight/hooks/stop-validate.sh"}],
            "timeout": 60000
          }
        ]
      }
    }
    ```
+
+   **Note:** The `cd $(git rev-parse --show-toplevel)` ensures hooks work when Claude Code
+   is operating in subdirectories (e.g., `src/`, `packages/app/`).
 
 ### How It Works
 
@@ -503,6 +506,7 @@ Clean? → APPROVE
 | Problem | Cause | Solution |
 |---------|-------|----------|
 | Hook not running | Not configured | Check `.claude/settings.json` path |
+| "No such file" in subdirectory | Relative path issue | Use `cd $(git rev-parse --show-toplevel) &&` prefix |
 | "lib.sh not found" | Wrong directory | Ensure hooks are in `.flight/hooks/` |
 | Timeout errors | Slow validation | Increase timeout in settings.json |
 | "jq not available" | jq not installed | Install jq or hooks use grep fallback |
