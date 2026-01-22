@@ -2,21 +2,31 @@
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": {"tools": ["Write", "Edit", "MultiEdit"]},
+        "matcher": "Write",
+        "hooks": [{"type": "command", "command": "cd $(git rev-parse --show-toplevel) && ./.flight/hooks/post-tool-validate.sh"}],
+        "timeout": 30000
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [{"type": "command", "command": "cd $(git rev-parse --show-toplevel) && ./.flight/hooks/post-tool-validate.sh"}],
+        "timeout": 30000
+      },
+      {
+        "matcher": "MultiEdit",
         "hooks": [{"type": "command", "command": "cd $(git rev-parse --show-toplevel) && ./.flight/hooks/post-tool-validate.sh"}],
         "timeout": 30000
       }
     ],
     "Stop": [
       {
-        "matcher": {},
+        "matcher": "",
         "hooks": [{"type": "command", "command": "cd $(git rev-parse --show-toplevel) && ./.flight/hooks/stop-validate.sh"}],
         "timeout": 60000
       }
     ],
     "SubagentStop": [
       {
-        "matcher": {},
+        "matcher": "",
         "hooks": [{"type": "command", "command": "cd $(git rev-parse --show-toplevel) && ./.flight/hooks/stop-validate.sh"}],
         "timeout": 60000
       }
