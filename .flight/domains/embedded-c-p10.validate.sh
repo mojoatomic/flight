@@ -90,17 +90,15 @@ check "N1: No goto" \
 check "N2: No setjmp/longjmp" \
     grep -n "setjmp\\|longjmp" "${FILES[@]}"
 
-# N3: No Dynamic Memory Allocation
-check "N3: No Dynamic Memory Allocation" \
-    grep -En "\\b(malloc|free|calloc|realloc)\\b" "${FILES[@]}"
+# N3: No Dynamic Memory Allocation - HANDLED BY AST (flight-lint)
+# Detects actual function calls, ignores comments and strings
 
 # N4: No Conditional Compilation
 check "N4: No Conditional Compilation" \
     grep -n "^#ifdef\\|^#if " "${FILES[@]}"
 
-# N5: No Double Pointer Dereference
-check "N5: No Double Pointer Dereference" \
-    grep -n "[^/]\\*\\*[a-zA-Z]" "${FILES[@]}"
+# N5: No Double Pointer Dereference - HANDLED BY AST (flight-lint)
+# Detects actual dereferences, ignores pointer parameter declarations
 
 # N6: No Chained Pointer Access
 check "N6: No Chained Pointer Access" \
@@ -110,9 +108,9 @@ check "N6: No Chained Pointer Access" \
 check "N7: No Unbounded Loops" \
     grep -En "while\\s*\\(1\\)|while\\s*\\(true\\)|for\\s*\\(;;\\)" "${FILES[@]}"
 
-# N8: Compile Clean with Strict Warnings
-check "N8: Compile Clean with Strict Warnings" \
-    bash -c 'gcc -Wall -Wextra -Werror -pedantic -std=c11 -fsyntax-only "$@" 2>&1' _ "${FILES[@]}"
+# N8: Compile Clean with Strict Warnings - GUIDANCE ONLY
+# Cannot be validated by Flight - requires project-specific toolchain
+# Enforce in your build system: CFLAGS += -Wall -Wextra -Werror -pedantic
 
 # N9: Functions Must Be 60 Lines or Less
 check "N9: Functions Must Be 60 Lines or Less" \
@@ -146,9 +144,8 @@ check "N10: Minimum 2 Assertions Per Function" \
   in_func=0
 }'"'"' "$@"' _ "${FILES[@]}"
 
-# N11: Check or Cast All Return Values
-check "N11: Check or Cast All Return Values" \
-    bash -c 'grep -n '"'"'printf\|fprintf'"'"' "$@" 2>/dev/null | grep -v '"'"'(void)'"'"' | grep -v '"'"'= '"'"' || true' _ "${FILES[@]}"
+# N11: Check or Cast All Return Values - HANDLED BY AST (flight-lint)
+# Detects unchecked printf/fprintf calls, ignores comments and (void) casts
 
 printf '\n%s\n' "═══════════════════════════════════════════"
 printf '  PASS: %d  FAIL: %d  WARN: %d\n' "$PASS" "$FAIL" "$WARN"

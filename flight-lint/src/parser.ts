@@ -54,8 +54,11 @@ export async function getLanguage(languageName: string): Promise<TreeSitterLangu
     case 'rust':
       languageModule = (await import('tree-sitter-rust')) as LanguageModule;
       break;
+    case 'c':
+      languageModule = (await import('tree-sitter-c')) as LanguageModule;
+      break;
     default:
-      throw new Error(`Unsupported language: ${languageName}. Supported: javascript, jsx, typescript, tsx, python, go, rust`);
+      throw new Error(`Unsupported language: ${languageName}. Supported: javascript, jsx, typescript, tsx, python, go, rust, c`);
   }
 
   languageCache.set(languageName, languageModule.default);
@@ -103,6 +106,9 @@ export function detectLanguage(filePath: string): string | null {
       return 'go';
     case 'rs':
       return 'rust';
+    case 'c':
+    case 'h':
+      return 'c';
     default:
       return null;
   }
