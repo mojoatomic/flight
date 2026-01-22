@@ -137,9 +137,12 @@ rules:
       introduces unpredictable behavior, fragmentation, and potential for
       memory leaks. Use static allocation with fixed-size buffers.
     check:
-      type: grep
-      pattern: '\b(malloc|free|calloc|realloc)\b'
-      flags: -En
+      type: ast
+      query: |
+        (call_expression
+          function: (identifier) @violation
+          (#match? @violation "^(malloc|free|calloc|realloc)$"))
+    note: AST-based detection - only matches actual function calls, not comments or strings.
     examples:
       bad:
         - "char *buf = malloc(size);"
@@ -148,6 +151,7 @@ rules:
       good:
         - "static char buffer[MAX_BUFFER_SIZE];"
         - "char local_buf[FIXED_SIZE];"
+        - "// Comment mentioning malloc is OK"
 
   N4:
     title: No Conditional Compilation
@@ -195,9 +199,13 @@ rules:
       complex data structures. Flatten data structures or use single
       indirection with explicit indexing.
     check:
-      type: grep
-      pattern: '[^/]\*\*[a-zA-Z]'
-      flags: -n
+      type: ast
+      query: |
+        (pointer_expression
+          argument: (pointer_expression) @violation)
+    note: |
+      AST-based detection - only matches actual double dereferences like **ptr.
+      Does NOT flag valid C patterns like output parameters (int **out_param).
     examples:
       bad:
         - "**ptr = value;"
@@ -205,6 +213,7 @@ rules:
       good:
         - "*ptr = value;"
         - "array[index].field = value;"
+        - "void func(int **out_param) { ... }  // declarations are OK"
 
   N6:
     title: No Chained Pointer Access
@@ -270,7 +279,7 @@ rules:
   N8:
     title: Compile Clean with Strict Warnings
     severity: NEVER
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -282,11 +291,21 @@ rules:
     description: >
       Code must compile without warnings using strict compiler flags:
       -Wall -Wextra -Werror -pedantic -std=c11. Any warning is an error.
-    check:
-      type: script
-      code: |
-        gcc -Wall -Wextra -Werror -pedantic -std=c11 -fsyntax-only "$@" 2>&1
-    note: Requires gcc. Adjust for your toolchain if needed.
+    guidance: |
+      This rule cannot be validated by Flight because:
+      - Cross-compilation targets require specific toolchains (arm-none-eabi-gcc, etc.)
+      - SDK headers may not be available on the host machine
+      - Build systems vary per project
+
+      Enforce this rule in your actual build system:
+      ```makefile
+      CFLAGS += -Wall -Wextra -Werror -pedantic -std=c11
+      ```
+
+      Or in CMake:
+      ```cmake
+      target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror -pedantic)
+      ```
     examples:
       bad:
         - "// Code that produces any warning"
@@ -398,9 +417,15 @@ rules:
       (void) if intentionally ignored. This applies especially to printf
       and fprintf.
     check:
-      type: script
-      code: |
-        grep -n 'printf\|fprintf' "$@" 2>/dev/null | grep -v '(void)' | grep -v '= ' || true
+      type: ast
+      query: |
+        (expression_statement
+          (call_expression
+            function: (identifier) @fn
+            (#match? @fn "^(printf|fprintf|sprintf|snprintf)$"))) @violation
+    note: |
+      AST-based detection - catches printf/fprintf calls used as statements
+      (return value discarded). Does NOT flag when cast to (void) or assigned.
     examples:
       bad:
         - 'printf("Hello");'
@@ -408,6 +433,7 @@ rules:
       good:
         - '(void)printf("Hello");'
         - 'int ret = fprintf(fp, "data"); ASSERT(ret > 0);'
+        - '// Comment mentioning printf is OK'
 
   # =========================================================================
   # GUIDANCE - Best practices (not mechanically checked)

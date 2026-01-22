@@ -1,7 +1,7 @@
 {
   "domain": "embedded-c-p10",
-  "version": "1.1.0",
-  "language": "unknown",
+  "version": "1.2.0",
+  "language": "c",
   "file_patterns": [
     "**/*.c"
   ],
@@ -12,107 +12,54 @@
     "**/.git/**"
   ],
   "provenance": {
-    "last_full_audit": "2026-01-16",
+    "last_full_audit": "2026-01-22",
     "audited_by": "flight-research",
-    "next_audit_due": "2026-07-16"
+    "next_audit_due": "2026-07-22"
   },
   "rules": [
-    {
-      "id": "N1",
-      "title": "No goto",
-      "severity": "NEVER",
-      "type": "grep",
-      "pattern": "goto ",
-      "query": null,
-      "message": "Never use goto. It creates unstructured control flow that is difficult to analyze and verify. Use structured control flow (if, while, for, switch) instead.",
-      "provenance": {
-        "last_verified": "2026-01-16",
-        "confidence": "high",
-        "re_verify_after": "2027-01-16"
-      }
-    },
-    {
-      "id": "N2",
-      "title": "No setjmp/longjmp",
-      "severity": "NEVER",
-      "type": "grep",
-      "pattern": "setjmp\\|longjmp",
-      "query": null,
-      "message": "Never use setjmp or longjmp. They create non-local jumps that bypass normal control flow and make code impossible to analyze statically.",
-      "provenance": {
-        "last_verified": "2026-01-16",
-        "confidence": "high",
-        "re_verify_after": "2027-01-16"
-      }
-    },
     {
       "id": "N3",
       "title": "No Dynamic Memory Allocation",
       "severity": "NEVER",
-      "type": "grep",
-      "pattern": "\\b(malloc|free|calloc|realloc)\\b",
-      "query": null,
+      "type": "ast",
+      "language": "c",
+      "pattern": null,
+      "query": "(call_expression\n  function: (identifier) @violation\n  (#match? @violation \"^(malloc|free|calloc|realloc)$\"))",
       "message": "Never use malloc, free, calloc, or realloc. Dynamic memory allocation introduces unpredictable behavior, fragmentation, and potential for memory leaks. Use static allocation with fixed-size buffers.",
       "provenance": {
-        "last_verified": "2026-01-16",
+        "last_verified": "2026-01-22",
         "confidence": "high",
-        "re_verify_after": "2027-01-16"
-      }
-    },
-    {
-      "id": "N4",
-      "title": "No Conditional Compilation",
-      "severity": "NEVER",
-      "type": "grep",
-      "pattern": "^#ifdef\\|^#if ",
-      "query": null,
-      "message": "Never use #ifdef or #if. Conditional compilation creates multiple code paths that may not all be tested. Use runtime configuration or compile separate variants.",
-      "provenance": {
-        "last_verified": "2026-01-16",
-        "confidence": "high",
-        "re_verify_after": "2027-01-16"
+        "re_verify_after": "2027-01-22"
       }
     },
     {
       "id": "N5",
       "title": "No Double Pointer Dereference",
       "severity": "NEVER",
-      "type": "grep",
-      "pattern": "[^/]\\*\\*[a-zA-Z]",
-      "query": null,
+      "type": "ast",
+      "language": "c",
+      "pattern": null,
+      "query": "(pointer_expression\n  argument: (pointer_expression) @violation)",
       "message": "Never use double pointer dereference (**ptr). It indicates overly complex data structures. Flatten data structures or use single indirection with explicit indexing.",
       "provenance": {
-        "last_verified": "2026-01-16",
+        "last_verified": "2026-01-22",
         "confidence": "high",
-        "re_verify_after": "2027-01-16"
+        "re_verify_after": "2027-01-22"
       }
     },
     {
-      "id": "N6",
-      "title": "No Chained Pointer Access",
+      "id": "N11",
+      "title": "Check or Cast All Return Values",
       "severity": "NEVER",
-      "type": "grep",
-      "pattern": "->.*->",
-      "query": null,
-      "message": "Never chain pointer dereferences (->field->field). It indicates overly coupled data structures. Use local variables to break the chain.",
+      "type": "ast",
+      "language": "c",
+      "pattern": null,
+      "query": "(expression_statement\n  (call_expression\n    function: (identifier) @fn\n    (#match? @fn \"^(printf|fprintf|sprintf|snprintf)$\"))) @violation",
+      "message": "All function return values must be checked or explicitly cast to (void) if intentionally ignored. This applies especially to printf and fprintf.",
       "provenance": {
-        "last_verified": "2026-01-16",
+        "last_verified": "2026-01-22",
         "confidence": "high",
-        "re_verify_after": "2027-01-16"
-      }
-    },
-    {
-      "id": "N7",
-      "title": "No Unbounded Loops",
-      "severity": "NEVER",
-      "type": "grep",
-      "pattern": "while\\s*\\(1\\)|while\\s*\\(true\\)|for\\s*\\(;;\\)",
-      "query": null,
-      "message": "Never use unbounded loops (while(1), while(true), for(;;)). All loops must have a fixed upper bound that can be statically verified.",
-      "provenance": {
-        "last_verified": "2026-01-16",
-        "confidence": "high",
-        "re_verify_after": "2027-01-16"
+        "re_verify_after": "2027-01-22"
       }
     }
   ]
