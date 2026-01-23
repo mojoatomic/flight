@@ -1,7 +1,7 @@
 # nextjs.flight - Next.js 14+ App Router patterns
 
 domain: nextjs
-version: 1.2.0
+version: 1.3.0
 schema_version: 2
 description: >
   Next.js 14-16+ App Router patterns for server components, routing, and data fetching.
@@ -496,6 +496,50 @@ rules:
             return Response.json(result);
           }
 
+  N9:
+    title: Deprecated middleware.ts File (Next.js 16+)
+    severity: NEVER
+    mechanical: true
+    provenance:
+      last_verified: "2026-01-23"
+      confidence: high
+      re_verify_after: "2027-01-23"
+      sources:
+        - url: "https://nextjs.org/docs/messages/middleware-to-proxy"
+          accessed: "2026-01-23"
+          quote: "The 'middleware' file convention is deprecated. Please use 'proxy' instead."
+    description: >
+      Next.js 16 deprecated middleware.ts in favor of proxy.ts. The middleware
+      file convention has been renamed to clarify its network boundary purpose
+      and avoid confusion with Express middleware.
+    check:
+      type: script
+      code: |
+        # Check for middleware files at root or src level
+        for loc in "." "src"; do
+          for ext in ts js; do
+            if [ -f "$loc/middleware.$ext" ]; then
+              echo "$loc/middleware.$ext: deprecated in Next.js 16+, rename to proxy.$ext"
+              echo "  Migration: npx @next/codemod@canary middleware-to-proxy ."
+            fi
+          done
+        done
+    note: |
+      Migration steps:
+      1. Run: npx @next/codemod@canary middleware-to-proxy .
+      2. Or manually rename middleware.ts → proxy.ts
+      3. Rename export function middleware() → export function proxy()
+      4. Note: proxy.ts runs on Node.js runtime (not Edge)
+
+      See G4 for the new proxy pattern.
+    examples:
+      bad:
+        - "middleware.ts"
+        - "src/middleware.ts"
+      good:
+        - "proxy.ts"
+        - "src/proxy.ts"
+
   # =========================================================================
   # SHOULD - Best practices (validator warns)
   # =========================================================================
@@ -897,4 +941,8 @@ anti_patterns:
   - pattern: "'any' in handlers"
     description: "No validation"
     fix: "Zod + unknown"
+
+  - pattern: "middleware.ts"
+    description: "Deprecated in Next.js 16+"
+    fix: "Rename to proxy.ts"
 

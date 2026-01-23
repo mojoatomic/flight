@@ -169,6 +169,18 @@ check "N8: Fat Route Handlers (>100 lines)" \
     fi
 done' _ "${FILES[@]}"
 
+# N9: Deprecated middleware.ts File (Next.js 16+)
+check "N9: Deprecated middleware.ts File (Next.js 16+)" \
+    bash -c '# Check for middleware files at root or src level
+for loc in "." "src"; do
+  for ext in ts js; do
+    if [ -f "$loc/middleware.$ext" ]; then
+      echo "$loc/middleware.$ext: deprecated in Next.js 16+, rename to proxy.$ext"
+      echo "  Migration: npx @next/codemod@canary middleware-to-proxy ."
+    fi
+  done
+done' _ "${FILES[@]}"
+
 printf '\n%s\n' "## SHOULD Rules"
 
 # S1: Dynamic Routes Should Use notFound()
