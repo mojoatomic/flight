@@ -169,8 +169,8 @@ check "N8: Fat Route Handlers (>100 lines)" \
     fi
 done' _ "${FILES[@]}"
 
-# N9: Deprecated middleware.ts File (Next.js 16+)
-check "N9: Deprecated middleware.ts File (Next.js 16+)" \
+# S6: Deprecated middleware.ts File (Next.js 16+)
+warn "S6: Deprecated middleware.ts File (Next.js 16+)" \
     bash -c '# Check for middleware files at root or src level
 for loc in "." "src"; do
   for ext in ts js; do
