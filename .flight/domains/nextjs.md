@@ -11,7 +11,36 @@ Next.js 14+ App Router patterns for server components, routing, and data fetchin
 
 ### NEVER (validator will reject)
 
-1. **'use client' in page.tsx Files** - Page components should be server components by default. Adding 'use client' at the page level kills SSR benefits for the entire page tree.
+1. **Inconsistent Source Directory Structure** - If src/ directory exists, all application code must live under src/. No parallel directories at root level (lib/ alongside src/lib/). This prevents AI assistants from creating duplicate file structures.
+
+   ```
+   // BAD
+   # Split structure - NEVER do this
+   src/
+     app/
+     components/
+   lib/           # Wrong! Should be src/lib/
+   components/    # Wrong! Duplicate of src/components/
+   
+
+   // GOOD
+   # All code under src/
+   src/
+     app/
+     lib/
+     components/
+     types/
+   
+   // GOOD
+   # Or no src/ at all (root convention)
+   app/
+   lib/
+   components/
+   types/
+   
+   ```
+
+2. **'use client' in page.tsx Files** - Page components should be server components by default. Adding 'use client' at the page level kills SSR benefits for the entire page tree.
 
    ```
    // BAD
@@ -33,7 +62,7 @@ Next.js 14+ App Router patterns for server components, routing, and data fetchin
    
    ```
 
-2. **React Hooks in Server Components** - useState, useEffect, and other React hooks cannot be used in server components. Files without 'use client' directive are server components.
+3. **React Hooks in Server Components** - useState, useEffect, and other React hooks cannot be used in server components. Files without 'use client' directive are server components.
 
    ```
    // BAD
@@ -52,7 +81,7 @@ Next.js 14+ App Router patterns for server components, routing, and data fetchin
    
    ```
 
-3. **useEffect Fetch for Initial Page Data** - Don't use useEffect to fetch initial page data. Server components can fetch data directly, avoiding the extra round trip.
+4. **useEffect Fetch for Initial Page Data** - Don't use useEffect to fetch initial page data. Server components can fetch data directly, avoiding the extra round trip.
 
    ```
    // BAD
@@ -74,7 +103,7 @@ Next.js 14+ App Router patterns for server components, routing, and data fetchin
    
    ```
 
-4. **process.env in Client Components** - Non-NEXT_PUBLIC_ environment variables are not available in client components and would expose secrets if they were. Only NEXT_PUBLIC_ vars are safe client-side.
+5. **process.env in Client Components** - Non-NEXT_PUBLIC_ environment variables are not available in client components and would expose secrets if they were. Only NEXT_PUBLIC_ vars are safe client-side.
 
    ```
    // BAD
@@ -92,7 +121,7 @@ Next.js 14+ App Router patterns for server components, routing, and data fetchin
    
    ```
 
-5. **'any' Type in Route Handlers** - Route handlers should validate input, not use 'any'. External data from requests is unknown until validated.
+6. **'any' Type in Route Handlers** - Route handlers should validate input, not use 'any'. External data from requests is unknown until validated.
 
    ```
    // BAD
@@ -109,7 +138,7 @@ Next.js 14+ App Router patterns for server components, routing, and data fetchin
    
    ```
 
-6. **Hardcoded Multi-segment Routes** - Hardcoded route strings with multiple segments are fragile. Use centralized route constants for maintainability.
+7. **Hardcoded Multi-segment Routes** - Hardcoded route strings with multiple segments are fragile. Use centralized route constants for maintainability.
 
    ```
    // BAD
@@ -127,7 +156,7 @@ Next.js 14+ App Router patterns for server components, routing, and data fetchin
    
    ```
 
-7. **console.log in App Directory** - Console statements in production code indicate incomplete development or forgotten debugging. Remove before deploying.
+8. **console.log in App Directory** - Console statements in production code indicate incomplete development or forgotten debugging. Remove before deploying.
 
    ```
    // BAD
@@ -137,7 +166,7 @@ Next.js 14+ App Router patterns for server components, routing, and data fetchin
    // Use proper logging service for production
    ```
 
-8. **Fat Route Handlers (>100 lines)** - Route handlers should be thin orchestrators. Extract business logic to separate functions for testability and reuse. 100 lines allows for proper validation, auth, and error handling while flagging genuinely fat handlers.
+9. **Fat Route Handlers (>100 lines)** - Route handlers should be thin orchestrators. Extract business logic to separate functions for testability and reuse. 100 lines allows for proper validation, auth, and error handling while flagging genuinely fat handlers.
 
    ```
    // BAD

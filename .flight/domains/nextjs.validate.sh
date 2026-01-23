@@ -82,6 +82,30 @@ printf 'Files: %d\n\n' "${#FILES[@]}"
 
 printf '\n%s\n' "## NEVER Rules"
 
+# N0: Inconsistent Source Directory Structure
+check "N0: Inconsistent Source Directory Structure" \
+    bash -c '# Only check if src/ exists (indicates src/ convention chosen)
+if [ -d "src" ]; then
+    found=0
+    # Check for parallel directories that should be under src/
+    for dir in lib components types utils hooks services helpers; do
+        if [ -d "$dir" ] && [ -d "src/$dir" ]; then
+            if [ $found -eq 0 ]; then
+                echo "Split directory structure detected:"
+                found=1
+            fi
+            echo "  $dir/ exists alongside src/$dir/"
+        elif [ -d "$dir" ] && [ -d "src" ]; then
+            # Even if src/$dir doesn'"'"'t exist, root $dir is wrong when src/ exists
+            if [ $found -eq 0 ]; then
+                echo "Split directory structure detected:"
+                found=1
+            fi
+            echo "  $dir/ should be src/$dir/"
+        fi
+    done
+fi' _ "${FILES[@]}"
+
 # N1: 'use client' in page.tsx Files
 check "N1: 'use client' in page.tsx Files" \
     bash -c 'for f in "$@"; do
