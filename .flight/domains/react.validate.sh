@@ -96,7 +96,9 @@ check "N3: Index as Key" \
 
 # N4: Direct State Mutation
 check "N4: Direct State Mutation" \
-    grep -En "\\.push\\(|\\.splice\\(|\\.pop\\(|\\.shift\\(|\\.unshift\\(" "${FILES[@]}"
+    bash -c '# Exclude navigation methods: router.push, history.push, navigate
+grep -En '"'"'\.push\(|\.splice\(|\.pop\(|\.shift\(|\.unshift\('"'"' "$@" 2>/dev/null | \
+grep -v '"'"'router\.push\|history\.push\|navigate\.'"'"' || true' _ "${FILES[@]}"
 
 # N5: Missing Dependency Arrays
 check "N5: Missing Dependency Arrays" \

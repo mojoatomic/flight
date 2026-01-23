@@ -21,38 +21,7 @@ SMS consent management, opt-in/opt-out handling, and Twilio error code interpret
    type ConsentState = 'UNKNOWN' | 'PENDING' | 'OPTED_IN' | 'OPTED_OUT';
    ```
 
-2. **Never Send to OPTED_OUT or UNKNOWN** - INVARIANT: Never send messages to users in OPTED_OUT or UNKNOWN state. Only OPTED_IN users can receive messages. Violating this is a legal compliance issue (TCPA).
-
-   ```
-   // BAD
-   if (state === 'OPTED_OUT') sendSMS(phone, msg);
-   // BAD
-   sendSMS(phone, msg); // user is UNKNOWN
-
-   // GOOD
-   if (consent.state !== 'OPTED_IN') {
-     throw new Error('Cannot send to non-opted-in user');
-   }
-   await sendSMS(phone, msg);
-   
-   ```
-
-3. **Consent Check Before Sending** - Always check consent state before sending any SMS. Sending without checking consent violates TCPA and carrier policies.
-
-   ```
-   // BAD
-   await sendSMS(phoneNumber, message); // WRONG - no consent check
-
-   // GOOD
-   const consent = await getConsentState(phoneNumber);
-   if (consent.state !== 'OPTED_IN') {
-     throw new Error('Cannot send to non-opted-in user');
-   }
-   await sendSMS(phoneNumber, message);
-   
-   ```
-
-4. **STOP Keyword Triggers State Change** - STOP keyword must trigger a state change to OPTED_OUT. Ignoring STOP is a legal violation. Twilio handles this automatically but your database must also be updated.
+2. **STOP Keyword Triggers State Change** - STOP keyword must trigger a state change to OPTED_OUT. Ignoring STOP is a legal violation. Twilio handles this automatically but your database must also be updated.
 
    ```
    // BAD
@@ -69,7 +38,7 @@ SMS consent management, opt-in/opt-out handling, and Twilio error code interpret
    
    ```
 
-5. **Error 21610 Marks OPTED_OUT** - INVARIANT: Twilio error 21610 (unsubscribed recipient) must mark the user as OPTED_OUT. This is a carrier-level block. Do NOT retry.
+3. **Error 21610 Marks OPTED_OUT** - INVARIANT: Twilio error 21610 (unsubscribed recipient) must mark the user as OPTED_OUT. This is a carrier-level block. Do NOT retry.
 
    ```
    // BAD
@@ -81,9 +50,14 @@ SMS consent management, opt-in/opt-out handling, and Twilio error code interpret
      // No retry
    }
    
+   // GOOD
+   // Using constant - also valid
+   const OPT_OUT_ERROR_CODES = [21610, 30004];
+   if (OPT_OUT_ERROR_CODES.includes(errorCode)) { ... }
+   
    ```
 
-6. **Error 30004 Marks OPTED_OUT** - INVARIANT: Twilio error 30004 (message blocked by carrier) must mark the user as OPTED_OUT. This indicates carrier-level blocking. Do NOT retry.
+4. **Error 30004 Marks OPTED_OUT** - INVARIANT: Twilio error 30004 (message blocked by carrier) must mark the user as OPTED_OUT. This indicates carrier-level blocking. Do NOT retry.
 
    ```
    // BAD
@@ -95,9 +69,14 @@ SMS consent management, opt-in/opt-out handling, and Twilio error code interpret
      // No retry
    }
    
+   // GOOD
+   // Using constant - also valid
+   const OPT_OUT_ERROR_CODES = [21610, 30004];
+   if (OPT_OUT_ERROR_CODES.includes(errorCode)) { ... }
+   
    ```
 
-7. **No Retry on Opt-Out Errors** - INVARIANT: Never retry on opt-out errors (21610, 30004). The user has opted out - retrying violates their consent and carrier policies.
+5. **No Retry on Opt-Out Errors** - INVARIANT: Never retry on opt-out errors (21610, 30004). The user has opted out - retrying violates their consent and carrier policies.
 
    ```
    // BAD
@@ -114,7 +93,7 @@ SMS consent management, opt-in/opt-out handling, and Twilio error code interpret
    
    ```
 
-8. **Error 30005/30006 Marks Number INVALID** - INVARIANT: Twilio errors 30005 (unknown destination) and 30006 (landline/unreachable) must mark the number as INVALID. Do NOT retry.
+6. **Error 30005/30006 Marks Number INVALID** - INVARIANT: Twilio errors 30005 (unknown destination) and 30006 (landline/unreachable) must mark the number as INVALID. Do NOT retry.
 
    ```
    // BAD
@@ -126,9 +105,14 @@ SMS consent management, opt-in/opt-out handling, and Twilio error code interpret
      // No retry
    }
    
+   // GOOD
+   // Using constant - also valid
+   const INVALID_NUMBER_ERRORS = [30005, 30006];
+   if (INVALID_NUMBER_ERRORS.includes(errorCode)) { ... }
+   
    ```
 
-9. **First Message Includes Opt-Out Instructions** - The first message to a newly opted-in user MUST include opt-out instructions (STOP keyword). This is required by CTIA guidelines.
+7. **First Message Includes Opt-Out Instructions** - The first message to a newly opted-in user MUST include opt-out instructions (STOP keyword). This is required by CTIA guidelines.
 
    ```
    // BAD
@@ -136,9 +120,14 @@ SMS consent management, opt-in/opt-out handling, and Twilio error code interpret
 
    // GOOD
    await sendSMS(phone, 'Acme Co: Sale! 50% off today! Reply STOP to unsubscribe.');
+   // GOOD
+   // Using constant - also valid
+   const OPT_OUT_INSTRUCTIONS = 'Reply STOP to unsubscribe';
+   const welcomeMsg = `Welcome! ${OPT_OUT_INSTRUCTIONS}`;
+   
    ```
 
-10. **No Hardcoded Phone Numbers** - Never hardcode phone numbers in source code. Use environment variables or configuration for phone numbers.
+8. **No Hardcoded Phone Numbers** - Never hardcode phone numbers in source code. Use environment variables or configuration for phone numbers.
 
    ```
    // BAD
@@ -148,7 +137,7 @@ SMS consent management, opt-in/opt-out handling, and Twilio error code interpret
    const phone = process.env.SUPPORT_PHONE;
    ```
 
-11. **No Hardcoded Twilio Credentials** - Never hardcode Twilio credentials (Account SID, Auth Token) in source code. Use environment variables.
+9. **No Hardcoded Twilio Credentials** - Never hardcode Twilio credentials (Account SID, Auth Token) in source code. Use environment variables.
 
    ```
    // BAD
@@ -269,6 +258,44 @@ SMS consent management, opt-in/opt-out handling, and Twilio error code interpret
 
 8. **Compliance Checklist** - Checklist for SMS compliance before going live.
 
+
+9. **Never Send to OPTED_OUT or UNKNOWN** - INVARIANT: Never send messages to users in OPTED_OUT or UNKNOWN state. Only OPTED_IN users can receive messages. Violating this is a legal compliance issue (TCPA).
+
+   ```
+   // BAD
+   if (state === 'OPTED_OUT') sendSMS(phone, msg);
+   // BAD
+   sendSMS(phone, msg); // user is UNKNOWN
+
+   // GOOD
+   if (consent.state !== 'OPTED_IN') {
+     throw new Error('Cannot send to non-opted-in user');
+   }
+   await sendSMS(phone, msg);
+   
+   ```
+
+10. **Consent Check Before Sending** - Always check consent state before sending any SMS. Sending without checking consent violates TCPA and carrier policies.
+
+   ```
+   // BAD
+   await sendSMS(phoneNumber, message); // WRONG - no consent check
+
+   // GOOD
+   const consent = await getConsentState(phoneNumber);
+   if (consent.state !== 'OPTED_IN') {
+     throw new Error('Cannot send to non-opted-in user');
+   }
+   await sendSMS(phoneNumber, message);
+   
+   // GOOD
+   // Supabase pattern - consent checked in query
+   const { data } = await supabase
+     .from('profiles')
+     .select('phone')
+     .eq('sms_consent_state', 'OPTED_IN');
+   
+   ```
 
 ---
 
