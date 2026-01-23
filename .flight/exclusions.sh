@@ -64,6 +64,9 @@ FLIGHT_EXCLUDE_DIRS=(
     # Framework directories (never scan framework config/tooling)
     ".flight"
     ".claude"
+
+    # Flight tooling (linter should not lint itself)
+    "flight-lint"
 )
 
 # -----------------------------------------------------------------------------

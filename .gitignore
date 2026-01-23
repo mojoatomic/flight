@@ -3,6 +3,12 @@
 *.swo
 *~
 
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+
 # Flight working files (not for version control)
 tasks/
 PRIME.md

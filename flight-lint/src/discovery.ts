@@ -7,6 +7,7 @@ const DEFAULT_EXCLUDES = [
   '**/dist/**',
   '**/build/**',
   '**/.git/**',
+  '**/flight-lint/**',
 ];
 
 const RULES_FILE_PATTERN = '**/*.rules.json';
