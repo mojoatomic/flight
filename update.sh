@@ -83,6 +83,9 @@ fi
 # Update inject-flight-protocol.sh
 [[ -f "$TMP_DIR/.flight/inject-flight-protocol.sh" ]] && cp "$TMP_DIR/.flight/inject-flight-protocol.sh" .flight/
 
+# Update update.sh itself (so consumers always get latest version)
+[[ -f "$TMP_DIR/update.sh" ]] && cp "$TMP_DIR/update.sh" ./update.sh && chmod +x ./update.sh
+
 # Update hooks (self-validation hooks for Claude Code)
 if [[ -d "$TMP_DIR/.flight/hooks" ]]; then
     mkdir -p .flight/hooks
@@ -104,6 +107,7 @@ chmod +x .flight/hooks/*.sh 2>/dev/null || true
 echo "Flight updated"
 echo ""
 echo "Updated:"
+echo "  - update.sh (this script)"
 echo "  - .claude/settings.json (hooks configuration)"
 echo "  - .claude/skills/* (all Flight skills)"
 echo "  - .flight/FLIGHT.md (core methodology)"
