@@ -69,13 +69,17 @@ FLIGHT_EXCLUDE_DIRS=(
     "flight-lint"
 )
 
-# Files to exclude from validation (auto-generated, edits would be lost)
+# Files to exclude from validation (auto-generated or upstream-managed)
 # These are filename patterns matched with bash [[ == ]] glob matching
 FLIGHT_EXCLUDE_FILES=(
+    # Auto-generated (edits would be lost)
     "supabase.ts"
     "database.types.ts"
     "*.generated.ts"
     "graphql.ts"
+
+    # Upstream-managed (Flight framework files)
+    "update.sh"
 )
 
 # -----------------------------------------------------------------------------
