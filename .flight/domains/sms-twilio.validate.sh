@@ -174,6 +174,11 @@ check "N9: First Message Includes Opt-Out Instructions" \
   grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
 }
 for f in "$@"; do
+  # Only check files with SMS/Twilio context
+  # This prevents false positives on email templates, React hooks, etc.
+  if ! strip_comments "$f" | grep -qEi "twilio|sendSMS|messages\.create|sms.*send|sms.*consent"; then
+    continue
+  fi
   if strip_comments "$f" | grep -qEi "first.?message|welcome|initial|confirm.*message|WELCOME_MSG|FIRST_MSG|CONSENT_CONFIRMED"; then
     # Check for common opt-out instruction patterns
     if ! strip_comments "$f" | grep -qEi "STOP|opt.?out|unsubscribe|Reply.*to.*cancel|text.*stop|OPT_OUT_INSTRUCTIONS"; then

@@ -17,7 +17,16 @@
     "**/build/**",
     "**/.venv/**",
     "**/venv/**",
-    "**/.git/**"
+    "**/.git/**",
+    "**/*.sql",
+    "**/migrations/**",
+    "**/email-templates/**",
+    "**/firmware/**",
+    "**/embedded/**",
+    "**/*.c",
+    "**/*.h",
+    "**/hooks/use*.ts",
+    "**/hooks/use*.tsx"
   ],
   "provenance": {
     "last_full_audit": "2026-01-20",
