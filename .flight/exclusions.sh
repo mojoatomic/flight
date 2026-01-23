@@ -69,6 +69,15 @@ FLIGHT_EXCLUDE_DIRS=(
     "flight-lint"
 )
 
+# Files to exclude from validation (auto-generated, edits would be lost)
+# These are filename patterns matched with bash [[ == ]] glob matching
+FLIGHT_EXCLUDE_FILES=(
+    "supabase.ts"
+    "database.types.ts"
+    "*.generated.ts"
+    "graphql.ts"
+)
+
 # -----------------------------------------------------------------------------
 # flight_is_excluded - Check if a path should be excluded
 # -----------------------------------------------------------------------------
@@ -81,11 +90,23 @@ FLIGHT_EXCLUDE_DIRS=(
 flight_is_excluded() {
     local filepath="$1"
     local dir
+    local pattern
+    local filename
 
+    # Check directory exclusions
     for dir in "${FLIGHT_EXCLUDE_DIRS[@]}"; do
         # Check if path contains the excluded directory as a component
         # Matches: node_modules/foo, ./node_modules/bar, src/node_modules/baz
         if [[ "$filepath" == *"/$dir/"* ]] || [[ "$filepath" == "$dir/"* ]] || [[ "$filepath" == *"/$dir" ]]; then
+            return 0
+        fi
+    done
+
+    # Check file exclusions (auto-generated files)
+    filename=$(basename "$filepath")
+    for pattern in "${FLIGHT_EXCLUDE_FILES[@]}"; do
+        # Use glob matching for patterns like *.generated.ts
+        if [[ "$filename" == $pattern ]]; then
             return 0
         fi
     done
@@ -180,7 +201,8 @@ flight_get_files() {
 
     # Execute and output results
     # Use subshell to isolate potential errors from set -e
-    (eval "$find_cmd" 2>/dev/null || true) | sort
+    # Filter through flight_filter_excluded to remove auto-generated files
+    (eval "$find_cmd" 2>/dev/null || true) | flight_filter_excluded | sort
 }
 
 # -----------------------------------------------------------------------------
@@ -229,7 +251,7 @@ flight_get_files_for_patterns() {
 
         # Run find
         eval "find \"$dir_part\" -type f -name \"$name_part\" $find_excludes 2>/dev/null"
-    done | sort -u
+    done | flight_filter_excluded | sort -u
 }
 
 # -----------------------------------------------------------------------------
