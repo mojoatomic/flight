@@ -374,28 +374,29 @@ rules:
         - "// Use proper logging service for production"
 
   N8:
-    title: Fat Route Handlers (>50 lines)
+    title: Fat Route Handlers (>100 lines)
     severity: NEVER
     mechanical: true
     provenance:
-      last_verified: "2026-01-16"
+      last_verified: "2026-01-23"
       confidence: medium
-      re_verify_after: "2026-07-16"
+      re_verify_after: "2026-07-23"
       sources:
         - url: "https://nextjs.org/docs/app/building-your-application/routing/route-handlers"
           accessed: "2026-01-16"
           quote: "Route Handlers can be nested inside the app directory... similar to page.tsx."
     description: >
       Route handlers should be thin orchestrators. Extract business logic
-      to separate functions for testability and reuse.
+      to separate functions for testability and reuse. 100 lines allows for
+      proper validation, auth, and error handling while flagging genuinely fat handlers.
     check:
       type: script
       code: |
         for f in "$@"; do
             if [[ "$f" == *route.ts ]]; then
                 lines=$(wc -l < "$f")
-                if [ "$lines" -gt 50 ]; then
-                    echo "$f: $lines lines (max 50)"
+                if [ "$lines" -gt 100 ]; then
+                    echo "$f: $lines lines (max 100)"
                 fi
             fi
         done
