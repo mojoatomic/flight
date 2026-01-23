@@ -1,7 +1,6 @@
 {
   "domain": "typescript",
   "version": "1.1.0",
-  "language": "typescript",
   "file_patterns": [
     "**/*.ts",
     "**/*.tsx"
@@ -11,7 +10,12 @@
     "**/dist/**",
     "**/build/**",
     "**/.git/**",
-    "**/*.d.ts"
+    "**/*.d.ts",
+    "**/supabase.ts",
+    "**/database.types.ts",
+    "**/*.generated.ts",
+    "**/graphql.ts",
+    "**/__generated__/**"
   ],
   "provenance": {
     "last_full_audit": "2026-01-20",
@@ -31,8 +35,7 @@
         "last_verified": "2026-01-20",
         "confidence": "high",
         "re_verify_after": "2027-01-20"
-      },
-      "language": "typescript"
+      }
     },
     {
       "id": "N2",
@@ -46,8 +49,7 @@
         "last_verified": "2026-01-20",
         "confidence": "high",
         "re_verify_after": "2027-01-20"
-      },
-      "language": "typescript"
+      }
     },
     {
       "id": "N3",
