@@ -1,21 +1,21 @@
 # nextjs.flight - Next.js 14+ App Router patterns
 
 domain: nextjs
-version: 1.1.0
+version: 1.2.0
 schema_version: 2
 description: >
-  Next.js 14+ App Router patterns for server components, routing, and data fetching.
+  Next.js 14-16+ App Router patterns for server components, routing, and data fetching.
   Enforces proper client/server boundaries, prevents secret exposure, and promotes
-  parallel data fetching.
+  parallel data fetching. Updated for Next.js 16 proxy pattern (formerly middleware).
 
 provenance:
-  last_full_audit: "2026-01-16"
+  last_full_audit: "2026-01-23"
   audited_by: "flight-research"
-  next_audit_due: "2026-07-16"
+  next_audit_due: "2026-07-23"
 
   sources_consulted:
     - url: "https://nextjs.org/docs/app"
-      accessed: "2026-01-16"
+      accessed: "2026-01-23"
       note: "Next.js App Router documentation"
     - url: "https://nextjs.org/docs/app/building-your-application/rendering/server-components"
       accessed: "2026-01-16"
@@ -26,6 +26,12 @@ provenance:
     - url: "https://nextjs.org/docs/app/building-your-application/configuring/environment-variables"
       accessed: "2026-01-16"
       note: "Environment Variables documentation"
+    - url: "https://nextjs.org/docs/app/api-reference/file-conventions/proxy"
+      accessed: "2026-01-23"
+      note: "Proxy file convention (replaced middleware in v16)"
+    - url: "https://nextjs.org/docs/messages/middleware-to-proxy"
+      accessed: "2026-01-23"
+      note: "Migration guide from middleware to proxy"
 
   coverage:
     apis_covered:
@@ -34,6 +40,7 @@ provenance:
       - "Environment variable handling"
       - "Error and loading boundaries"
       - "Dynamic routes with notFound()"
+      - "Proxy pattern (v16+, formerly middleware)"
     known_gaps:
       - "Server Actions not fully covered"
       - "Parallel Routes not covered"
@@ -779,17 +786,28 @@ rules:
       }
 
   G4:
-    title: Middleware Pattern
+    title: Proxy Pattern (formerly Middleware)
     severity: GUIDANCE
     mechanical: false
+    provenance:
+      last_verified: "2026-01-23"
+      confidence: high
+      re_verify_after: "2026-07-23"
+      sources:
+        - url: "https://nextjs.org/docs/app/api-reference/file-conventions/proxy"
+          accessed: "2026-01-23"
+          quote: "The proxy file convention is used to define a proxy for the application."
     description: >
-      Pattern for Next.js middleware with auth checks and path matching.
+      Pattern for Next.js proxy with auth checks and path matching.
+      In Next.js 16+, middleware.ts was renamed to proxy.ts to clarify its
+      network boundary purpose and avoid confusion with Express middleware.
     note: |
-      // middleware.ts
+      // proxy.ts (Next.js 16+)
+      // Migration: npx @next/codemod@canary middleware-to-proxy .
       import { NextResponse } from 'next/server';
       import type { NextRequest } from 'next/server';
 
-      export function middleware(request: NextRequest) {
+      export function proxy(request: NextRequest) {
         const { pathname } = request.nextUrl;
 
         if (pathname.startsWith('/dashboard')) {
@@ -805,6 +823,10 @@ rules:
       export const config = {
         matcher: ['/dashboard/:path*', '/api/:path*'],
       };
+
+      // NOTE: proxy.ts runs on Node.js runtime (not Edge).
+      // Do NOT use proxy for primary auth - use server-side checks.
+      // See CVE-2025-29927 for why middleware auth was vulnerable.
 
 # ===========================================================================
 # INFO CHECKS - Statistics for reporting (not pass/fail)

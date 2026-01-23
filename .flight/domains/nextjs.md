@@ -1,6 +1,6 @@
 # Domain: Nextjs Design
 
-Next.js 14+ App Router patterns for server components, routing, and data fetching. Enforces proper client/server boundaries, prevents secret exposure, and promotes parallel data fetching.
+Next.js 14-16+ App Router patterns for server components, routing, and data fetching. Enforces proper client/server boundaries, prevents secret exposure, and promotes parallel data fetching. Updated for Next.js 16 proxy pattern (formerly middleware).
 
 
 **Validation:** `nextjs.validate.sh` enforces NEVER/MUST rules. SHOULD rules trigger warnings. GUIDANCE is not mechanically checked.
@@ -329,14 +329,15 @@ export async function POST(request: Request) {
 }
 
 
-4. **Middleware Pattern** - Pattern for Next.js middleware with auth checks and path matching.
+4. **Proxy Pattern (formerly Middleware)** - Pattern for Next.js proxy with auth checks and path matching. In Next.js 16+, middleware.ts was renamed to proxy.ts to clarify its network boundary purpose and avoid confusion with Express middleware.
 
 
-   > // middleware.ts
+   > // proxy.ts (Next.js 16+)
+// Migration: npx @next/codemod@canary middleware-to-proxy .
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (pathname.startsWith('/dashboard')) {
@@ -352,6 +353,10 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: ['/dashboard/:path*', '/api/:path*'],
 };
+
+// NOTE: proxy.ts runs on Node.js runtime (not Edge).
+// Do NOT use proxy for primary auth - use server-side checks.
+// See CVE-2025-29927 for why middleware auth was vulnerable.
 
 
 ---
