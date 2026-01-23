@@ -145,12 +145,15 @@ SH_FILES=$(collect_files "*.sh")
 SQL_FILES=$(collect_files "*.sql")
 GO_FILES=$(collect_files "*.go")
 RS_FILES=$(collect_files "*.rs")
+C_FILES=$(collect_files "*.c")
+H_FILES=$(collect_files "*.h")
 
 # Combine related file types
 TYPESCRIPT_FILES="$TS_FILES $TSX_FILES"
 JAVASCRIPT_FILES="$JS_FILES $JSX_FILES"
 REACT_FILES="$TSX_FILES $JSX_FILES"
-ALL_CODE_FILES="$TYPESCRIPT_FILES $JAVASCRIPT_FILES $PY_FILES $SH_FILES $SQL_FILES $GO_FILES $RS_FILES"
+C_CODE_FILES="$C_FILES $H_FILES"
+ALL_CODE_FILES="$TYPESCRIPT_FILES $JAVASCRIPT_FILES $PY_FILES $SH_FILES $SQL_FILES $GO_FILES $RS_FILES $C_CODE_FILES"
 
 # Count files
 count_files() {
@@ -184,6 +187,9 @@ get_domain_files() {
         go)             echo "$GO_FILES" ;;
         rust)           echo "$RS_FILES" ;;
         sql)            echo "$SQL_FILES" ;;
+        # C/embedded domains
+        rp2040-pico)    echo "$C_CODE_FILES" ;;
+        embedded-c-p10) echo "$C_CODE_FILES" ;;
         # Domains that check multiple/all file types
         code-hygiene)   echo "$ALL_CODE_FILES" ;;
         api)            echo "$TYPESCRIPT_FILES $JAVASCRIPT_FILES" ;;
