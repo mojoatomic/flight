@@ -58,6 +58,16 @@ exclude_patterns:
   - "**/.venv/**"
   - "**/venv/**"
   - "**/.git/**"
+  # Exclude non-SMS files that may match patterns
+  - "**/*.sql"
+  - "**/migrations/**"
+  - "**/email-templates/**"
+  - "**/firmware/**"
+  - "**/embedded/**"
+  - "**/*.c"
+  - "**/*.h"
+  - "**/hooks/use*.ts"
+  - "**/hooks/use*.tsx"
 
 # ===========================================================================
 # RULES
@@ -412,9 +422,9 @@ rules:
       The first message to a newly opted-in user MUST include opt-out
       instructions (STOP keyword). This is required by CTIA guidelines.
     provenance:
-      last_verified: "2026-01-20"
+      last_verified: "2026-01-23"
       confidence: high
-      re_verify_after: "2027-01-20"
+      re_verify_after: "2027-01-23"
       sources:
         - url: "https://www.ctia.org/the-wireless-industry/industry-commitments/messaging-principles-and-best-practices"
           accessed: "2026-01-20"
@@ -426,6 +436,11 @@ rules:
           grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
         }
         for f in "$@"; do
+          # Only check files with SMS/Twilio context
+          # This prevents false positives on email templates, React hooks, etc.
+          if ! strip_comments "$f" | grep -qEi "twilio|sendSMS|messages\.create|sms.*send|sms.*consent"; then
+            continue
+          fi
           if strip_comments "$f" | grep -qEi "first.?message|welcome|initial|confirm.*message|WELCOME_MSG|FIRST_MSG|CONSENT_CONFIRMED"; then
             # Check for common opt-out instruction patterns
             if ! strip_comments "$f" | grep -qEi "STOP|opt.?out|unsubscribe|Reply.*to.*cancel|text.*stop|OPT_OUT_INSTRUCTIONS"; then

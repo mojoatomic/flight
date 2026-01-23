@@ -197,6 +197,7 @@ get_domain_files() {
         supabase)       echo "$TYPESCRIPT_FILES $JAVASCRIPT_FILES" ;;
         prisma)         echo "$TYPESCRIPT_FILES $JAVASCRIPT_FILES" ;;
         clerk)          echo "$TYPESCRIPT_FILES $JAVASCRIPT_FILES" ;;
+        sms-twilio)     echo "$TYPESCRIPT_FILES $JAVASCRIPT_FILES $PY_FILES" ;;
         testing)        echo "$ALL_CODE_FILES" ;;
         webhooks)       echo "$TYPESCRIPT_FILES $JAVASCRIPT_FILES $PY_FILES" ;;
         docker)         echo "" ;;  # Dockerfile patterns - needs special handling
