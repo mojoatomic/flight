@@ -343,8 +343,12 @@ if [[ "$TOTAL_WARN" -gt "$BASELINE" ]]; then
     exit 1
 fi
 
-# All passed
-if [[ "$TOTAL_WARN" -gt 0 ]]; then
+# Auto-ratchet down: if warnings decreased, tighten the baseline
+if [[ "$TOTAL_WARN" -lt "$BASELINE" ]]; then
+    echo -e "${GREEN}✓ ALL VALIDATIONS PASSED${NC}"
+    echo -e "${GREEN}  Baseline auto-lowered: $BASELINE → $TOTAL_WARN (ratchet tightened)${NC}"
+    save_baseline "$TOTAL_WARN"
+elif [[ "$TOTAL_WARN" -gt 0 ]]; then
     echo -e "${GREEN}✓ ALL VALIDATIONS PASSED${NC} (within baseline: $TOTAL_WARN ≤ $BASELINE)"
 else
     echo -e "${GREEN}✓ ALL VALIDATIONS PASSED${NC}"
