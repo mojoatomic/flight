@@ -9,9 +9,62 @@ set -euo pipefail
 #   .flight/validate-all.sh                    # Scan current directory
 #   .flight/validate-all.sh src                # Scan src/ only
 #   .flight/validate-all.sh packages/app lib   # Scan multiple directories
+#   .flight/validate-all.sh --update-baseline  # Accept current warnings as baseline
+#
+# Baseline Ratchet:
+#   Prevents warning count from increasing. New projects start at 0.
+#   Use --update-baseline to accept a new warning count (e.g., after brownfield import).
 # =============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASELINE_FILE="$SCRIPT_DIR/baseline.json"
+
+# -----------------------------------------------------------------------------
+# Flag handling
+# -----------------------------------------------------------------------------
+UPDATE_BASELINE=false
+ARGS=()
+
+for arg in "$@"; do
+    case "$arg" in
+        --update-baseline)
+            UPDATE_BASELINE=true
+            ;;
+        *)
+            ARGS+=("$arg")
+            ;;
+    esac
+done
+
+# Reset positional parameters to non-flag arguments
+set -- "${ARGS[@]+"${ARGS[@]}"}"
+
+# -----------------------------------------------------------------------------
+# Baseline functions
+# -----------------------------------------------------------------------------
+
+load_baseline() {
+    if [[ -f "$BASELINE_FILE" ]]; then
+        jq -r '.warnings // 0' "$BASELINE_FILE" 2>/dev/null || echo "0"
+    else
+        echo "0"
+    fi
+}
+
+save_baseline() {
+    local warnings="$1"
+    local date
+    date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    cat > "$BASELINE_FILE" << EOF
+{
+  "warnings": $warnings,
+  "updated": "$date",
+  "note": "Baseline for warning ratchet. Validation fails if warnings exceed this count."
+}
+EOF
+    echo "Baseline updated: $warnings warnings"
+}
+
 DOMAINS_DIR="$SCRIPT_DIR/domains"
 CONFIG_FILE="$SCRIPT_DIR/flight.json"
 
@@ -255,15 +308,46 @@ echo -e "${BLUE}═════════════════════�
 echo -e "  Total Checks Passed: ${GREEN}$TOTAL_PASS${NC}"
 echo -e "  Total Checks Failed: ${RED}$TOTAL_FAIL${NC}"
 echo -e "  Total Warnings:      ${YELLOW}$TOTAL_WARN${NC}"
+
+# -----------------------------------------------------------------------------
+# Baseline ratchet check
+# -----------------------------------------------------------------------------
+
+BASELINE=$(load_baseline)
+echo -e "  Warning Baseline:    ${BLUE}$BASELINE${NC}"
 echo ""
 
+# Handle --update-baseline flag
+if [[ "$UPDATE_BASELINE" == true ]]; then
+    save_baseline "$TOTAL_WARN"
+    BASELINE="$TOTAL_WARN"
+fi
+
+# Check for domain failures first (NEVER/MUST violations)
 if [[ ${#FAILED_DOMAINS[@]} -gt 0 ]]; then
     echo -e "${RED}✗ VALIDATION FAILED${NC}"
     echo -e "${RED}  Failed domains: ${FAILED_DOMAINS[*]}${NC}"
     echo ""
     exit 1
+fi
+
+# Check warning ratchet (warnings cannot exceed baseline)
+if [[ "$TOTAL_WARN" -gt "$BASELINE" ]]; then
+    NEW_WARNINGS=$((TOTAL_WARN - BASELINE))
+    echo -e "${RED}✗ VALIDATION FAILED - Warning ratchet exceeded${NC}"
+    echo -e "${RED}  Current warnings: $TOTAL_WARN (baseline: $BASELINE, +$NEW_WARNINGS new)${NC}"
+    echo ""
+    echo -e "${YELLOW}  For greenfield projects: Fix the warnings to maintain zero baseline.${NC}"
+    echo -e "${YELLOW}  For brownfield imports: Run with --update-baseline to accept current count.${NC}"
+    echo ""
+    exit 1
+fi
+
+# All passed
+if [[ "$TOTAL_WARN" -gt 0 ]]; then
+    echo -e "${GREEN}✓ ALL VALIDATIONS PASSED${NC} (within baseline: $TOTAL_WARN ≤ $BASELINE)"
 else
     echo -e "${GREEN}✓ ALL VALIDATIONS PASSED${NC}"
-    echo ""
-    exit 0
 fi
+echo ""
+exit 0
