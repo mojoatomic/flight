@@ -184,9 +184,11 @@ rules:
       Never mutate state directly with push/pop/splice. React won't detect
       the change and won't re-render.
     check:
-      type: grep
-      pattern: '\.push\(|\.splice\(|\.pop\(|\.shift\(|\.unshift\('
-      flags: -En
+      type: script
+      code: |
+        # Exclude navigation methods: router.push, history.push, navigate
+        grep -En '\.push\(|\.splice\(|\.pop\(|\.shift\(|\.unshift\(' "$@" 2>/dev/null | \
+        grep -v 'router\.push\|history\.push\|navigate\.' || true
     note: |
       Mutating arrays in place keeps the same reference.
       React compares references, not contents. Create new arrays.

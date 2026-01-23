@@ -1,7 +1,6 @@
 {
   "domain": "react",
   "version": "1.1.0",
-  "language": "javascript",
   "file_patterns": [
     "**/*.jsx",
     "**/*.tsx"
@@ -55,20 +54,6 @@
       "pattern": "key=\\{.*index|key=\\{i\\}|key=\\{idx\\}",
       "query": null,
       "message": "Using array index as key breaks React reconciliation on reorder/delete. Items get wrong state and animations break.",
-      "provenance": {
-        "last_verified": "2026-01-20",
-        "confidence": "high",
-        "re_verify_after": "2027-01-20"
-      }
-    },
-    {
-      "id": "N4",
-      "title": "Direct State Mutation",
-      "severity": "NEVER",
-      "type": "grep",
-      "pattern": "\\.push\\(|\\.splice\\(|\\.pop\\(|\\.shift\\(|\\.unshift\\(",
-      "query": null,
-      "message": "Never mutate state directly with push/pop/splice. React won't detect the change and won't re-render.",
       "provenance": {
         "last_verified": "2026-01-20",
         "confidence": "high",

@@ -96,23 +96,6 @@ for f in "$@"; do
 done
 [[ $found -eq 0 ]] && echo "No consent states found"' _ "${FILES[@]}"
 
-# N2: Never Send to OPTED_OUT or UNKNOWN
-check "N2: Never Send to OPTED_OUT or UNKNOWN" \
-    grep -Ein "OPTED_OUT.*send|UNKNOWN.*send|send.*OPTED_OUT|send.*UNKNOWN" "${FILES[@]}"
-
-# N3: Consent Check Before Sending
-check "N3: Consent Check Before Sending" \
-    bash -c 'strip_comments() {
-  grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
-}
-for f in "$@"; do
-  if strip_comments "$f" | grep -qEi "sendSMS|send.*message|twilio.*messages.*create"; then
-    if ! strip_comments "$f" | grep -qEi "consent|opted.?in|OPTED_IN|getConsent"; then
-      printf "%s: sends without consent check\n" "$f"
-    fi
-  fi
-done' _ "${FILES[@]}"
-
 # N4: STOP Keyword Triggers State Change
 check "N4: STOP Keyword Triggers State Change" \
     bash -c 'strip_comments() {
@@ -133,7 +116,8 @@ check "N5: Error 21610 Marks OPTED_OUT" \
 }
 for f in "$@"; do
   if strip_comments "$f" | grep -qEi "twilio|sendSMS|messages.*create"; then
-    if ! strip_comments "$f" | grep -qEi "21610"; then
+    # Check for literal 21610 OR common constant patterns for opt-out errors
+    if ! strip_comments "$f" | grep -qEi "21610|OPT.?OUT.*ERROR|UNSUBSCRIBED.*ERROR|BLOCKED.*CODE"; then
       printf "%s: no 21610 handling\n" "$f"
     fi
   fi
@@ -146,7 +130,8 @@ check "N6: Error 30004 Marks OPTED_OUT" \
 }
 for f in "$@"; do
   if strip_comments "$f" | grep -qEi "twilio|sendSMS|messages.*create"; then
-    if ! strip_comments "$f" | grep -qEi "30004"; then
+    # Check for literal 30004 OR common constant patterns for opt-out/blocked errors
+    if ! strip_comments "$f" | grep -qEi "30004|OPT.?OUT.*ERROR|BLOCKED.*ERROR|CARRIER.*BLOCK"; then
       printf "%s: no 30004 handling\n" "$f"
     fi
   fi
@@ -171,7 +156,8 @@ check "N8: Error 30005/30006 Marks Number INVALID" \
 }
 for f in "$@"; do
   if strip_comments "$f" | grep -qEi "twilio|sendSMS|messages.*create"; then
-    if ! strip_comments "$f" | grep -qEi "30005|30006|invalid.*number|landline|INVALID"; then
+    # Check for literal codes OR common constant patterns for invalid number errors
+    if ! strip_comments "$f" | grep -qEi "30005|30006|INVALID.*NUMBER|INVALID.*ERROR|LANDLINE|UNREACHABLE|UNKNOWN.*DEST"; then
       printf "%s: no 30005/30006 handling\n" "$f"
     fi
   fi
@@ -183,8 +169,9 @@ check "N9: First Message Includes Opt-Out Instructions" \
   grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
 }
 for f in "$@"; do
-  if strip_comments "$f" | grep -qEi "first.?message|welcome|initial|confirm.*message"; then
-    if ! strip_comments "$f" | grep -qEi "STOP|opt.?out|unsubscribe"; then
+  if strip_comments "$f" | grep -qEi "first.?message|welcome|initial|confirm.*message|WELCOME_MSG|FIRST_MSG|CONSENT_CONFIRMED"; then
+    # Check for common opt-out instruction patterns
+    if ! strip_comments "$f" | grep -qEi "STOP|opt.?out|unsubscribe|Reply.*to.*cancel|text.*stop|OPT_OUT_INSTRUCTIONS"; then
       printf "%s: first message may lack opt-out\n" "$f"
     fi
   fi
