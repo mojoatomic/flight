@@ -99,128 +99,27 @@ fi
 echo ""
 
 # -----------------------------------------------------------------------------
-# Collect files
+# Search path configuration
 # -----------------------------------------------------------------------------
 
-# Determine search paths
+# Determine search paths (validators use FLIGHT_SEARCH_DIR from exclusions.sh)
 if [[ $# -gt 0 ]]; then
-    SEARCH_PATHS=("$@")
+    # Export for validators to use
+    export FLIGHT_SEARCH_DIR="$1"
+    echo -e "${BLUE}Scanning:${NC} $*"
 else
-    SEARCH_PATHS=(".")
+    export FLIGHT_SEARCH_DIR="."
+    echo -e "${BLUE}Scanning:${NC} current directory"
 fi
-
-echo -e "${BLUE}Scanning:${NC} ${SEARCH_PATHS[*]}"
-
-# Collect all files with exclusions
-collect_files() {
-    local pattern="$1"
-    local files=""
-
-    for search_path in "${SEARCH_PATHS[@]}"; do
-        if [[ -d "$search_path" ]]; then
-            # Use exclusions-aware discovery (always available)
-            local found
-            found=$(FLIGHT_SEARCH_DIR="$search_path" flight_get_files "$pattern")
-            if [[ -n "$found" ]]; then
-                files="$files $found"
-            fi
-        elif [[ -f "$search_path" ]]; then
-            # Direct file argument
-            if [[ "$search_path" == *"$pattern"* ]] || [[ "$pattern" == "*" ]]; then
-                files="$files $search_path"
-            fi
-        fi
-    done
-
-    echo "$files" | tr ' ' '\n' | (grep -v '^$' || true) | sort -u | tr '\n' ' '
-}
-
-# Collect files by type
-TS_FILES=$(collect_files "*.ts")
-TSX_FILES=$(collect_files "*.tsx")
-JS_FILES=$(collect_files "*.js")
-JSX_FILES=$(collect_files "*.jsx")
-PY_FILES=$(collect_files "*.py")
-SH_FILES=$(collect_files "*.sh")
-SQL_FILES=$(collect_files "*.sql")
-GO_FILES=$(collect_files "*.go")
-RS_FILES=$(collect_files "*.rs")
-C_FILES=$(collect_files "*.c")
-H_FILES=$(collect_files "*.h")
-
-# Combine related file types
-TYPESCRIPT_FILES="$TS_FILES $TSX_FILES"
-JAVASCRIPT_FILES="$JS_FILES $JSX_FILES"
-REACT_FILES="$TSX_FILES $JSX_FILES"
-C_CODE_FILES="$C_FILES $H_FILES"
-ALL_CODE_FILES="$TYPESCRIPT_FILES $JAVASCRIPT_FILES $PY_FILES $SH_FILES $SQL_FILES $GO_FILES $RS_FILES $C_CODE_FILES"
-
-# Count files
-count_files() {
-    local count
-    count=$(echo "$1" | tr ' ' '\n' | grep -cv '^$' 2>/dev/null) || count=0
-    echo "$count"
-}
-
-TOTAL_FILES=$(count_files "$ALL_CODE_FILES")
-echo -e "${BLUE}Total files:${NC} $TOTAL_FILES"
 echo ""
 
-if [[ "$TOTAL_FILES" -eq 0 ]]; then
-    echo -e "${YELLOW}No code files found in search paths${NC}"
-    echo ""
-    exit 0
-fi
-
 # -----------------------------------------------------------------------------
-# Get files for a specific domain based on file type mapping
-# -----------------------------------------------------------------------------
-
-get_domain_files() {
-    local domain="$1"
-    case "$domain" in
-        typescript)     echo "$TYPESCRIPT_FILES" ;;
-        react)          echo "$REACT_FILES" ;;
-        javascript)     echo "$JAVASCRIPT_FILES" ;;
-        bash)           echo "$SH_FILES" ;;
-        python)         echo "$PY_FILES" ;;
-        go)             echo "$GO_FILES" ;;
-        rust)           echo "$RS_FILES" ;;
-        sql)            echo "$SQL_FILES" ;;
-        # C/embedded domains
-        rp2040-pico)    echo "$C_CODE_FILES" ;;
-        embedded-c-p10) echo "$C_CODE_FILES" ;;
-        # Domains that check multiple/all file types
-        code-hygiene)   echo "$ALL_CODE_FILES" ;;
-        api)            echo "$TYPESCRIPT_FILES $JAVASCRIPT_FILES" ;;
-        nextjs)         echo "$TYPESCRIPT_FILES $JAVASCRIPT_FILES" ;;
-        supabase)       echo "$TYPESCRIPT_FILES $JAVASCRIPT_FILES" ;;
-        prisma)         echo "$TYPESCRIPT_FILES $JAVASCRIPT_FILES" ;;
-        clerk)          echo "$TYPESCRIPT_FILES $JAVASCRIPT_FILES" ;;
-        sms-twilio)     echo "$TYPESCRIPT_FILES $JAVASCRIPT_FILES $PY_FILES" ;;
-        testing)        echo "$ALL_CODE_FILES" ;;
-        webhooks)       echo "$TYPESCRIPT_FILES $JAVASCRIPT_FILES $PY_FILES" ;;
-        docker)         echo "" ;;  # Dockerfile patterns - needs special handling
-        kubernetes)     echo "" ;;  # YAML patterns - needs special handling
-        yaml)           echo "" ;;  # YAML patterns - needs special handling
-        *)              echo "$ALL_CODE_FILES" ;;
-    esac
-}
-
-# -----------------------------------------------------------------------------
-# Run a validator if files exist
+# Run a validator (self-discovers files via file_patterns from .flight)
 # -----------------------------------------------------------------------------
 
 run_validator() {
     local domain="$1"
-    local files="$2"
     local validator="$DOMAINS_DIR/${domain}.validate.sh"
-
-    # Trim whitespace and check if empty
-    files=$(echo "$files" | xargs)
-    if [[ -z "$files" ]]; then
-        return 0
-    fi
 
     # Skip if validator doesn't exist
     if [[ ! -x "$validator" ]]; then
@@ -229,10 +128,10 @@ run_validator() {
 
     echo -e "${BLUE}▶ Running $domain validator...${NC}"
 
-    # Run validator and capture output
+    # Run validator - it self-discovers files via file_patterns from .flight
     local output
     local exit_code=0
-    output=$("$validator" $files 2>&1) || exit_code=$?
+    output=$("$validator" 2>&1) || exit_code=$?
 
     # Parse results from output
     local pass=$(echo "$output" | grep -oE 'PASS:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | tail -1 || echo "0")
@@ -274,14 +173,14 @@ run_validator() {
 if [[ "$CONFIG_MODE" == true ]]; then
     # Config-driven: loop over enabled domains from flight.json
     for domain in $ENABLED_DOMAINS; do
-        run_validator "$domain" "$(get_domain_files "$domain")"
+        run_validator "$domain"
     done
 else
     # Legacy mode: no flight.json found
     echo -e "${YELLOW}No flight.json found. Run /flight-scan to detect domains.${NC}"
     echo -e "${YELLOW}Falling back to code-hygiene only...${NC}"
     echo ""
-    run_validator "code-hygiene" "$(get_domain_files "code-hygiene")"
+    run_validator "code-hygiene"
 fi
 
 # -----------------------------------------------------------------------------
