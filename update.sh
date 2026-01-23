@@ -59,10 +59,19 @@ if [[ -d "$TMP_DIR/flight-lint" ]]; then
         rm -rf flight-lint
         cp -r "$TMP_DIR/flight-lint" .
     fi
-    # Build if not already built
-    if [[ ! -d "flight-lint/dist" ]]; then
+    # Build if not already built or if source is newer
+    if [[ ! -d "flight-lint/dist" ]] || [[ ! -d "flight-lint/node_modules" ]]; then
         echo "Building flight-lint..."
-        (cd flight-lint && npm install && npm run build)
+        echo "  Installing dependencies (including tree-sitter native modules)..."
+        (cd flight-lint && npm install --include=optional) || {
+            echo "Warning: npm install had issues. tree-sitter requires build tools."
+            echo "  On macOS: xcode-select --install"
+            echo "  On Ubuntu: apt-get install build-essential"
+        }
+        echo "  Compiling TypeScript..."
+        (cd flight-lint && npm run build) || {
+            echo "Warning: flight-lint build failed. AST rules will be skipped."
+        }
     fi
 fi
 
@@ -74,6 +83,12 @@ fi
 # Update inject-flight-protocol.sh
 [[ -f "$TMP_DIR/.flight/inject-flight-protocol.sh" ]] && cp "$TMP_DIR/.flight/inject-flight-protocol.sh" .flight/
 
+# Update hooks (self-validation hooks for Claude Code)
+if [[ -d "$TMP_DIR/.flight/hooks" ]]; then
+    mkdir -p .flight/hooks
+    cp -r "$TMP_DIR/.flight/hooks/"* .flight/hooks/ 2>/dev/null || true
+fi
+
 # Make scripts executable
 chmod +x .flight/validate-all.sh 2>/dev/null || true
 chmod +x .flight/exclusions.sh 2>/dev/null || true
@@ -81,6 +96,7 @@ chmod +x .flight/domains/*.validate.sh 2>/dev/null || true
 chmod +x .flight/domains/*.sh 2>/dev/null || true
 chmod +x .flight/bin/* 2>/dev/null || true
 chmod +x .flight/inject-flight-protocol.sh 2>/dev/null || true
+chmod +x .flight/hooks/*.sh 2>/dev/null || true
 
 # Inject/update Flight Execution Protocol in CLAUDE.md
 ./.flight/inject-flight-protocol.sh .
@@ -93,8 +109,10 @@ echo "  - .claude/skills/* (all Flight skills)"
 echo "  - .flight/FLIGHT.md (core methodology)"
 echo "  - .flight/validate-all.sh, exclusions.sh"
 echo "  - .flight/domains/* (all stock domains)"
+echo "  - .flight/hooks/* (self-validation hooks)"
 echo "  - .flight/bin/* (tooling scripts)"
 echo "  - .flight/examples/, exercises/, templates/"
+echo "  - flight-lint/* (AST validation tool)"
 echo "  - CLAUDE.md (Flight Execution Protocol injected/updated)"
 echo ""
 echo "Preserved:"
