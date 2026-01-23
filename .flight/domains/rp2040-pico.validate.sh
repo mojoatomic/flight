@@ -117,9 +117,7 @@ done' _ "${FILES[@]}"
 
 # N6: Arrays Must Have Named Size Constants
 check "N6: Arrays Must Have Named Size Constants" \
-    bash -c 'for f in "$@"; do
-  grep -En '"'"'\[[0-9]+\]'"'"' "$f" 2>/dev/null | grep -v '"'"'#define\|//\|/\*'"'"' | head -5
-done' _ "${FILES[@]}"
+    # Unknown check type: ast
 
 # N7: Core 0 Must Use Watchdog
 check "N7: Core 0 Must Use Watchdog" \
@@ -212,10 +210,11 @@ elif [ -n "$missing" ]; then
   echo "$missing"
 fi' _ "${FILES[@]}"
 
-# S9: Should Have Emergency Handling
-warn "S9: Should Have Emergency Handling" \
-    bash -c 'if ! grep -rl '"'"'emergency\|EMERGENCY'"'"' "$@" 2>/dev/null | head -1 | grep -q '"'"'.'"'"'; then
-  echo "No emergency handling found"
+# S9: Should Have Emergency/Error Handling
+warn "S9: Should Have Emergency/Error Handling" \
+    bash -c '# Check for emergency, error, or fault handling patterns
+if ! grep -rlE '"'"'emergency|EMERGENCY|STATE_ERROR|error_code|fault|FAULT'"'"' "$@" 2>/dev/null | head -1 | grep -q '"'"'.'"'"'; then
+  echo "No emergency/error handling found"
 fi' _ "${FILES[@]}"
 
 # S10: Should Have Inter-Core Heartbeat

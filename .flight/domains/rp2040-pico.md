@@ -89,7 +89,7 @@ Raspberry Pi Pico (RP2040) dual-core embedded development with Pico SDK. Extends
    spi_write_read_blocking(spi0, tx, rx, len);  // bounded by len
    ```
 
-6. **Arrays Must Have Named Size Constants** - Array sizes must use #define constants, not magic numbers. This ensures buffer sizes are documented and can be changed in one place.
+6. **Arrays Must Have Named Size Constants** - Array sizes must use #define constants, not magic numbers. This ensures buffer sizes are documented and can be changed in one place. Uses AST to match array declarations only - element access like arr[0] is correctly ignored (it's a subscript_expression, not array_declarator).
 
    ```
    // BAD
@@ -234,16 +234,20 @@ Raspberry Pi Pico (RP2040) dual-core embedded development with Pico SDK. Extends
    src/core1.c     # Core 1 entry
    ```
 
-9. **Should Have Emergency Handling** - Safety-critical RP2040 projects should have emergency handling code for failure scenarios.
+9. **Should Have Emergency/Error Handling** - Safety-critical RP2040 projects should have emergency or error handling code for failure scenarios. This includes dedicated emergency modules, error states in state machines, or fault handling.
 
    ```
    // BAD
-   // No emergency handling
+   // No emergency or error handling
 
    // GOOD
    void emergency_surface(emergency_reason_t reason);
    // GOOD
    #define EMERGENCY_DEPTH_EXCEEDED 4
+   // GOOD
+   typedef enum { STATE_ERROR } device_state_t;
+   // GOOD
+   static void sm_set_error(error_code_t err);
    ```
 
 10. **Should Have Inter-Core Heartbeat** - Dual-core projects should implement a heartbeat mechanism between cores to detect if one core has stalled.

@@ -1,7 +1,6 @@
 {
   "domain": "rp2040-pico",
-  "version": "1.1.0",
-  "language": "unknown",
+  "version": "1.2.0",
   "file_patterns": [
     "src/**/*.c",
     "src/**/*.h",
@@ -31,6 +30,21 @@
         "last_verified": "2026-01-20",
         "confidence": "high",
         "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N6",
+      "title": "Arrays Must Have Named Size Constants",
+      "severity": "NEVER",
+      "type": "ast",
+      "language": "c",
+      "pattern": null,
+      "query": "(array_declarator\n  size: (number_literal) @violation)",
+      "message": "Array sizes must use #define constants, not magic numbers. This ensures buffer sizes are documented and can be changed in one place. Uses AST to match array declarations only - element access like arr[0] is correctly ignored (it's a subscript_expression, not array_declarator).",
+      "provenance": {
+        "last_verified": "2026-01-23",
+        "confidence": "high",
+        "re_verify_after": "2027-01-23"
       }
     },
     {
