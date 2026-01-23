@@ -352,7 +352,7 @@ rules:
             # Flag if using userId for data filtering without orgId
             # Covers Prisma (where: { userId }) and Drizzle (eq(*.userId, ...))
             if grep -qE "where.*userId|userId.*=|eq\(.*userId" "$f" 2>/dev/null; then
-              if ! grep -qE "orgId|organizationId" "$f" 2>/dev/null; then
+              if ! grep -qE "orgId|organizationId|organization_id|org_id" "$f" 2>/dev/null; then
                 grep -Hn "userId" "$f" 2>/dev/null | head -3
               fi
             fi
@@ -401,7 +401,7 @@ rules:
             # If file uses auth() but doesn't check orgId
             if grep -q "await auth()" "$f" 2>/dev/null; then
               if grep -qE "userId\s*\}" "$f" 2>/dev/null; then
-                if ! grep -qE "orgId|organizationId|!.*org" "$f" 2>/dev/null; then
+                if ! grep -qE "orgId|organizationId|organization_id|org_id|!.*org" "$f" 2>/dev/null; then
                   echo "$f: auth check without orgId verification"
                 fi
               fi
@@ -714,8 +714,9 @@ rules:
           if [[ "$f" == *"/api/"* ]] || [[ "$f" == *"/actions/"* ]] || [[ "$f" == *".server."* ]]; then
             # If file has database queries (Prisma or Drizzle)
             if grep -qE "findMany|findFirst|findUnique|select.*from|query\.|\.insert\(|\.update\(|\.delete\(" "$f" 2>/dev/null; then
-              # Should have orgId in where clause
-              if ! grep -qE "orgId|organization_id|organizationId" "$f" 2>/dev/null; then
+              # Should have orgId in where clause (supports various naming conventions)
+              # orgId = Clerk auth object, organizationId = Clerk SDK, organization_id = REST API, org_id = PostgreSQL/Supabase
+              if ! grep -qE "orgId|organization_id|organizationId|org_id" "$f" 2>/dev/null; then
                 echo "$f: database query without orgId filter"
               fi
             fi
