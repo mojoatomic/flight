@@ -102,7 +102,12 @@ check "N4: STOP Keyword Triggers State Change" \
   grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
 }
 for f in "$@"; do
-  if strip_comments "$f" | grep -qEi "STOP"; then
+  # Only check for STOP handling if file has SMS/Twilio context
+  # This prevents false positives on firmware state machines, etc.
+  if ! strip_comments "$f" | grep -qEi "twilio|sendSMS|messages\.create|sms.*send|consent"; then
+    continue
+  fi
+  if strip_comments "$f" | grep -qEi "\bSTOP\b"; then
     if ! strip_comments "$f" | grep -qEi "OPTED_OUT|updateConsent|setState|optOut"; then
       printf "%s: STOP found but no state change\n" "$f"
     fi
