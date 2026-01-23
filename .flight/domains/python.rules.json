@@ -32,7 +32,8 @@
         "last_verified": "2026-01-20",
         "confidence": "high",
         "re_verify_after": "2027-01-20"
-      }
+      },
+      "language": "python"
     },
     {
       "id": "N3",
@@ -46,7 +47,8 @@
         "last_verified": "2026-01-20",
         "confidence": "high",
         "re_verify_after": "2027-01-20"
-      }
+      },
+      "language": "python"
     },
     {
       "id": "N4",
