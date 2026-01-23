@@ -42,7 +42,9 @@
       "Bash(gh issue create:*)",
       "Skill(flight-prd)",
       "Bash(name=\"flight-prime\")",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(./scripts/flight-domain-compile.sh:*)",
+      "Bash(git rebase:*)"
     ]
   }
 }

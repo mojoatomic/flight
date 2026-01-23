@@ -184,20 +184,6 @@ Next.js 14-16+ App Router patterns for server components, routing, and data fetc
    
    ```
 
-10. **Deprecated middleware.ts File (Next.js 16+)** - Next.js 16 deprecated middleware.ts in favor of proxy.ts. The middleware file convention has been renamed to clarify its network boundary purpose and avoid confusion with Express middleware.
-
-   ```
-   // BAD
-   middleware.ts
-   // BAD
-   src/middleware.ts
-
-   // GOOD
-   proxy.ts
-   // GOOD
-   src/proxy.ts
-   ```
-
 ### SHOULD (validator warns)
 
 1. **Dynamic Routes Should Use notFound()** - Dynamic route pages ([id], [slug]) should call notFound() when the resource doesn't exist, rendering the not-found.tsx boundary.
@@ -254,6 +240,18 @@ Next.js 14-16+ App Router patterns for server components, routing, and data fetc
    // lib/db.ts
    import 'server-only';
    export const db = new PrismaClient();
+   ```
+
+6. **Deprecated middleware.ts File (Next.js 16+)** - Next.js 16 deprecated middleware.ts in favor of proxy.ts. However, third-party auth libraries (Clerk, Auth0, etc.) may still require middleware.ts until they update. Migrate when your auth library supports proxy.ts.
+
+   ```
+   // DEPRECATED (but may be required by auth libraries)
+   middleware.ts
+   src/middleware.ts
+
+   // PREFERRED (Next.js 16+)
+   proxy.ts
+   src/proxy.ts
    ```
 
 ### GUIDANCE (not mechanically checked)
@@ -388,4 +386,4 @@ export const config = {
 | Fat route handlers |  | Extract to functions |
 | Hardcoded paths |  | Route constants |
 | 'any' in handlers |  | Zod + unknown |
-| middleware.ts |  | Rename to proxy.ts |
+| middleware.ts |  | Rename to proxy.ts (when auth library supports it) |
