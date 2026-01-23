@@ -3,31 +3,31 @@
     "PostToolUse": [
       {
         "matcher": "Write",
-        "hooks": [{"type": "command", "command": "\"$(git rev-parse --show-toplevel)/.flight/hooks/post-tool-validate.sh\""}],
+        "hooks": [{"type": "command", "command": "bash -c 'if ROOT=$(git rev-parse --show-toplevel 2>/dev/null); then \"$ROOT/.flight/hooks/post-tool-validate.sh\"; else echo \"{\\\"decision\\\":\\\"approve\\\",\\\"reason\\\":\\\"Not in a git repository\\\"}\"; fi'"}],
         "timeout": 30000
       },
       {
         "matcher": "Edit",
-        "hooks": [{"type": "command", "command": "\"$(git rev-parse --show-toplevel)/.flight/hooks/post-tool-validate.sh\""}],
+        "hooks": [{"type": "command", "command": "bash -c 'if ROOT=$(git rev-parse --show-toplevel 2>/dev/null); then \"$ROOT/.flight/hooks/post-tool-validate.sh\"; else echo \"{\\\"decision\\\":\\\"approve\\\",\\\"reason\\\":\\\"Not in a git repository\\\"}\"; fi'"}],
         "timeout": 30000
       },
       {
         "matcher": "MultiEdit",
-        "hooks": [{"type": "command", "command": "\"$(git rev-parse --show-toplevel)/.flight/hooks/post-tool-validate.sh\""}],
+        "hooks": [{"type": "command", "command": "bash -c 'if ROOT=$(git rev-parse --show-toplevel 2>/dev/null); then \"$ROOT/.flight/hooks/post-tool-validate.sh\"; else echo \"{\\\"decision\\\":\\\"approve\\\",\\\"reason\\\":\\\"Not in a git repository\\\"}\"; fi'"}],
         "timeout": 30000
       }
     ],
     "Stop": [
       {
         "matcher": "",
-        "hooks": [{"type": "command", "command": "\"$(git rev-parse --show-toplevel)/.flight/hooks/stop-validate.sh\""}],
+        "hooks": [{"type": "command", "command": "bash -c 'if ROOT=$(git rev-parse --show-toplevel 2>/dev/null); then \"$ROOT/.flight/hooks/stop-validate.sh\"; else echo \"{\\\"decision\\\":\\\"approve\\\",\\\"reason\\\":\\\"Not in a git repository\\\"}\"; fi'"}],
         "timeout": 60000
       }
     ],
     "SubagentStop": [
       {
         "matcher": "",
-        "hooks": [{"type": "command", "command": "\"$(git rev-parse --show-toplevel)/.flight/hooks/stop-validate.sh\""}],
+        "hooks": [{"type": "command", "command": "bash -c 'if ROOT=$(git rev-parse --show-toplevel 2>/dev/null); then \"$ROOT/.flight/hooks/stop-validate.sh\"; else echo \"{\\\"decision\\\":\\\"approve\\\",\\\"reason\\\":\\\"Not in a git repository\\\"}\"; fi'"}],
         "timeout": 60000
       }
     ]

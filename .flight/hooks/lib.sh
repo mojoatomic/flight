@@ -92,8 +92,10 @@ respond() {
 # -----------------------------------------------------------------------------
 # Output:
 #   JSON from flight-lint --auto --format json
+#   Or special marker if flight-lint not found: __FLIGHT_LINT_NOT_FOUND__
 # Returns:
 #   Exit code from flight-lint (0 = no violations, non-zero = violations found)
+#   Returns 127 if flight-lint binary not found
 # -----------------------------------------------------------------------------
 run_flight_lint() {
     local lint_output=""
@@ -101,8 +103,8 @@ run_flight_lint() {
 
     # Check if flight-lint exists
     if [[ ! -x "$FLIGHT_LINT_BIN" ]]; then
-        printf '{"error":"flight-lint not found at %s"}\n' "$FLIGHT_LINT_BIN"
-        return 1
+        printf '__FLIGHT_LINT_NOT_FOUND__\n'
+        return 127
     fi
 
     # Run flight-lint and capture output
@@ -111,6 +113,16 @@ run_flight_lint() {
     # Output the result
     printf '%s\n' "$lint_output"
     return "$exit_code"
+}
+
+# -----------------------------------------------------------------------------
+# check_flight_lint_available - Check if flight-lint binary exists
+# -----------------------------------------------------------------------------
+# Returns:
+#   0 if flight-lint is available and executable, 1 otherwise
+# -----------------------------------------------------------------------------
+check_flight_lint_available() {
+    [[ -x "$FLIGHT_LINT_BIN" ]]
 }
 
 # -----------------------------------------------------------------------------
@@ -181,7 +193,7 @@ get_total_violations() {
 # format_violations_summary - Format violations for human-readable output
 # -----------------------------------------------------------------------------
 # Arguments:
-#   $1 - json_string: JSON output from flight-lint
+#   $1 - json_string: JSON output from flight-lint (NDJSON format)
 #   $2 - max_items: Maximum number of violations to show (default: 5)
 # Output:
 #   Formatted string with violation details
@@ -192,9 +204,9 @@ format_violations_summary() {
     local summary=""
 
     if check_jq_available; then
-        # Use jq to format violations
-        summary="$(printf '%s' "$json_string" | jq -r \
-            ".results[:$max_items][] | \"- [\(.severity)] \(.ruleId): \(.message) at \(.filePath):\(.line)\"" \
+        # Use jq to format violations (slurp to handle NDJSON - one object per domain)
+        summary="$(printf '%s' "$json_string" | jq -rs \
+            "[.[].results[]] | .[:$max_items][] | \"- [\(.severity)] \(.ruleId): \(.message) at \(.filePath):\(.line)\"" \
             2>/dev/null)" || summary=""
     else
         # Fallback: basic extraction (less precise)
