@@ -288,11 +288,25 @@ rules:
     guidance: |
       npx create-next-app my-app --typescript --tailwind --app --eslint
 
+      CRITICAL: Source Directory Convention
+      create-next-app asks "Would you like to use `src/` directory?"
+      - If YES: ALL application code goes under src/ (src/app/, src/lib/, src/components/)
+      - If NO: ALL application code goes at root (app/, lib/, components/)
+
+      NEVER mix conventions (lib/ alongside src/lib/).
+      See nextjs.md N0 rule - validator will FAIL on split structures.
+
+      After scaffold, verify tsconfig.json paths match structure:
+      - With src/: "@/*": ["./src/*"]
+      - Without src/: "@/*": ["./*"]
+
       Before scaffold:
       - Decide: App router vs pages router
+      - Decide: src/ directory YES or NO (pick one, stick with it)
 
       After scaffold:
       - Follow nextjs.md for API routes, server components
+      - Verify no split directory structure (nextjs N0)
 
   G8:
     title: Python Scaffold Commands
