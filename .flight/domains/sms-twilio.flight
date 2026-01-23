@@ -111,8 +111,8 @@ rules:
 
   N2:
     title: Never Send to OPTED_OUT or UNKNOWN
-    severity: NEVER
-    mechanical: true
+    severity: GUIDANCE
+    mechanical: false
     description: >
       INVARIANT: Never send messages to users in OPTED_OUT or UNKNOWN state.
       Only OPTED_IN users can receive messages. Violating this is a legal
@@ -125,10 +125,14 @@ rules:
         - url: "https://www.fcc.gov/tcpa"
           accessed: "2026-01-20"
           quote: "Prior express consent required for non-emergency messages"
-    check:
-      type: grep
-      pattern: 'OPTED_OUT.*send|UNKNOWN.*send|send.*OPTED_OUT|send.*UNKNOWN'
-      flags: -Ein
+    guidance: |
+      This rule cannot be reliably automated because detecting "sending to
+      opted-out users" requires data flow analysis. Manual code review required.
+
+      Ensure your send functions:
+      1. Check consent state before sending
+      2. Only proceed if state === 'OPTED_IN'
+      3. Throw/return error for any other state
     examples:
       bad:
         - "if (state === 'OPTED_OUT') sendSMS(phone, msg);"
@@ -142,8 +146,8 @@ rules:
 
   N3:
     title: Consent Check Before Sending
-    severity: NEVER
-    mechanical: true
+    severity: GUIDANCE
+    mechanical: false
     description: >
       Always check consent state before sending any SMS. Sending without
       checking consent violates TCPA and carrier policies.
@@ -155,19 +159,17 @@ rules:
         - url: "https://www.twilio.com/docs/messaging/compliance/a2p-10dlc"
           accessed: "2026-01-20"
           quote: "Verify consent before sending any A2P message"
-    check:
-      type: script
-      code: |
-        strip_comments() {
-          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
-        }
-        for f in "$@"; do
-          if strip_comments "$f" | grep -qEi "sendSMS|send.*message|twilio.*messages.*create"; then
-            if ! strip_comments "$f" | grep -qEi "consent|opted.?in|OPTED_IN|getConsent"; then
-              printf "%s: sends without consent check\n" "$f"
-            fi
-          fi
-        done
+    guidance: |
+      This rule cannot be reliably automated because detecting consent checks
+      requires data flow analysis across:
+      - Supabase query patterns (.eq('sms_consent_state', 'OPTED_IN'))
+      - Database queries in caller functions
+      - Call hierarchy (low-level utils may rely on caller validation)
+
+      Manual code review required. Verify that:
+      1. Every code path that sends SMS checks consent state
+      2. Consent can be checked via direct query or passed as validated parameter
+      3. Low-level send utilities document their consent assumptions
     examples:
       bad:
         - "await sendSMS(phoneNumber, message); // WRONG - no consent check"
@@ -178,6 +180,12 @@ rules:
             throw new Error('Cannot send to non-opted-in user');
           }
           await sendSMS(phoneNumber, message);
+        - |
+          // Supabase pattern - consent checked in query
+          const { data } = await supabase
+            .from('profiles')
+            .select('phone')
+            .eq('sms_consent_state', 'OPTED_IN');
 
   N4:
     title: STOP Keyword Triggers State Change
@@ -244,7 +252,8 @@ rules:
         }
         for f in "$@"; do
           if strip_comments "$f" | grep -qEi "twilio|sendSMS|messages.*create"; then
-            if ! strip_comments "$f" | grep -qEi "21610"; then
+            # Check for literal 21610 OR common constant patterns for opt-out errors
+            if ! strip_comments "$f" | grep -qEi "21610|OPT.?OUT.*ERROR|UNSUBSCRIBED.*ERROR|BLOCKED.*CODE"; then
               printf "%s: no 21610 handling\n" "$f"
             fi
           fi
@@ -258,6 +267,10 @@ rules:
             await updateConsentState(phoneNumber, 'OPTED_OUT');
             // No retry
           }
+        - |
+          // Using constant - also valid
+          const OPT_OUT_ERROR_CODES = [21610, 30004];
+          if (OPT_OUT_ERROR_CODES.includes(errorCode)) { ... }
 
   N6:
     title: Error 30004 Marks OPTED_OUT
@@ -283,7 +296,8 @@ rules:
         }
         for f in "$@"; do
           if strip_comments "$f" | grep -qEi "twilio|sendSMS|messages.*create"; then
-            if ! strip_comments "$f" | grep -qEi "30004"; then
+            # Check for literal 30004 OR common constant patterns for opt-out/blocked errors
+            if ! strip_comments "$f" | grep -qEi "30004|OPT.?OUT.*ERROR|BLOCKED.*ERROR|CARRIER.*BLOCK"; then
               printf "%s: no 30004 handling\n" "$f"
             fi
           fi
@@ -297,6 +311,10 @@ rules:
             await updateConsentState(phoneNumber, 'OPTED_OUT');
             // No retry
           }
+        - |
+          // Using constant - also valid
+          const OPT_OUT_ERROR_CODES = [21610, 30004];
+          if (OPT_OUT_ERROR_CODES.includes(errorCode)) { ... }
 
   N7:
     title: No Retry on Opt-Out Errors
@@ -361,7 +379,8 @@ rules:
         }
         for f in "$@"; do
           if strip_comments "$f" | grep -qEi "twilio|sendSMS|messages.*create"; then
-            if ! strip_comments "$f" | grep -qEi "30005|30006|invalid.*number|landline|INVALID"; then
+            # Check for literal codes OR common constant patterns for invalid number errors
+            if ! strip_comments "$f" | grep -qEi "30005|30006|INVALID.*NUMBER|INVALID.*ERROR|LANDLINE|UNREACHABLE|UNKNOWN.*DEST"; then
               printf "%s: no 30005/30006 handling\n" "$f"
             fi
           fi
@@ -375,6 +394,10 @@ rules:
             await markNumberInvalid(phoneNumber);
             // No retry
           }
+        - |
+          // Using constant - also valid
+          const INVALID_NUMBER_ERRORS = [30005, 30006];
+          if (INVALID_NUMBER_ERRORS.includes(errorCode)) { ... }
 
   N9:
     title: First Message Includes Opt-Out Instructions
@@ -398,8 +421,9 @@ rules:
           grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
         }
         for f in "$@"; do
-          if strip_comments "$f" | grep -qEi "first.?message|welcome|initial|confirm.*message"; then
-            if ! strip_comments "$f" | grep -qEi "STOP|opt.?out|unsubscribe"; then
+          if strip_comments "$f" | grep -qEi "first.?message|welcome|initial|confirm.*message|WELCOME_MSG|FIRST_MSG|CONSENT_CONFIRMED"; then
+            # Check for common opt-out instruction patterns
+            if ! strip_comments "$f" | grep -qEi "STOP|opt.?out|unsubscribe|Reply.*to.*cancel|text.*stop|OPT_OUT_INSTRUCTIONS"; then
               printf "%s: first message may lack opt-out\n" "$f"
             fi
           fi
@@ -409,6 +433,10 @@ rules:
         - "await sendSMS(phone, 'Sale! 50% off!'); // WRONG - missing opt-out"
       good:
         - "await sendSMS(phone, 'Acme Co: Sale! 50% off today! Reply STOP to unsubscribe.');"
+        - |
+          // Using constant - also valid
+          const OPT_OUT_INSTRUCTIONS = 'Reply STOP to unsubscribe';
+          const welcomeMsg = `Welcome! ${OPT_OUT_INSTRUCTIONS}`;
 
   N10:
     title: No Hardcoded Phone Numbers

@@ -25,7 +25,16 @@ cp "$TMP_DIR/update.sh" .
 if [[ -d "$TMP_DIR/flight-lint" ]]; then
     cp -r "$TMP_DIR/flight-lint" .
     echo "Building flight-lint..."
-    (cd flight-lint && npm install && npm run build)
+    echo "  Installing dependencies (including tree-sitter native modules)..."
+    (cd flight-lint && npm install --include=optional) || {
+        echo "Warning: npm install had issues. tree-sitter requires build tools."
+        echo "  On macOS: xcode-select --install"
+        echo "  On Ubuntu: apt-get install build-essential"
+    }
+    echo "  Compiling TypeScript..."
+    (cd flight-lint && npm run build) || {
+        echo "Warning: flight-lint build failed. AST rules will be skipped."
+    }
 fi
 
 # Copy project files only if they don't exist
