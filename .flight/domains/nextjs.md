@@ -137,7 +137,7 @@ Next.js 14+ App Router patterns for server components, routing, and data fetchin
    // Use proper logging service for production
    ```
 
-8. **Fat Route Handlers (>50 lines)** - Route handlers should be thin orchestrators. Extract business logic to separate functions for testability and reuse.
+8. **Fat Route Handlers (>100 lines)** - Route handlers should be thin orchestrators. Extract business logic to separate functions for testability and reuse. 100 lines allows for proper validation, auth, and error handling while flagging genuinely fat handlers.
 
    ```
    // BAD

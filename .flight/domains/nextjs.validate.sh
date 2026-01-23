@@ -134,13 +134,13 @@ check "N6: Hardcoded Multi-segment Routes" \
 check "N7: console.log in App Directory" \
     # Unknown check type: ast
 
-# N8: Fat Route Handlers (>50 lines)
-check "N8: Fat Route Handlers (>50 lines)" \
+# N8: Fat Route Handlers (>100 lines)
+check "N8: Fat Route Handlers (>100 lines)" \
     bash -c 'for f in "$@"; do
     if [[ "$f" == *route.ts ]]; then
         lines=$(wc -l < "$f")
-        if [ "$lines" -gt 50 ]; then
-            echo "$f: $lines lines (max 50)"
+        if [ "$lines" -gt 100 ]; then
+            echo "$f: $lines lines (max 100)"
         fi
     fi
 done' _ "${FILES[@]}"
