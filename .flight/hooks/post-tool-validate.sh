@@ -52,9 +52,23 @@ main() {
             ;;
     esac
 
+    # Check if flight-lint is available
+    if ! check_flight_lint_available; then
+        # Approve with warning - post-tool is feedback only, stop hook will block
+        respond "approve" "" \
+            "Warning: flight-lint not found. Validation skipped.\nBuild with: cd flight-lint && npm install && npm run build"
+        exit 0
+    fi
+
     # Run flight-lint
     local lint_output
     lint_output="$(run_flight_lint 2>&1)" || true
+
+    # Check for flight-lint errors
+    if [[ "$lint_output" == "__FLIGHT_LINT_NOT_FOUND__" ]]; then
+        respond "approve" "" "Warning: flight-lint returned an error. Validation skipped."
+        exit 0
+    fi
 
     # Count violations
     local total_violations
