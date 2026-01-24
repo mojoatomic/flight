@@ -18,7 +18,9 @@ git clone --depth 1 "$REPO" "$TMP_DIR" 2>/dev/null
 
 # Copy Flight core
 cp -r "$TMP_DIR/.flight" .
-cp -r "$TMP_DIR/.claude" .
+mkdir -p .claude
+cp "$TMP_DIR/.flight/templates/claude-settings.json" .claude/settings.json
+cp -r "$TMP_DIR/.claude/skills" .claude/
 cp "$TMP_DIR/update.sh" .
 
 # Copy flight-lint (AST validation tool)

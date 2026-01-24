@@ -24,8 +24,8 @@ if [[ -d "$TMP_DIR/.claude/skills" ]]; then
     cp -r "$TMP_DIR/.claude/skills/"* .claude/skills/ 2>/dev/null || true
 fi
 
-# Update settings.json (hooks configuration)
-[[ -f "$TMP_DIR/.claude/settings.json" ]] && cp "$TMP_DIR/.claude/settings.json" .claude/settings.json
+# Update settings.json (hooks configuration) from template
+[[ -f "$TMP_DIR/.flight/templates/claude-settings.json" ]] && cp "$TMP_DIR/.flight/templates/claude-settings.json" .claude/settings.json
 
 # Update FLIGHT.md (core methodology)
 [[ -f "$TMP_DIR/.flight/FLIGHT.md" ]] && cp "$TMP_DIR/.flight/FLIGHT.md" .flight/FLIGHT.md

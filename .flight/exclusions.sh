@@ -67,6 +67,9 @@ FLIGHT_EXCLUDE_DIRS=(
 
     # Flight tooling (linter should not lint itself)
     "flight-lint"
+
+    # Dev scripts (not installed to user projects)
+    "scripts"
 )
 
 # Files to exclude from validation (auto-generated or upstream-managed)

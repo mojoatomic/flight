@@ -15,3 +15,7 @@ PRIME.md
 PROMPT.md
 PRD.md
 MILESTONES.md
+
+# Claude Code settings (installed to consumer projects, not source repo)
+.claude/settings.json
+.claude/settings.local.json
