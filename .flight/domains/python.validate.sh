@@ -148,6 +148,22 @@ done' _ "${FILES[@]}"
 check "N10: Hardcoded Credentials" \
     grep -Eni "(password|passwd|api_key|api_secret|secret_key|auth_token|access_token)\\s*=\\s*['\"][^'\"]{8,}['\"]" "${FILES[@]}"
 
+# N11: eval() Usage
+check "N11: eval() Usage" \
+    # Unknown check type: ast
+
+# N12: exec() Usage
+check "N12: exec() Usage" \
+    # Unknown check type: ast
+
+# N13: subprocess shell=True
+check "N13: subprocess shell=True" \
+    # Unknown check type: ast
+
+# N14: pickle.loads() on Untrusted Data
+check "N14: pickle.loads() on Untrusted Data" \
+    # Unknown check type: ast
+
 printf '\n%s\n' "## SHOULD Rules"
 
 # S1: String += Patterns

@@ -178,6 +178,62 @@ Production Python patterns for clean, maintainable, type-safe code. Prevents com
    auth_token = get_secret('auth_token')
    ```
 
+11. **eval() Usage** - Never use eval() to execute arbitrary code. It allows code injection attacks if any part of the input is user-controlled.
+
+   ```
+   // BAD
+   result = eval(user_input)
+   // BAD
+   config = eval(f'dict({params})')
+
+   // GOOD
+   result = ast.literal_eval(user_input)  # Safe for literals only
+   // GOOD
+   config = json.loads(params)
+   ```
+
+12. **exec() Usage** - Never use exec() to execute code strings. It allows arbitrary code execution and is almost never necessary.
+
+   ```
+   // BAD
+   exec(code_string)
+   // BAD
+   exec(f'import {module_name}')
+
+   // GOOD
+   importlib.import_module(module_name)
+   // GOOD
+   # Redesign to avoid dynamic code execution
+   ```
+
+13. **subprocess shell=True** - Never use shell=True with subprocess. It enables shell injection attacks when any part of the command is user-controlled.
+
+   ```
+   // BAD
+   subprocess.run(f'ls {user_dir}', shell=True)
+   // BAD
+   subprocess.call(cmd_string, shell=True)
+
+   // GOOD
+   subprocess.run(['ls', user_dir])
+   // GOOD
+   subprocess.call(shlex.split(cmd_string))
+   ```
+
+14. **pickle.loads() on Untrusted Data** - Never unpickle data from untrusted sources. Pickle can execute arbitrary code during deserialization.
+
+   ```
+   // BAD
+   data = pickle.loads(request.body)
+   // BAD
+   obj = pickle.load(open(user_file, 'rb'))
+
+   // GOOD
+   data = json.loads(request.body)
+   // GOOD
+   obj = msgpack.unpackb(content)
+   ```
+
 ### SHOULD (validator warns)
 
 1. **String += Patterns** - Avoid string concatenation with += in loops. It creates O(n²) complexity due to string immutability.
@@ -328,3 +384,7 @@ Production Python patterns for clean, maintainable, type-safe code. Prevents com
 | Hardcoded paths |  | pathlib.Path |
 | Generic names |  | Domain terms |
 | password = 'secret' |  | os.environ.get() |
+| eval(user_input) |  | ast.literal_eval() or json.loads() |
+| exec(code_string) |  | Redesign without dynamic code |
+| shell=True |  | Pass args as list |
+| pickle.loads() |  | Use JSON or msgpack |

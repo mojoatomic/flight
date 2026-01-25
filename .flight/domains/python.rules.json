@@ -120,6 +120,66 @@
       }
     },
     {
+      "id": "N11",
+      "title": "eval() Usage",
+      "severity": "NEVER",
+      "type": "ast",
+      "language": "python",
+      "pattern": null,
+      "query": "(call\n  function: (identifier) @fn\n  (#eq? @fn \"eval\")) @violation",
+      "message": "Never use eval() to execute arbitrary code. It allows code injection attacks if any part of the input is user-controlled.",
+      "provenance": {
+        "last_verified": "2026-01-25",
+        "confidence": "high",
+        "re_verify_after": "2026-07-25"
+      }
+    },
+    {
+      "id": "N12",
+      "title": "exec() Usage",
+      "severity": "NEVER",
+      "type": "ast",
+      "language": "python",
+      "pattern": null,
+      "query": "(call\n  function: (identifier) @fn\n  (#eq? @fn \"exec\")) @violation",
+      "message": "Never use exec() to execute code strings. It allows arbitrary code execution and is almost never necessary.",
+      "provenance": {
+        "last_verified": "2026-01-25",
+        "confidence": "high",
+        "re_verify_after": "2026-07-25"
+      }
+    },
+    {
+      "id": "N13",
+      "title": "subprocess shell=True",
+      "severity": "NEVER",
+      "type": "ast",
+      "language": "python",
+      "pattern": null,
+      "query": "(call\n  function: (attribute\n    object: (identifier) @mod\n    attribute: (identifier) @method)\n  arguments: (argument_list\n    (keyword_argument\n      name: (identifier) @kwarg\n      value: (true)))\n  (#eq? @mod \"subprocess\")\n  (#match? @method \"^(run|call|Popen|check_output|check_call)$\")\n  (#eq? @kwarg \"shell\")) @violation",
+      "message": "Never use shell=True with subprocess. It enables shell injection attacks when any part of the command is user-controlled.",
+      "provenance": {
+        "last_verified": "2026-01-25",
+        "confidence": "high",
+        "re_verify_after": "2026-07-25"
+      }
+    },
+    {
+      "id": "N14",
+      "title": "pickle.loads() on Untrusted Data",
+      "severity": "NEVER",
+      "type": "ast",
+      "language": "python",
+      "pattern": null,
+      "query": "(call\n  function: (attribute\n    object: (identifier) @mod\n    attribute: (identifier) @method)\n  (#eq? @mod \"pickle\")\n  (#match? @method \"^(loads?|Unpickler)$\")) @violation",
+      "message": "Never unpickle data from untrusted sources. Pickle can execute arbitrary code during deserialization.",
+      "provenance": {
+        "last_verified": "2026-01-25",
+        "confidence": "high",
+        "re_verify_after": "2026-07-25"
+      }
+    },
+    {
       "id": "S1",
       "title": "String += Patterns",
       "severity": "SHOULD",

@@ -14,6 +14,24 @@ WINDOWS_PATH = 'C:\\Users\\admin\\config.ini'
 password = 'mysecretpassword123'
 api_key = 'sk-proj-abc123def456ghi789'
 
+# N11: eval() usage (NEVER) - AST rule
+def bad_eval(user_input):
+    return eval(user_input)
+
+# N12: exec() usage (NEVER) - AST rule
+def bad_exec(code_string):
+    exec(code_string)
+
+# N13: subprocess shell=True (NEVER) - AST rule
+import subprocess
+def bad_shell(cmd):
+    subprocess.run(cmd, shell=True)
+
+# N14: pickle.loads() (NEVER) - AST rule
+import pickle
+def bad_pickle(data):
+    return pickle.loads(data)
+
 # N1: Bare except (NEVER) - AST rule
 def bad_except():
     try:
