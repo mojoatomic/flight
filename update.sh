@@ -46,33 +46,21 @@ if [[ -d "$TMP_DIR/.flight/bin" ]]; then
 fi
 
 # Update flight-lint (AST validation tool)
+# Always rebuild to ensure dist matches updated source files
 if [[ -d "$TMP_DIR/flight-lint" ]]; then
-    if [[ -d "flight-lint/node_modules" ]]; then
-        # Preserve existing node_modules and dist
-        mv flight-lint/node_modules /tmp/flight-lint-node_modules-$$ 2>/dev/null || true
-        mv flight-lint/dist /tmp/flight-lint-dist-$$ 2>/dev/null || true
-        rm -rf flight-lint
-        cp -r "$TMP_DIR/flight-lint" .
-        mv /tmp/flight-lint-node_modules-$$ flight-lint/node_modules 2>/dev/null || true
-        mv /tmp/flight-lint-dist-$$ flight-lint/dist 2>/dev/null || true
-    else
-        rm -rf flight-lint
-        cp -r "$TMP_DIR/flight-lint" .
-    fi
-    # Build if not already built or if source is newer
-    if [[ ! -d "flight-lint/dist" ]] || [[ ! -d "flight-lint/node_modules" ]]; then
-        echo "Building flight-lint..."
-        echo "  Installing dependencies (including tree-sitter native modules)..."
-        (cd flight-lint && CI=true npm install --include=optional --legacy-peer-deps) || {
-            echo "Warning: npm install had issues. tree-sitter requires build tools."
-            echo "  On macOS: xcode-select --install"
-            echo "  On Ubuntu: apt-get install build-essential"
-        }
-        echo "  Compiling TypeScript..."
-        (cd flight-lint && CI=true npm run build) || {
-            echo "Warning: flight-lint build failed. AST rules will be skipped."
-        }
-    fi
+    rm -rf flight-lint
+    cp -r "$TMP_DIR/flight-lint" .
+    echo "Building flight-lint..."
+    echo "  Installing dependencies (including tree-sitter native modules)..."
+    (cd flight-lint && CI=true npm install --include=optional --legacy-peer-deps) || {
+        echo "Warning: npm install had issues. tree-sitter requires build tools."
+        echo "  On macOS: xcode-select --install"
+        echo "  On Ubuntu: apt-get install build-essential"
+    }
+    echo "  Compiling TypeScript..."
+    (cd flight-lint && CI=true npm run build) || {
+        echo "Warning: flight-lint build failed. AST rules will be skipped."
+    }
 fi
 
 # Update examples, exercises, templates (learning resources)
@@ -118,7 +106,7 @@ echo "  - .flight/hooks/* (self-validation hooks)"
 echo "  - .flight/bin/* (tooling scripts)"
 echo "  - .flight/examples/, exercises/, templates/"
 echo "  - .flight/inject-flight-protocol.sh, protocol-block.md"
-echo "  - flight-lint/* (AST validation tool)"
+echo "  - flight-lint/* (AST validation tool - rebuilt)"
 echo "  - CLAUDE.md (Flight Execution Protocol injected/updated)"
 echo ""
 echo "Preserved:"
@@ -126,6 +114,3 @@ echo "  - CLAUDE.md (your project description - protocol section updated only)"
 echo "  - PROMPT.md, PRIME.md (your working files)"
 echo "  - .flight/known-landmines.md (your project's temporal data)"
 echo "  - Custom domains (any .md/.sh not in Flight repo)"
-echo ""
-echo "If AST validation fails (missing tree-sitter packages), rebuild flight-lint:"
-echo "  cd flight-lint && npm install --legacy-peer-deps && npm run build"
