@@ -33,6 +33,17 @@ fi
 # Main
 # -----------------------------------------------------------------------------
 main() {
+    # Read input from stdin
+    local input_json
+    input_json="$(read_stdin_json)"
+
+    # Only validate when there's tool use - skip text-only responses
+    # This prevents infinite loops when Claude is just responding with text
+    if ! has_tool_use "$input_json"; then
+        respond "approve" "" ""
+        return 0
+    fi
+
     # Check if flight-lint is available
     if ! check_flight_lint_available; then
         # Block with clear message - don't silently approve
