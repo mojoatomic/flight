@@ -91,7 +91,8 @@ check "N1: Tab Characters" \
 
 # N2: Duplicate Keys
 check "N2: Duplicate Keys" \
-    bash -c '# Check for duplicate keys at the same indentation level
+    bash -c 'for file in "$@"; do
+# Check for duplicate keys at the same indentation level
 awk '"'"'
 /^[[:space:]]*[^#[:space:]][^:]*:/ {
   # Extract indentation and key
@@ -114,7 +115,8 @@ awk '"'"'
   if (indent == 0) indent_context++;
 }
 END { exit found ? 1 : 0 }
-'"'"' "$file"' _ "${FILES[@]}"
+'"'"' "$file"
+done' _ "${FILES[@]}"
 
 # N3: Unsafe YAML Load
 check "N3: Unsafe YAML Load" \
@@ -152,7 +154,8 @@ check "M6: Unquoted Special Strings" \
 
 # M7: Inconsistent Indentation
 check "M7: Inconsistent Indentation" \
-    bash -c '# Check for inconsistent indentation increments
+    bash -c 'for file in "$@"; do
+# Check for inconsistent indentation increments
 awk '"'"'
 BEGIN { base_indent = 0; last_indent = 0 }
 /^[[:space:]]+[^#[:space:]]/ {
@@ -172,7 +175,8 @@ BEGIN { base_indent = 0; last_indent = 0 }
 }
 /^[^[:space:]#]/ { last_indent = 0 }
 END { exit found ? 1 : 0 }
-'"'"' "$file"' _ "${FILES[@]}"
+'"'"' "$file"
+done' _ "${FILES[@]}"
 
 # M8: Trailing Whitespace in Multiline
 check "M8: Trailing Whitespace in Multiline" \
@@ -182,7 +186,8 @@ printf '\n%s\n' "## SHOULD Rules"
 
 # S1: Prefer Explicit Document Start
 warn "S1: Prefer Explicit Document Start" \
-    bash -c '# Warn if file has multiple documents without ---
+    bash -c 'for file in "$@"; do
+# Warn if file has multiple documents without ---
 if grep -q '"'"'^---'"'"' "$file"; then
   exit 0  # Has document markers
 fi
@@ -190,7 +195,8 @@ if grep -c '"'"'^\.\.\.$'"'"' "$file" > /dev/null 2>&1; then
   echo "$file:1: missing document start marker (---) in multi-doc file"
   exit 1
 fi
-exit 0' _ "${FILES[@]}"
+exit 0
+done' _ "${FILES[@]}"
 
 # S2: Quote Strings Starting with Special Characters
 warn "S2: Quote Strings Starting with Special Characters" \

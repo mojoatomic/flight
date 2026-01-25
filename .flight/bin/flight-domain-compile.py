@@ -746,7 +746,9 @@ def generate_check_command(rule: Rule) -> str:
         code = check.get("code", "").strip()
         # Escape single quotes for embedding in bash -c
         code = code.replace("'", "'\"'\"'")
-        return f"bash -c '{code}' _ \"${{FILES[@]}}\""
+        # Wrap in a for loop to iterate over files, setting $file for each
+        # This allows scripts to reference $file as expected
+        return f"bash -c 'for file in \"$@\"; do\n{code}\ndone' _ \"${{FILES[@]}}\""
 
     elif check_type == "multi-condition":
         logic = check.get("logic", "AND")

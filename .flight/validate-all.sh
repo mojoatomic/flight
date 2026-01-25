@@ -187,9 +187,10 @@ run_validator() {
     output=$("$validator" 2>&1) || exit_code=$?
 
     # Parse results from output
-    local pass=$(echo "$output" | grep -oE 'PASS:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | tail -1 || echo "0")
-    local fail=$(echo "$output" | grep -oE 'FAIL:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | tail -1 || echo "0")
-    local warn=$(echo "$output" | grep -oE 'WARN:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | tail -1 || echo "0")
+    # Use subshell to prevent SIGPIPE from killing script with pipefail
+    local pass=$( (echo "$output" | grep -oE 'PASS:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | tail -1) || echo "0")
+    local fail=$( (echo "$output" | grep -oE 'FAIL:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | tail -1) || echo "0")
+    local warn=$( (echo "$output" | grep -oE 'WARN:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | tail -1) || echo "0")
 
     # Default to 0 if empty
     pass=${pass:-0}
@@ -254,7 +255,8 @@ fi
 has_ast_rules() {
     local rules_dir="$SCRIPT_DIR/domains"
     if [[ -d "$rules_dir" ]]; then
-        grep -l '"type": "ast"' "$rules_dir"/*.rules.json 2>/dev/null | head -1
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (grep -l '"type": "ast"' "$rules_dir"/*.rules.json 2>/dev/null | head -1) || true
     fi
 }
 
@@ -270,8 +272,9 @@ if [[ -n "$FLIGHT_LINT" ]]; then
 
         # Parse flight-lint output for error/warning counts
         # Format: "✗ N error(s)" and "⚠ N warning(s)"
-        AST_ERRORS=$(echo "$LINT_OUTPUT" | grep -oE '✗ [0-9]+ error' | grep -oE '[0-9]+' | head -1 || echo "0")
-        AST_WARNINGS=$(echo "$LINT_OUTPUT" | grep -oE '⚠ [0-9]+ warning' | grep -oE '[0-9]+' | head -1 || echo "0")
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        AST_ERRORS=$( (echo "$LINT_OUTPUT" | grep -oE '✗ [0-9]+ error' | grep -oE '[0-9]+' | head -1) || echo "0")
+        AST_WARNINGS=$( (echo "$LINT_OUTPUT" | grep -oE '⚠ [0-9]+ warning' | grep -oE '[0-9]+' | head -1) || echo "0")
         AST_ERRORS=${AST_ERRORS:-0}
         AST_WARNINGS=${AST_WARNINGS:-0}
 
