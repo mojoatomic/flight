@@ -70,17 +70,44 @@ CONFIG_FILE="$SCRIPT_DIR/flight.json"
 
 # -----------------------------------------------------------------------------
 # Config-driven mode: read enabled domains from flight.json
+# Supports v1 (enabled_domains) and v2 (domains.source/test) schemas
 # -----------------------------------------------------------------------------
 
+CONFIG_MODE=false
+CONFIG_VERSION="1"
+ENABLED_DOMAINS=""
+SOURCE_DOMAINS=""
+TEST_DOMAINS=""
+SOURCE_PATHS=""
+TEST_PATHS=""
+EXCLUDE_PATHS=""
+
 if [[ -f "$CONFIG_FILE" ]]; then
-    ENABLED_DOMAINS=$(jq -r '.enabled_domains[]' "$CONFIG_FILE" 2>/dev/null || echo "")
-    CONFIG_MODE=true
-    if [[ -z "$ENABLED_DOMAINS" ]]; then
-        echo "Warning: flight.json exists but enabled_domains is empty or invalid" >&2
-        CONFIG_MODE=false
+    # Detect schema version
+    CONFIG_VERSION=$(jq -r '.version // "1"' "$CONFIG_FILE" 2>/dev/null || echo "1")
+
+    if [[ "$CONFIG_VERSION" == "2" ]]; then
+        # v2 schema: separate source and test domains
+        SOURCE_DOMAINS=$(jq -r '.domains.source[]? // empty' "$CONFIG_FILE" 2>/dev/null || echo "")
+        TEST_DOMAINS=$(jq -r '.domains.test[]? // empty' "$CONFIG_FILE" 2>/dev/null || echo "")
+        SOURCE_PATHS=$(jq -r '.paths.source[]? // empty' "$CONFIG_FILE" 2>/dev/null || echo "")
+        TEST_PATHS=$(jq -r '.paths.test[]? // empty' "$CONFIG_FILE" 2>/dev/null || echo "")
+        EXCLUDE_PATHS=$(jq -r '.paths.exclude[]? // empty' "$CONFIG_FILE" 2>/dev/null || echo "")
+
+        if [[ -n "$SOURCE_DOMAINS" ]] || [[ -n "$TEST_DOMAINS" ]]; then
+            CONFIG_MODE=true
+        else
+            echo "Warning: flight.json v2 exists but domains.source/test are empty" >&2
+        fi
+    else
+        # v1 schema: flat enabled_domains list
+        ENABLED_DOMAINS=$(jq -r '.enabled_domains[]' "$CONFIG_FILE" 2>/dev/null || echo "")
+        if [[ -n "$ENABLED_DOMAINS" ]]; then
+            CONFIG_MODE=true
+        else
+            echo "Warning: flight.json exists but enabled_domains is empty or invalid" >&2
+        fi
     fi
-else
-    CONFIG_MODE=false
 fi
 
 # Source exclusions helper (required - ships with validate-all.sh)
@@ -138,14 +165,24 @@ is_domain_enabled() {
     if [[ "$CONFIG_MODE" == false ]]; then
         return 0  # Legacy mode - all domains enabled
     fi
-    echo "$ENABLED_DOMAINS" | grep -qw "$domain"
+    if [[ "$CONFIG_VERSION" == "2" ]]; then
+        # v2: check both source and test domains
+        echo "$SOURCE_DOMAINS $TEST_DOMAINS" | grep -qw "$domain"
+    else
+        # v1: check flat list
+        echo "$ENABLED_DOMAINS" | grep -qw "$domain"
+    fi
 }
 
 echo -e "${BLUE}═══════════════════════════════════════════${NC}"
 echo -e "${BLUE}       Flight Validation Runner${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════${NC}"
 if [[ "$CONFIG_MODE" == true ]]; then
-    echo -e "${GREEN}Mode: Config-driven (flight.json)${NC}"
+    if [[ "$CONFIG_VERSION" == "2" ]]; then
+        echo -e "${GREEN}Mode: Config-driven (flight.json v2)${NC}"
+    else
+        echo -e "${GREEN}Mode: Config-driven (flight.json v1)${NC}"
+    fi
 else
     echo -e "${YELLOW}Mode: Legacy (no flight.json)${NC}"
 fi
@@ -227,10 +264,34 @@ run_validator() {
 # -----------------------------------------------------------------------------
 
 if [[ "$CONFIG_MODE" == true ]]; then
-    # Config-driven: loop over enabled domains from flight.json
-    for domain in $ENABLED_DOMAINS; do
-        run_validator "$domain"
-    done
+    if [[ "$CONFIG_VERSION" == "2" ]]; then
+        # v2: Categorized validation - source domains then test domains
+        if [[ -n "$SOURCE_DOMAINS" ]]; then
+            echo -e "${BLUE}▸ Source file validation${NC}"
+            # Export context for validators
+            export FLIGHT_FILE_CATEGORY="source"
+            for domain in $SOURCE_DOMAINS; do
+                run_validator "$domain"
+            done
+        fi
+
+        if [[ -n "$TEST_DOMAINS" ]]; then
+            echo ""
+            echo -e "${BLUE}▸ Test file validation${NC}"
+            # Export context for validators
+            export FLIGHT_FILE_CATEGORY="test"
+            for domain in $TEST_DOMAINS; do
+                run_validator "$domain"
+            done
+        fi
+        # Clear category after validation
+        unset FLIGHT_FILE_CATEGORY
+    else
+        # v1: Loop over flat enabled_domains list
+        for domain in $ENABLED_DOMAINS; do
+            run_validator "$domain"
+        done
+    fi
 else
     # Legacy mode: no flight.json found
     echo -e "${YELLOW}No flight.json found. Run /flight-scan to detect domains.${NC}"

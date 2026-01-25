@@ -605,6 +605,7 @@ If MCP tools aren't available, fall back to web search.
 | `.flight/bin/flight-domain-compile.py` | Domain compiler (generates .md + .sh) |
 | `.flight/templates/domain-schema-v2.flight` | Schema v2 template with provenance |
 | `.flight/validate-all.sh` | Runs bash validators + flight-lint (AST) automatically |
+| `.flight/flight.json` | Project config: enabled domains, source/test paths |
 | `.flight/tests/run-tests.sh` | Validator test suite runner |
 | `tests/validator-fixtures/` | Test fixtures for each validator |
 | `.flight/known-landmines.md` | Temporal issues discovered during research |
@@ -728,6 +729,76 @@ for file in "${files[@]}"; do
     # Run validation...
 done
 ```
+
+---
+
+## Project Configuration (flight.json)
+
+The `.flight/flight.json` file configures which domains are enabled and how files are categorized. Generate it with `/flight-scan`.
+
+### Schema v2 (Recommended)
+
+v2 separates source and test files with different validation rules:
+
+```json
+{
+  "version": "2",
+  "generated": "2026-01-25T12:00:00Z",
+  "scan_root": ".",
+  "paths": {
+    "source": ["src", "lib"],
+    "test": ["tests", "__tests__", "**/*.test.ts"],
+    "exclude": []
+  },
+  "domains": {
+    "source": ["code-hygiene", "typescript", "react"],
+    "test": ["testing"]
+  },
+  "detection_log": {
+    "code-hygiene": "always enabled",
+    "typescript": "found *.ts files",
+    "react": "package.json: react",
+    "testing": "package.json: vitest"
+  }
+}
+```
+
+**Fields:**
+
+| Field | Description |
+|-------|-------------|
+| `version` | Schema version (`"2"` for source/test separation) |
+| `paths.source` | Directories containing source code |
+| `paths.test` | Directories/patterns for test files |
+| `paths.exclude` | Additional exclusions (beyond .flightignore) |
+| `domains.source` | Domains to run on source files |
+| `domains.test` | Domains to run on test files |
+| `detection_log` | Why each domain was enabled |
+
+### Schema v1 (Legacy)
+
+v1 uses a flat list with no source/test distinction:
+
+```json
+{
+  "generated": "2026-01-15T12:00:00Z",
+  "scan_root": ".",
+  "enabled_domains": ["code-hygiene", "typescript", "react", "testing"],
+  "detection_log": { ... }
+}
+```
+
+### Migration
+
+To upgrade from v1 to v2, run `/flight-scan`. It auto-detects source and test paths.
+
+### Validation Behavior
+
+| Config Version | Validation |
+|----------------|------------|
+| v2 | Source files → source domains; Test files → test domains |
+| v1 | All files → all enabled domains |
+| No config | Falls back to code-hygiene only |
 
 ---
 

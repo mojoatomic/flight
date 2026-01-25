@@ -389,8 +389,9 @@ flight_get_files() {
     # Execute and output results
     # Use subshell to isolate potential errors from set -e
     # Filter through flight_filter_excluded to remove auto-generated files
+    # Filter through flight_filter_by_category for v2 source/test separation
     # Redirect stdin from /dev/null to prevent hanging in piped contexts (curl | bash)
-    (eval "$find_cmd" < /dev/null 2>/dev/null || true) | flight_filter_excluded | sort
+    (eval "$find_cmd" < /dev/null 2>/dev/null || true) | flight_filter_excluded | flight_filter_by_category | sort
 }
 
 # -----------------------------------------------------------------------------
@@ -439,7 +440,7 @@ flight_get_files_for_patterns() {
 
         # Run find - redirect stdin from /dev/null to prevent hanging in piped contexts
         eval "find \"$dir_part\" -type f -name \"$name_part\" $find_excludes < /dev/null 2>/dev/null"
-    done | flight_filter_excluded | sort -u
+    done | flight_filter_excluded | flight_filter_by_category | sort -u
 }
 
 # -----------------------------------------------------------------------------
@@ -469,6 +470,52 @@ flight_filter_excluded() {
     local file
     while IFS= read -r file; do
         if ! flight_is_excluded "$file"; then
+            echo "$file"
+        fi
+    done
+}
+
+# -----------------------------------------------------------------------------
+# flight_filter_by_category - Filter files by source/test category
+# -----------------------------------------------------------------------------
+# Uses FLIGHT_FILE_CATEGORY environment variable set by validate-all.sh
+# when running in v2 mode.
+#
+# Categories:
+#   - source: Only non-test files (excludes test files)
+#   - test: Only test files (uses flight_is_test_file)
+#   - (unset): Pass all files through (v1 mode / legacy)
+#
+# Input:
+#   Files via stdin, one per line
+# Output:
+#   Filtered files based on category, one per line
+# Example:
+#   find . -name "*.ts" | flight_filter_by_category
+# -----------------------------------------------------------------------------
+flight_filter_by_category() {
+    local file
+    local category="${FLIGHT_FILE_CATEGORY:-}"
+
+    if [[ -z "$category" ]]; then
+        # No category set - pass through all files (v1/legacy mode)
+        cat
+        return
+    fi
+
+    while IFS= read -r file; do
+        if [[ "$category" == "source" ]]; then
+            # Source mode: exclude test files
+            if ! flight_is_test_file "$file"; then
+                echo "$file"
+            fi
+        elif [[ "$category" == "test" ]]; then
+            # Test mode: only include test files
+            if flight_is_test_file "$file"; then
+                echo "$file"
+            fi
+        else
+            # Unknown category - pass through
             echo "$file"
         fi
     done
