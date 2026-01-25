@@ -16,8 +16,31 @@ echo "Installing Flight..."
 
 git clone --depth 1 "$REPO" "$TMP_DIR" 2>/dev/null
 
-# Copy Flight core
-cp -r "$TMP_DIR/.flight" .
+# Copy Flight core (selectively - exclude internal dev files)
+mkdir -p .flight/domains .flight/bin .flight/hooks
+mkdir -p .flight/templates .flight/examples .flight/exercises
+
+# Core files
+cp "$TMP_DIR/.flight/FLIGHT.md" .flight/
+cp "$TMP_DIR/.flight/validate-all.sh" .flight/
+cp "$TMP_DIR/.flight/exclusions.sh" .flight/
+cp "$TMP_DIR/.flight/inject-flight-protocol.sh" .flight/
+cp "$TMP_DIR/.flight/protocol-block.md" .flight/
+[[ -f "$TMP_DIR/.flight/flight.json" ]] && cp "$TMP_DIR/.flight/flight.json" .flight/
+
+# Directories (only user-facing content)
+cp -r "$TMP_DIR/.flight/domains/"* .flight/domains/ 2>/dev/null || true
+cp -r "$TMP_DIR/.flight/bin/"* .flight/bin/ 2>/dev/null || true
+cp -r "$TMP_DIR/.flight/hooks/"* .flight/hooks/ 2>/dev/null || true
+cp -r "$TMP_DIR/.flight/templates/"* .flight/templates/ 2>/dev/null || true
+cp -r "$TMP_DIR/.flight/examples/"* .flight/examples/ 2>/dev/null || true
+cp -r "$TMP_DIR/.flight/exercises/"* .flight/exercises/ 2>/dev/null || true
+
+# NOT copied (internal dev files):
+# - .flight/tests/ (test fixtures with intentional violations)
+# - .flight/research/ (internal research)
+# - .flight/docs/ (internal documentation)
+# - .flight/requirements-test.txt (Python test deps)
 mkdir -p .claude
 cp "$TMP_DIR/.flight/templates/claude-settings.json" .claude/settings.json
 cp -r "$TMP_DIR/.claude/skills" .claude/
