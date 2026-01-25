@@ -76,8 +76,13 @@ FLIGHT_EXCLUDE_DIRS=(
     # Flight tooling (linter should not lint itself)
     "flight-lint"
 
-    # Dev scripts (not installed to user projects)
+    # Dev scripts and tooling (internal, not product code)
     "scripts"
+    "tooling"
+    "tools"
+
+    # Documentation (may contain code examples, not product code)
+    "docs"
 )
 
 # Files to exclude from validation (auto-generated or upstream-managed)
@@ -91,7 +96,174 @@ FLIGHT_EXCLUDE_FILES=(
 
     # Upstream-managed (Flight framework files)
     "update.sh"
+
+    # Config files (not source code - tooling configuration)
+    "*.config.js"
+    "*.config.ts"
+    "*.config.mjs"
+    "*.config.cjs"
+    "eslint.config.*"
+    "prettier.config.*"
+    "vitest.config.*"
+    "vite.config.*"
+    "jest.config.*"
+    "webpack.config.*"
+    "rollup.config.*"
+    "tailwind.config.*"
+    "postcss.config.*"
+    "next.config.*"
+    "nuxt.config.*"
+    "svelte.config.*"
+    "astro.config.*"
+    "tsconfig.json"
+    "tsconfig.*.json"
+    "jsconfig.json"
+
+    # Package manifests (not source code)
+    "package.json"
+    "package-lock.json"
+    "pnpm-lock.yaml"
+    "yarn.lock"
+    "bun.lockb"
+    "Cargo.toml"
+    "Cargo.lock"
+    "go.mod"
+    "go.sum"
+    "requirements.txt"
+    "pyproject.toml"
+    "poetry.lock"
+    "Gemfile"
+    "Gemfile.lock"
+    "composer.json"
+    "composer.lock"
 )
+
+# -----------------------------------------------------------------------------
+# flight_load_flightignore - Load project-specific exclusions from .flightignore
+# -----------------------------------------------------------------------------
+# Reads .flightignore file (if exists) and adds patterns to exclusion arrays.
+# Supports gitignore-style patterns:
+#   - Lines starting with # are comments
+#   - Blank lines are ignored
+#   - Patterns ending with / are directory patterns
+#   - All other patterns are file patterns
+#
+# Usage: Call once at start of validation
+#   flight_load_flightignore
+# -----------------------------------------------------------------------------
+flight_load_flightignore() {
+    local search_dir="${FLIGHT_SEARCH_DIR:-.}"
+    local ignore_file="$search_dir/.flightignore"
+
+    # Return early if no .flightignore file exists
+    [[ ! -f "$ignore_file" ]] && return 0
+
+    local line
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        # Skip empty lines and comments
+        [[ -z "$line" ]] && continue
+        [[ "$line" == \#* ]] && continue
+
+        # Trim leading/trailing whitespace
+        line="${line#"${line%%[![:space:]]*}"}"
+        line="${line%"${line##*[![:space:]]}"}"
+        [[ -z "$line" ]] && continue
+
+        # Patterns ending with / are directory patterns
+        if [[ "$line" == */ ]]; then
+            # Remove trailing slash for directory name
+            FLIGHT_EXCLUDE_DIRS+=("${line%/}")
+        else
+            # File pattern
+            FLIGHT_EXCLUDE_FILES+=("$line")
+        fi
+    done < "$ignore_file"
+}
+
+# Auto-load .flightignore when this script is sourced
+flight_load_flightignore
+
+# -----------------------------------------------------------------------------
+# Test file patterns for categorization
+# -----------------------------------------------------------------------------
+# These patterns identify test files that should be validated by the testing
+# domain rather than source-code domains. Used by flight_is_test_file().
+# -----------------------------------------------------------------------------
+FLIGHT_TEST_FILE_PATTERNS=(
+    # JavaScript/TypeScript test files
+    "*.test.js"
+    "*.test.ts"
+    "*.test.jsx"
+    "*.test.tsx"
+    "*.spec.js"
+    "*.spec.ts"
+    "*.spec.jsx"
+    "*.spec.tsx"
+
+    # Python test files
+    "test_*.py"
+    "*_test.py"
+
+    # Go test files
+    "*_test.go"
+
+    # Java test files
+    "*Test.java"
+    "*Tests.java"
+
+    # Rust test files (embedded in source, but also separate files)
+    "*_test.rs"
+)
+
+# Test directories - files inside these are always test files
+FLIGHT_TEST_DIRS=(
+    "tests"
+    "test"
+    "__tests__"
+    "e2e"
+    "spec"
+    "integration-tests"
+    "unit-tests"
+)
+
+# -----------------------------------------------------------------------------
+# flight_is_test_file - Check if a path is a test file
+# -----------------------------------------------------------------------------
+# Arguments:
+#   $1 - File path to check
+# Returns:
+#   0 (true) if path is a test file
+#   1 (false) if path is not a test file
+#
+# Usage:
+#   if flight_is_test_file "$file"; then
+#       echo "Skipping test file: $file"
+#       continue
+#   fi
+# -----------------------------------------------------------------------------
+flight_is_test_file() {
+    local filepath="$1"
+    local dir
+    local pattern
+    local filename
+
+    # Check if file is in a test directory
+    for dir in "${FLIGHT_TEST_DIRS[@]}"; do
+        if [[ "$filepath" == *"/$dir/"* ]] || [[ "$filepath" == "$dir/"* ]]; then
+            return 0
+        fi
+    done
+
+    # Check file patterns
+    filename=$(basename "$filepath")
+    for pattern in "${FLIGHT_TEST_FILE_PATTERNS[@]}"; do
+        if [[ "$filename" == $pattern ]]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
 
 # -----------------------------------------------------------------------------
 # flight_is_excluded - Check if a path should be excluded

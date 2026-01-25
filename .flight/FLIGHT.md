@@ -613,6 +613,121 @@ If MCP tools aren't available, fall back to web search.
 | `PROMPT.md` | Output of /flight-compile command (what to execute) |
 | `PRD.md` | Output of /flight-prd (product vision) |
 | `tasks/*.md` | Atomic task files from /flight-prd |
+| `.flightignore` | Project-specific exclusions (gitignore-style) |
+
+---
+
+## Project-Specific Exclusions (.flightignore)
+
+Flight supports a `.flightignore` file in your project root for customizing what gets scanned. This works alongside the built-in exclusions in `exclusions.sh`.
+
+### Format
+
+Uses gitignore-style patterns:
+
+```bash
+# Comments start with #
+# Blank lines are ignored
+
+# Directory patterns (end with /)
+internal-tools/
+legacy/
+experiments/
+
+# File patterns
+*.generated.ts
+my-special-config.js
+database.types.ts
+
+# Glob patterns work
+**/*.backup
+src/**/*.old.ts
+```
+
+### How It Works
+
+| Pattern Type | Example | Matches |
+|--------------|---------|---------|
+| Directory | `mydir/` | Everything inside `mydir/` |
+| File | `foo.ts` | Any file named `foo.ts` anywhere |
+| Glob | `*.generated.ts` | Any `.generated.ts` file |
+| Deep glob | `src/**/*.test.ts` | Test files under `src/` |
+
+### When to Use
+
+Use `.flightignore` for:
+- Project-specific generated files
+- Legacy code that won't be updated
+- Internal tools that have different standards
+- Vendor code copied into the project
+
+**Don't** use for things already in `exclusions.sh`:
+- `node_modules/`, `dist/`, `build/` (already excluded)
+- Common config files like `*.config.js` (already excluded)
+- Test frameworks like `jest.config.*` (already excluded)
+
+### Example
+
+```bash
+# .flightignore for myproject
+
+# Legacy code we're not touching
+legacy/
+old-api/
+
+# Generated from protobuf
+*_pb.ts
+*_grpc.ts
+
+# Third-party SDK copied into project
+vendor/stripe-sdk/
+```
+
+---
+
+## Test File Categorization
+
+Flight distinguishes between source code and test files. Source-code validators skip test files; the `testing` domain validates test files.
+
+### Automatic Detection
+
+Files are identified as test files by:
+
+**File patterns:**
+- `*.test.{js,ts,jsx,tsx}` - JavaScript/TypeScript tests
+- `*.spec.{js,ts,jsx,tsx}` - Spec-style tests
+- `test_*.py`, `*_test.py` - Python tests
+- `*_test.go` - Go tests
+- `*Test.java`, `*Tests.java` - Java tests
+- `*_test.rs` - Rust tests
+
+**Directory patterns:**
+- `tests/`, `test/`, `__tests__/` - Standard test directories
+- `e2e/`, `spec/` - E2E and spec directories
+- `integration-tests/`, `unit-tests/` - Explicit test directories
+
+### Validator Behavior
+
+| File Type | Validated By | Example Rules Skipped |
+|-----------|--------------|----------------------|
+| Source files | All applicable domains | None |
+| Test files | `testing` domain only | `console.log` bans, some code-hygiene rules |
+
+### Using in Custom Validators
+
+The `exclusions.sh` script provides `flight_is_test_file()`:
+
+```bash
+source .flight/exclusions.sh
+
+for file in "${files[@]}"; do
+    if flight_is_test_file "$file"; then
+        # Skip test files for source-code rules
+        continue
+    fi
+    # Run validation...
+done
+```
 
 ---
 

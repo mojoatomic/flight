@@ -1,0 +1,14 @@
+# .flightignore - Project-specific exclusions for Flight validation
+# See .flight/FLIGHT.md for documentation
+
+# Flight's own internal dev files (not distributed to users)
+.flight/tests/
+.flight/research/
+.flight/docs/
+
+# CI/CD configuration
+.github/
+
+# Package manager lock files (already in defaults, but explicit for clarity)
+package-lock.json
+pnpm-lock.yaml
