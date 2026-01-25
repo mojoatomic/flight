@@ -10,6 +10,10 @@ result = []
 CONFIG_PATH = '/home/user/.config/app.json'
 WINDOWS_PATH = 'C:\\Users\\admin\\config.ini'
 
+# N10: Hardcoded credentials (NEVER)
+password = 'mysecretpassword123'
+api_key = 'sk-proj-abc123def456ghi789'
+
 # N1: Bare except (NEVER) - AST rule
 def bad_except():
     try:

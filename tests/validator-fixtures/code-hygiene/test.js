@@ -40,3 +40,11 @@ const enabled = true;
 
 // M3: Constants not UPPER_CASE
 const maxRetries = 5;
+
+// N12: Hardcoded API keys
+const API_KEY = 'sk-proj-abc123def456ghi';
+const apiKey = 'live_key_1234567890abcdef';
+
+// N13: Hardcoded passwords
+const password = 'mysecretpassword123';
+const db_pass = 'production_database_pw';

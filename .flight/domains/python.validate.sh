@@ -144,6 +144,10 @@ for f in "$@"; do
 done | head -5
 done' _ "${FILES[@]}"
 
+# N10: Hardcoded Credentials
+check "N10: Hardcoded Credentials" \
+    grep -Eni "(password|passwd|api_key|api_secret|secret_key|auth_token|access_token)\\s*=\\s*['\"][^'\"]{8,}['\"]" "${FILES[@]}"
+
 printf '\n%s\n' "## SHOULD Rules"
 
 # S1: String += Patterns

@@ -317,6 +317,50 @@ RIGHT: Write script to project directory where dependencies are available
    
    ```
 
+13. **Hardcoded API Keys** - Do not hardcode API keys, tokens, or secrets in source code. Use environment variables or secret management systems instead.
+
+   ```
+   // BAD
+   const API_KEY = 'sk-proj-abc123def456';
+   // BAD
+   apiKey: 'live_key_1234567890abcdef'
+   // BAD
+   const secret_key = "ghp_xxxxxxxxxxxxxxxxxxxx";
+   // BAD
+   API_SECRET = 'abcdefghijklmnopqrstuvwxyz'
+
+   // GOOD
+   const API_KEY = process.env.API_KEY;
+   // GOOD
+   apiKey: process.env.STRIPE_API_KEY
+   // GOOD
+   const secretKey = os.environ.get('SECRET_KEY')
+   // GOOD
+   # API keys loaded from .env file via dotenv
+   ```
+
+14. **Hardcoded Passwords and Secrets** - Do not hardcode passwords, database credentials, or authentication tokens in source code. These must come from environment variables or secret stores.
+
+   ```
+   // BAD
+   const password = 'mysecretpassword123';
+   // BAD
+   db_pass: 'production_db_password'
+   // BAD
+   PASSWORD = "admin123456"
+   // BAD
+   auth_token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+
+   // GOOD
+   const password = process.env.DB_PASSWORD;
+   // GOOD
+   db_pass: process.env.DATABASE_PASSWORD
+   // GOOD
+   PASSWORD = os.environ['PASSWORD']
+   // GOOD
+   auth_token = getSecretFromVault('auth_token')
+   ```
+
 ### MUST (validator will reject)
 
 1. **Boolean Variables Use Proper Prefixes** - Boolean variables and functions should use is/has/can/should/will/was/did/does prefixes to clearly indicate they return a boolean.
@@ -566,3 +610,5 @@ Java:
 | function user() |  | function getUser() |
 | mixed camel_Case |  | Pick one style per file |
 | cat > /tmp/*.mjs ... import |  | Run from project dir or use existing tooling |
+| API_KEY = 'sk-...' |  | Use process.env.API_KEY or secret management |
+| password = 'secret123' |  | Use process.env.PASSWORD or secret store |

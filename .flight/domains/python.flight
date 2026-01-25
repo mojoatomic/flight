@@ -403,6 +403,38 @@ rules:
               return
           do_action()
 
+  N10:
+    title: Hardcoded Credentials
+    severity: NEVER
+    mechanical: true
+    provenance:
+      last_verified: "2026-01-25"
+      confidence: high
+      re_verify_after: "2026-07-25"
+      sources:
+        - url: "https://cwe.mitre.org/data/definitions/798.html"
+          accessed: "2026-01-25"
+          quote: "CWE-798: Use of Hard-coded Credentials"
+    description: >
+      Never hardcode passwords, API keys, or secrets in source code.
+      Use environment variables or secret management systems.
+    check:
+      type: grep
+      pattern: "(password|passwd|api_key|api_secret|secret_key|auth_token|access_token)\\s*=\\s*['\"][^'\"]{8,}['\"]"
+      flags: -Eni
+    note: |
+      Hardcoded credentials are a critical security vulnerability.
+      Use os.environ.get() or a secrets manager for sensitive values.
+    examples:
+      bad:
+        - "password = 'mysecretpassword123'"
+        - "API_KEY = 'sk-proj-abc123def456ghi'"
+        - "auth_token = 'eyJhbGciOiJIUzI1NiIs...'"
+      good:
+        - "password = os.environ.get('DB_PASSWORD')"
+        - "API_KEY = os.environ['OPENAI_API_KEY']"
+        - "auth_token = get_secret('auth_token')"
+
   # =========================================================================
   # SHOULD - Best practices (validator warns)
   # =========================================================================
@@ -917,3 +949,6 @@ anti_patterns:
   - pattern: "Generic names"
     problem: "Unclear purpose"
     fix: "Domain terms"
+  - pattern: "password = 'secret'"
+    problem: "Hardcoded credentials"
+    fix: "os.environ.get()"

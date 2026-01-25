@@ -141,6 +141,34 @@
         "confidence": "high",
         "re_verify_after": "2027-01-16"
       }
+    },
+    {
+      "id": "N12",
+      "title": "Hardcoded API Keys",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "(api[_-]?key|apikey|api[_-]?secret|secret[_-]?key)\\s*[=:]\\s*['\"][a-zA-Z0-9_\\-]{16,}['\"]",
+      "query": null,
+      "message": "Do not hardcode API keys, tokens, or secrets in source code. Use environment variables or secret management systems instead.",
+      "provenance": {
+        "last_verified": "2026-01-25",
+        "confidence": "high",
+        "re_verify_after": "2026-07-25"
+      }
+    },
+    {
+      "id": "N13",
+      "title": "Hardcoded Passwords and Secrets",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "(password|passwd|pwd|db_pass|database_password|auth_token|bearer_token)\\s*[=:]\\s*['\"][^'\"]{8,}['\"]",
+      "query": null,
+      "message": "Do not hardcode passwords, database credentials, or authentication tokens in source code. These must come from environment variables or secret stores.",
+      "provenance": {
+        "last_verified": "2026-01-25",
+        "confidence": "high",
+        "re_verify_after": "2026-07-25"
+      }
     }
   ]
 }

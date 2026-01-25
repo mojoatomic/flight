@@ -160,6 +160,24 @@ Production Python patterns for clean, maintainable, type-safe code. Prevents com
    
    ```
 
+10. **Hardcoded Credentials** - Never hardcode passwords, API keys, or secrets in source code. Use environment variables or secret management systems.
+
+   ```
+   // BAD
+   password = 'mysecretpassword123'
+   // BAD
+   API_KEY = 'sk-proj-abc123def456ghi'
+   // BAD
+   auth_token = 'eyJhbGciOiJIUzI1NiIs...'
+
+   // GOOD
+   password = os.environ.get('DB_PASSWORD')
+   // GOOD
+   API_KEY = os.environ['OPENAI_API_KEY']
+   // GOOD
+   auth_token = get_secret('auth_token')
+   ```
+
 ### SHOULD (validator warns)
 
 1. **String += Patterns** - Avoid string concatenation with += in loops. It creates O(n²) complexity due to string immutability.
@@ -309,3 +327,4 @@ Production Python patterns for clean, maintainable, type-safe code. Prevents com
 | Nested if > 3 |  | Early returns |
 | Hardcoded paths |  | pathlib.Path |
 | Generic names |  | Domain terms |
+| password = 'secret' |  | os.environ.get() |
