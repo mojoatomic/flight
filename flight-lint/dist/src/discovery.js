@@ -1,10 +1,53 @@
 import fg from 'fast-glob';
 import path from 'node:path';
+// Keep in sync with .flight/exclusions.sh FLIGHT_EXCLUDE_DIRS
 const DEFAULT_EXCLUDES = [
+    // Package managers
     '**/node_modules/**',
+    '**/vendor/**',
+    '**/.venv/**',
+    '**/venv/**',
+    // Build outputs
     '**/dist/**',
     '**/build/**',
+    '**/target/**',
+    '**/obj/**',
+    '**/.next/**',
+    '**/.turbo/**',
+    '**/out/**',
+    '**/.output/**',
+    '**/.nuxt/**',
+    '**/.svelte-kit/**',
+    // VCS
     '**/.git/**',
+    // IDE
+    '**/.idea/**',
+    '**/.vscode/**',
+    // Test/Coverage
+    '**/coverage/**',
+    '**/.pytest_cache/**',
+    '**/.nyc_output/**',
+    '**/.coverage/**',
+    '**/__pycache__/**',
+    '**/.tox/**',
+    '**/.nox/**',
+    // Test fixtures (intentionally contain violations for testing)
+    '**/fixtures/**',
+    // Cache directories
+    '**/.cache/**',
+    '**/.parcel-cache/**',
+    '**/.webpack/**',
+    '**/.rollup.cache/**',
+    // Infrastructure
+    '**/.terraform/**',
+    '**/.serverless/**',
+    // Framework directories (never scan framework config/tooling)
+    '**/.flight/**',
+    '**/.claude/**',
+    // Flight tooling (linter should not lint itself)
+    '**/flight-lint/**',
+    // Dev scripts (not installed to user projects)
+    '**/scripts/**',
 ];
 const RULES_FILE_PATTERN = '**/*.rules.json';
 const FLIGHT_DOMAINS_DIR = '.flight/domains';
