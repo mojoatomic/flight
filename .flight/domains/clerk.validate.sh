@@ -26,7 +26,8 @@ check() {
         ((PASS++)) || true
     else
         red "❌ $name"
-        printf '%s\n' "$result" | head -10 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -10 | sed 's/^/   /') || true
         ((FAIL++)) || true
     fi
 }
@@ -41,7 +42,8 @@ warn() {
         ((PASS++)) || true
     else
         yellow "⚠️  $name"
-        printf '%s\n' "$result" | head -5 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -5 | sed 's/^/   /') || true
         ((WARN++)) || true
     fi
 }
@@ -67,7 +69,8 @@ elif [[ "$FLIGHT_HAS_EXCLUSIONS" == true ]]; then
     mapfile -t FILES < <(flight_get_files "*.ts" "*.tsx")
 else
     # Fallback: use find (works on bash 3.2+, no globstar needed)
-    mapfile -t FILES < <(find . -type f \( -name "*.ts" -o -name "*.tsx" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" 2>/dev/null | sort)
+    # Redirect stdin from /dev/null to prevent hanging in piped contexts (curl | bash)
+    mapfile -t FILES < <(find . -type f \( -name "*.ts" -o -name "*.tsx" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" < /dev/null 2>/dev/null | sort)
 fi
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
@@ -145,7 +148,7 @@ check "N7: Using userId When orgId is Required" \
     # Flag if using userId for data filtering without orgId
     # Covers Prisma (where: { userId }) and Drizzle (eq(*.userId, ...))
     if grep -qE "where.*userId|userId.*=|eq\(.*userId" "$f" 2>/dev/null; then
-      if ! grep -qE "orgId|organizationId" "$f" 2>/dev/null; then
+      if ! grep -qE "orgId|organizationId|organization_id|org_id" "$f" 2>/dev/null; then
         grep -Hn "userId" "$f" 2>/dev/null | head -3
       fi
     fi
@@ -160,7 +163,7 @@ check "N8: Missing Organization Context in Protected Routes" \
     # If file uses auth() but doesn'"'"'t check orgId
     if grep -q "await auth()" "$f" 2>/dev/null; then
       if grep -qE "userId\s*\}" "$f" 2>/dev/null; then
-        if ! grep -qE "orgId|organizationId|!.*org" "$f" 2>/dev/null; then
+        if ! grep -qE "orgId|organizationId|organization_id|org_id|!.*org" "$f" 2>/dev/null; then
           echo "$f: auth check without orgId verification"
         fi
       fi
@@ -246,8 +249,9 @@ check "M5: Include orgId in Database Queries" \
   if [[ "$f" == *"/api/"* ]] || [[ "$f" == *"/actions/"* ]] || [[ "$f" == *".server."* ]]; then
     # If file has database queries (Prisma or Drizzle)
     if grep -qE "findMany|findFirst|findUnique|select.*from|query\.|\.insert\(|\.update\(|\.delete\(" "$f" 2>/dev/null; then
-      # Should have orgId in where clause
-      if ! grep -qE "orgId|organization_id|organizationId" "$f" 2>/dev/null; then
+      # Should have orgId in where clause (supports various naming conventions)
+      # orgId = Clerk auth object, organizationId = Clerk SDK, organization_id = REST API, org_id = PostgreSQL/Supabase
+      if ! grep -qE "orgId|organization_id|organizationId|org_id" "$f" 2>/dev/null; then
         echo "$f: database query without orgId filter"
       fi
     fi

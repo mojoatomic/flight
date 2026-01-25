@@ -206,12 +206,14 @@ run_validator() {
         echo -e "${RED}✗ $domain: FAIL (Pass: $pass, Fail: $fail, Warn: $warn)${NC}"
         FAILED_DOMAINS+=("$domain")
         # Show failure details with file:line violations (strip color codes for matching)
-        echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^(❌|   )" | head -30
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^(❌|   )" | head -30) || true
         echo ""
     elif [[ "$warn" -gt 0 ]]; then
         echo -e "${GREEN}✓ $domain: PASS (Pass: $pass, Fail: $fail, Warn: ${YELLOW}$warn${NC}${GREEN})${NC}"
         # Show warning details
-        echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^(⚠️|   )" | head -20
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^(⚠️|   )" | head -20) || true
     else
         echo -e "${GREEN}✓ $domain: PASS (Pass: $pass, Fail: $fail, Warn: $warn)${NC}"
     fi
@@ -276,11 +278,13 @@ if [[ -n "$FLIGHT_LINT" ]]; then
         # Exit code 2 = config error (missing parser, etc) - treat as warning not failure
         if [[ "$LINT_EXIT" -eq 2 ]]; then
             echo -e "${YELLOW}⚠ AST validation: CONFIG ERROR${NC}"
-            echo "$LINT_OUTPUT" | grep -E "^Error:" | head -5
+            # Use subshell to prevent SIGPIPE from killing script with pipefail
+            (echo "$LINT_OUTPUT" | grep -E "^Error:" | head -5) || true
             echo -e "${YELLOW}  Some AST rules may have been skipped${NC}"
         elif [[ "$LINT_EXIT" -ne 0 ]] || [[ "$AST_ERRORS" -gt 0 ]]; then
             echo -e "${RED}✗ AST validation: FAIL (Errors: $AST_ERRORS, Warnings: $AST_WARNINGS)${NC}"
-            echo "$LINT_OUTPUT" | grep -E "^\s+[0-9]+:[0-9]+\s+(NEVER|MUST)" | head -20
+            # Use subshell to prevent SIGPIPE from killing script with pipefail
+            (echo "$LINT_OUTPUT" | grep -E "^\s+[0-9]+:[0-9]+\s+(NEVER|MUST)" | head -20) || true
             TOTAL_FAIL=$((TOTAL_FAIL + AST_ERRORS))
             FAILED_DOMAINS+=("ast-lint")
         elif [[ "$AST_WARNINGS" -gt 0 ]]; then

@@ -567,7 +567,8 @@ check() {{
         ((PASS++)) || true
     else
         red "❌ $name"
-        printf '%s\\n' "$result" | head -10 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\\n' "$result" | head -10 | sed 's/^/   /') || true
         ((FAIL++)) || true
     fi
 }}
@@ -582,7 +583,8 @@ warn() {{
         ((PASS++)) || true
     else
         yellow "⚠️  $name"
-        printf '%s\\n' "$result" | head -5 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\\n' "$result" | head -5 | sed 's/^/   /') || true
         ((WARN++)) || true
     fi
 }}
@@ -608,7 +610,8 @@ elif [[ "$FLIGHT_HAS_EXCLUSIONS" == true ]]; then
     mapfile -t FILES < <(flight_get_files {file_ext_patterns})
 else
     # Fallback: use find (works on bash 3.2+, no globstar needed)
-    mapfile -t FILES < <(find . -type f \\( {find_patterns} \\) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" 2>/dev/null | sort)
+    # Redirect stdin from /dev/null to prevent hanging in piped contexts (curl | bash)
+    mapfile -t FILES < <(find . -type f \\( {find_patterns} \\) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" < /dev/null 2>/dev/null | sort)
 fi
 
 if [[ ${{#FILES[@]}} -eq 0 ]]; then
