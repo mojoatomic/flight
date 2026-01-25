@@ -26,7 +26,8 @@ check() {
         ((PASS++)) || true
     else
         red "❌ $name"
-        printf '%s\n' "$result" | head -10 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -10 | sed 's/^/   /') || true
         ((FAIL++)) || true
     fi
 }
@@ -41,7 +42,8 @@ warn() {
         ((PASS++)) || true
     else
         yellow "⚠️  $name"
-        printf '%s\n' "$result" | head -5 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -5 | sed 's/^/   /') || true
         ((WARN++)) || true
     fi
 }
@@ -67,7 +69,8 @@ elif [[ "$FLIGHT_HAS_EXCLUSIONS" == true ]]; then
     mapfile -t FILES < <(flight_get_files "*.c" "*.h")
 else
     # Fallback: use find (works on bash 3.2+, no globstar needed)
-    mapfile -t FILES < <(find . -type f \( -name "*.c" -o -name "*.h" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" 2>/dev/null | sort)
+    # Redirect stdin from /dev/null to prevent hanging in piped contexts (curl | bash)
+    mapfile -t FILES < <(find . -type f \( -name "*.c" -o -name "*.h" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" < /dev/null 2>/dev/null | sort)
 fi
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
@@ -88,13 +91,16 @@ check "N1: No malloc/free" \
 
 # N2: No printf in Interrupt Handlers
 check "N2: No printf in Interrupt Handlers" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   awk '"'"'/void.*(_callback|_isr|_handler|_irq)\s*\(/,/^\}/ { if (/printf|puts|print/) print FILENAME":"NR": "$0 }'"'"' "$f"
+done
 done' _ "${FILES[@]}"
 
 # N3: No Recursive Functions
 check "N3: No Recursive Functions" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   awk '"'"'/^[a-zA-Z_][a-zA-Z0-9_]*\s+[a-zA-Z_][a-zA-Z0-9_]*\s*\(/ {
     match($0, /([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/, arr)
     if (arr[1] != "") fname = arr[1]
@@ -102,17 +108,22 @@ check "N3: No Recursive Functions" \
   fname && $0 ~ fname"\\s*\\(" && !/^[a-zA-Z_]/ {
     print FILENAME":"NR": possible recursion in "fname
   }'"'"' "$f" 2>/dev/null
-done | head -5' _ "${FILES[@]}"
+done | head -5
+done' _ "${FILES[@]}"
 
 # N4: No Direct Register Access
 check "N4: No Direct Register Access" \
-    bash -c 'grep -En '"'"'\*\s*\(volatile\s+uint32_t\s*\*\)|0x[0-9a-fA-F]+\s*='"'"' "$@" | grep -v '"'"'#define'"'"'' _ "${FILES[@]}"
+    bash -c 'for file in "$@"; do
+grep -En '"'"'\*\s*\(volatile\s+uint32_t\s*\*\)|0x[0-9a-fA-F]+\s*='"'"' "$@" | grep -v '"'"'#define'"'"'
+done' _ "${FILES[@]}"
 
 # N5: I2C/SPI Must Use Timeout Versions
 check "N5: I2C/SPI Must Use Timeout Versions" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   grep -En '"'"'i2c_write_blocking\(|i2c_read_blocking\(|spi_write_blocking\(|spi_read_blocking\('"'"' "$f" 2>/dev/null | \
   grep -v '"'"'timeout'"'"' | head -5
+done
 done' _ "${FILES[@]}"
 
 # N6: Arrays Must Have Named Size Constants
@@ -121,30 +132,36 @@ check "N6: Arrays Must Have Named Size Constants" \
 
 # N7: Core 0 Must Use Watchdog
 check "N7: Core 0 Must Use Watchdog" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if echo "$f" | grep -q '"'"'main\.c'"'"'; then
     if ! grep -q '"'"'watchdog_enable\|watchdog_update'"'"' "$f"; then
       echo "$f: missing watchdog"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## SHOULD Rules"
 
 # S1: Review Blocking Calls in Safety/Core0 Files
 warn "S1: Review Blocking Calls in Safety/Core0 Files" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if echo "$f" | grep -qiE '"'"'main\.c|safety|core0'"'"'; then
     grep -En '"'"'sleep_ms|_blocking\(|while\s*\(\s*true|for\s*\(\s*;\s*;\s*\)'"'"' "$f" 2>/dev/null | head -5
   fi
+done
 done' _ "${FILES[@]}"
 
 # S2: Review Float/Double in Safety Files
 warn "S2: Review Float/Double in Safety Files" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if echo "$f" | grep -qiE '"'"'safety|emergency|watchdog|core0'"'"'; then
     grep -En '"'"'\bfloat\b|\bdouble\b'"'"' "$f" 2>/dev/null
   fi
+done
 done' _ "${FILES[@]}"
 
 # S3: Review Unbounded Loops
@@ -153,27 +170,32 @@ warn "S3: Review Unbounded Loops" \
 
 # S4: Multicore Launch Should Have Handshake
 warn "S4: Multicore Launch Should Have Handshake" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -q '"'"'multicore_launch_core1'"'"' "$f"; then
     if ! grep -q '"'"'multicore_fifo_pop\|multicore_fifo_push'"'"' "$f"; then
       echo "$f: multicore launch without FIFO handshake"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S5: Shared Volatile State Should Use Spinlocks
 warn "S5: Shared Volatile State Should Use Spinlocks" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -q '"'"'volatile.*g_\|static.*volatile'"'"' "$f"; then
     if ! grep -q '"'"'spin_lock\|spinlock'"'"' "$f"; then
       echo "$f: has volatile globals but no spinlock"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S6: Functions With Pointer Params Should ASSERT Non-null
 warn "S6: Functions With Pointer Params Should ASSERT Non-null" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   awk '"'"'
   /^[a-zA-Z_].*\*[a-zA-Z_]+\)/ {
     func_line = NR; has_ptr = 1
@@ -186,18 +208,22 @@ warn "S6: Functions With Pointer Params Should ASSERT Non-null" \
     has_ptr = 0
   }
   '"'"' "$f" 2>/dev/null
-done | head -5' _ "${FILES[@]}"
+done | head -5
+done' _ "${FILES[@]}"
 
 # S7: Status Return Values Should Be Checked
 warn "S7: Status Return Values Should Be Checked" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   grep -En '"'"'^\s+[a-z_]+\s*\([^;]*\)\s*;'"'"' "$f" 2>/dev/null | \
   grep -v '"'"'if\s*(\|=\s*\|void\|return'"'"' | head -5
+done
 done' _ "${FILES[@]}"
 
 # S8: Should Have Dual-Core Structure
 warn "S8: Should Have Dual-Core Structure" \
-    bash -c 'missing=""
+    bash -c 'for file in "$@"; do
+missing=""
 if ! ls "$@" 2>/dev/null | grep -q '"'"'main\.c'"'"'; then
   missing="Missing main.c (Core 0 entry)"
 fi
@@ -208,20 +234,25 @@ if ! ls "$@" 2>/dev/null | grep -qE '"'"'core1\.c|core_1\.c'"'"'; then
   echo "Missing core1.c (Core 1 entry)"
 elif [ -n "$missing" ]; then
   echo "$missing"
-fi' _ "${FILES[@]}"
+fi
+done' _ "${FILES[@]}"
 
 # S9: Should Have Emergency/Error Handling
 warn "S9: Should Have Emergency/Error Handling" \
-    bash -c '# Check for emergency, error, or fault handling patterns
+    bash -c 'for file in "$@"; do
+# Check for emergency, error, or fault handling patterns
 if ! grep -rlE '"'"'emergency|EMERGENCY|STATE_ERROR|error_code|fault|FAULT'"'"' "$@" 2>/dev/null | head -1 | grep -q '"'"'.'"'"'; then
   echo "No emergency/error handling found"
-fi' _ "${FILES[@]}"
+fi
+done' _ "${FILES[@]}"
 
 # S10: Should Have Inter-Core Heartbeat
 warn "S10: Should Have Inter-Core Heartbeat" \
-    bash -c 'if ! grep -rl '"'"'heartbeat\|HEARTBEAT'"'"' "$@" 2>/dev/null | head -1 | grep -q '"'"'.'"'"'; then
+    bash -c 'for file in "$@"; do
+if ! grep -rl '"'"'heartbeat\|HEARTBEAT'"'"' "$@" 2>/dev/null | head -1 | grep -q '"'"'.'"'"'; then
   echo "No heartbeat mechanism found"
-fi' _ "${FILES[@]}"
+fi
+done' _ "${FILES[@]}"
 
 printf '\n%s\n' "═══════════════════════════════════════════"
 printf '  PASS: %d  FAIL: %d  WARN: %d\n' "$PASS" "$FAIL" "$WARN"

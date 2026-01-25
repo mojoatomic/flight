@@ -26,7 +26,8 @@ check() {
         ((PASS++)) || true
     else
         red "❌ $name"
-        printf '%s\n' "$result" | head -10 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -10 | sed 's/^/   /') || true
         ((FAIL++)) || true
     fi
 }
@@ -41,7 +42,8 @@ warn() {
         ((PASS++)) || true
     else
         yellow "⚠️  $name"
-        printf '%s\n' "$result" | head -5 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -5 | sed 's/^/   /') || true
         ((WARN++)) || true
     fi
 }
@@ -67,7 +69,8 @@ elif [[ "$FLIGHT_HAS_EXCLUSIONS" == true ]]; then
     mapfile -t FILES < <(flight_get_files "*test*.js" "*spec*.js" "*test*.ts" "*spec*.ts" "*test*.tsx" "*spec*.tsx" "*_test.py" "test_*.py" "*_test.go" "Test*.java")
 else
     # Fallback: use find (works on bash 3.2+, no globstar needed)
-    mapfile -t FILES < <(find . -type f \( -name "*test*.js" -o -name "*spec*.js" -o -name "*test*.ts" -o -name "*spec*.ts" -o -name "*test*.tsx" -o -name "*spec*.tsx" -o -name "*_test.py" -o -name "test_*.py" -o -name "*_test.go" -o -name "Test*.java" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" 2>/dev/null | sort)
+    # Redirect stdin from /dev/null to prevent hanging in piped contexts (curl | bash)
+    mapfile -t FILES < <(find . -type f \( -name "*test*.js" -o -name "*spec*.js" -o -name "*test*.ts" -o -name "*spec*.ts" -o -name "*test*.tsx" -o -name "*spec*.tsx" -o -name "*_test.py" -o -name "test_*.py" -o -name "*_test.go" -o -name "Test*.java" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" < /dev/null 2>/dev/null | sort)
 fi
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
@@ -162,17 +165,21 @@ printf '\n%s\n' "## SHOULD Rules"
 
 # S1: Shared Mutable State Between Tests
 warn "S1: Shared Mutable State Between Tests" \
-    bash -c 'grep -l "beforeAll" "$@" 2>/dev/null | xargs -I{} sh -c '"'"'grep -l "^let\s" "{}" 2>/dev/null && echo "{}: has beforeAll with top-level let"'"'"'' _ "${FILES[@]}"
+    bash -c 'for file in "$@"; do
+grep -l "beforeAll" "$@" 2>/dev/null | xargs -I{} sh -c '"'"'grep -l "^let\s" "{}" 2>/dev/null && echo "{}: has beforeAll with top-level let"'"'"'
+done' _ "${FILES[@]}"
 
 # S2: Try-Catch Swallowing Failures
 warn "S2: Try-Catch Swallowing Failures" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -q "catch\s*(" "$f" 2>/dev/null; then
     match=$(grep -A5 "catch\s*(" "$f" | grep -E "expect|assert" | grep -v "toThrow\|rejects")
     if [[ -n "$match" ]]; then
       echo "$f: catch block contains assertions - verify not swallowing"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S3: Non-Descriptive Test Names
@@ -181,7 +188,9 @@ warn "S3: Non-Descriptive Test Names" \
 
 # S4: Logic in Tests
 warn "S4: Logic in Tests" \
-    bash -c 'grep -En "^\s+(if|for|while)\s*\(" "$@" | grep -v "forEach\|test\.each\|pytest\.mark"' _ "${FILES[@]}"
+    bash -c 'for file in "$@"; do
+grep -En "^\s+(if|for|while)\s*\(" "$@" | grep -v "forEach\|test\.each\|pytest\.mark"
+done' _ "${FILES[@]}"
 
 # S4_js: Logic in Tests (JavaScript)
 warn "S4_js: Logic in Tests (JavaScript)" \

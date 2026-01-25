@@ -26,7 +26,8 @@ check() {
         ((PASS++)) || true
     else
         red "❌ $name"
-        printf '%s\n' "$result" | head -10 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -10 | sed 's/^/   /') || true
         ((FAIL++)) || true
     fi
 }
@@ -41,7 +42,8 @@ warn() {
         ((PASS++)) || true
     else
         yellow "⚠️  $name"
-        printf '%s\n' "$result" | head -5 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -5 | sed 's/^/   /') || true
         ((WARN++)) || true
     fi
 }
@@ -67,7 +69,8 @@ elif [[ "$FLIGHT_HAS_EXCLUSIONS" == true ]]; then
     mapfile -t FILES < <(flight_get_files "*.yaml" "*.yml")
 else
     # Fallback: use find (works on bash 3.2+, no globstar needed)
-    mapfile -t FILES < <(find . -type f \( -name "*.yaml" -o -name "*.yml" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" 2>/dev/null | sort)
+    # Redirect stdin from /dev/null to prevent hanging in piped contexts (curl | bash)
+    mapfile -t FILES < <(find . -type f \( -name "*.yaml" -o -name "*.yml" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" < /dev/null 2>/dev/null | sort)
 fi
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
@@ -88,7 +91,8 @@ check "N1: Tab Characters" \
 
 # N2: Duplicate Keys
 check "N2: Duplicate Keys" \
-    bash -c '# Check for duplicate keys at the same indentation level
+    bash -c 'for file in "$@"; do
+# Check for duplicate keys at the same indentation level
 awk '"'"'
 /^[[:space:]]*[^#[:space:]][^:]*:/ {
   # Extract indentation and key
@@ -111,7 +115,8 @@ awk '"'"'
   if (indent == 0) indent_context++;
 }
 END { exit found ? 1 : 0 }
-'"'"' "$file"' _ "${FILES[@]}"
+'"'"' "$file"
+done' _ "${FILES[@]}"
 
 # N3: Unsafe YAML Load
 check "N3: Unsafe YAML Load" \
@@ -149,7 +154,8 @@ check "M6: Unquoted Special Strings" \
 
 # M7: Inconsistent Indentation
 check "M7: Inconsistent Indentation" \
-    bash -c '# Check for inconsistent indentation increments
+    bash -c 'for file in "$@"; do
+# Check for inconsistent indentation increments
 awk '"'"'
 BEGIN { base_indent = 0; last_indent = 0 }
 /^[[:space:]]+[^#[:space:]]/ {
@@ -169,7 +175,8 @@ BEGIN { base_indent = 0; last_indent = 0 }
 }
 /^[^[:space:]#]/ { last_indent = 0 }
 END { exit found ? 1 : 0 }
-'"'"' "$file"' _ "${FILES[@]}"
+'"'"' "$file"
+done' _ "${FILES[@]}"
 
 # M8: Trailing Whitespace in Multiline
 check "M8: Trailing Whitespace in Multiline" \
@@ -179,7 +186,8 @@ printf '\n%s\n' "## SHOULD Rules"
 
 # S1: Prefer Explicit Document Start
 warn "S1: Prefer Explicit Document Start" \
-    bash -c '# Warn if file has multiple documents without ---
+    bash -c 'for file in "$@"; do
+# Warn if file has multiple documents without ---
 if grep -q '"'"'^---'"'"' "$file"; then
   exit 0  # Has document markers
 fi
@@ -187,7 +195,8 @@ if grep -c '"'"'^\.\.\.$'"'"' "$file" > /dev/null 2>&1; then
   echo "$file:1: missing document start marker (---) in multi-doc file"
   exit 1
 fi
-exit 0' _ "${FILES[@]}"
+exit 0
+done' _ "${FILES[@]}"
 
 # S2: Quote Strings Starting with Special Characters
 warn "S2: Quote Strings Starting with Special Characters" \

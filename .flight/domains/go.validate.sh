@@ -26,7 +26,8 @@ check() {
         ((PASS++)) || true
     else
         red "❌ $name"
-        printf '%s\n' "$result" | head -10 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -10 | sed 's/^/   /') || true
         ((FAIL++)) || true
     fi
 }
@@ -41,7 +42,8 @@ warn() {
         ((PASS++)) || true
     else
         yellow "⚠️  $name"
-        printf '%s\n' "$result" | head -5 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -5 | sed 's/^/   /') || true
         ((WARN++)) || true
     fi
 }
@@ -67,7 +69,8 @@ elif [[ "$FLIGHT_HAS_EXCLUSIONS" == true ]]; then
     mapfile -t FILES < <(flight_get_files "*.go")
 else
     # Fallback: use find (works on bash 3.2+, no globstar needed)
-    mapfile -t FILES < <(find . -type f \( -name "*.go" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" 2>/dev/null | sort)
+    # Redirect stdin from /dev/null to prevent hanging in piped contexts (curl | bash)
+    mapfile -t FILES < <(find . -type f \( -name "*.go" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" < /dev/null 2>/dev/null | sort)
 fi
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
@@ -100,13 +103,15 @@ check "N4: Defer in Loop" \
 
 # N5: Goroutine without Lifetime Management
 check "N5: Goroutine without Lifetime Management" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Look for goroutines without context, done channel, or WaitGroup
   if grep -qE '"'"'go\s+func\s*\('"'"' "$f" 2>/dev/null; then
     if ! grep -qE '"'"'context\.|<-done|<-ctx\.Done|sync\.WaitGroup|errgroup\.'"'"' "$f" 2>/dev/null; then
       echo "$f: goroutine found but no lifetime management (context, done channel, or WaitGroup)"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # N6: Unbuffered Channel in Select with Default
@@ -133,7 +138,8 @@ check "M2: Initialisms Must Be Consistent Case" \
 
 # M3: Exported Names Must Have Doc Comments
 check "M3: Exported Names Must Have Doc Comments" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Find exported functions/types without preceding comment
   awk '"'"'
     /^func [A-Z]/ && prev !~ /^\/\// { print FILENAME ":" NR ": " $0 }
@@ -142,6 +148,7 @@ check "M3: Exported Names Must Have Doc Comments" \
     /^const [A-Z]/ && prev !~ /^\/\// { print FILENAME ":" NR ": " $0 }
     { prev = $0 }
   '"'"' "$f" 2>/dev/null
+done
 done' _ "${FILES[@]}"
 
 # M4: Context as First Parameter
@@ -168,18 +175,21 @@ printf '\n%s\n' "## SHOULD Rules"
 
 # S1: Wrap Errors with Context
 warn "S1: Wrap Errors with Context" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Look for bare error returns without wrapping
   if grep -qE '"'"'return\s+(nil,\s*)?err\s*$'"'"' "$f" 2>/dev/null; then
     if ! grep -qE '"'"'fmt\.Errorf.*%w|errors\.Wrap|errors\.WithMessage'"'"' "$f" 2>/dev/null; then
       echo "$f: bare error returns found but no error wrapping"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S2: Table-Driven Tests
 warn "S2: Table-Driven Tests" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if [[ "$f" == *"_test.go" ]]; then
     # Multiple similar test functions suggest table-driven would be better
     count=$(grep -cE '"'"'^func Test\w+\('"'"' "$f" 2>/dev/null || echo 0)
@@ -189,6 +199,7 @@ warn "S2: Table-Driven Tests" \
       fi
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S3: Prefer var for Zero Values
@@ -201,7 +212,8 @@ warn "S4: Synchronous Functions Preferred" \
 
 # S5: Project Structure
 warn "S5: Project Structure" \
-    bash -c '# Only check if this looks like a project root (has go.mod)
+    bash -c 'for file in "$@"; do
+# Only check if this looks like a project root (has go.mod)
 if [[ -f "go.mod" ]]; then
   issues=""
   # Check for proper cmd/ structure for multiple binaries
@@ -218,11 +230,13 @@ if [[ -f "go.mod" ]]; then
   if [[ -d "pkg" ]]; then
     echo "pkg/ directory found - consider using internal/ instead"
   fi
-fi' _ "${FILES[@]}"
+fi
+done' _ "${FILES[@]}"
 
 # S6: Use t.Helper in Test Helpers
 warn "S6: Use t.Helper in Test Helpers" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if [[ "$f" == *"_test.go" ]]; then
     # Find functions that take *testing.T but don'"'"'t call t.Helper()
     awk '"'"'
@@ -239,6 +253,7 @@ warn "S6: Use t.Helper in Test Helpers" \
       }
     '"'"' "$f" 2>/dev/null
   fi
+done
 done' _ "${FILES[@]}"
 
 # S7: Avoid Global State

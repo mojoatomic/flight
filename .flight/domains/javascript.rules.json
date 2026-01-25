@@ -1,7 +1,6 @@
 {
   "domain": "javascript",
   "version": "1.2.0",
-  "language": "javascript",
   "file_patterns": [
     "**/*.js",
     "**/*.mjs",
@@ -25,6 +24,7 @@
       "title": "Generic Variable Names",
       "severity": "NEVER",
       "type": "ast",
+      "language": "javascript",
       "pattern": null,
       "query": "(variable_declarator\n  name: (identifier) @violation\n  (#match? @violation \"^(data|result|temp|info|item|value|obj|thing|stuff|tmp|ret|val)$\"))",
       "message": "Never use generic names like data, result, temp, info, item, value, obj, thing, stuff, foo, bar, baz, tmp, ret, val. Use domain-specific names instead.",
@@ -32,14 +32,14 @@
         "last_verified": "2026-01-16",
         "confidence": "high",
         "re_verify_after": "2027-01-16"
-      },
-      "language": "javascript"
+      }
     },
     {
       "id": "N2",
       "title": "Redundant Conditional Returns",
       "severity": "NEVER",
       "type": "ast",
+      "language": "javascript",
       "pattern": null,
       "query": "(if_statement\n  consequence: [(statement_block (return_statement (true))) (return_statement (true))]\n  alternative: [(else_clause [(statement_block (return_statement (false))) (return_statement (false))])] @violation)\n(if_statement\n  consequence: [(statement_block (return_statement (false))) (return_statement (false))]\n  alternative: [(else_clause [(statement_block (return_statement (true))) (return_statement (true))])] @violation)",
       "message": "Never write 'if (condition) return true; else return false' or equivalent. Return the condition directly.",
@@ -47,14 +47,14 @@
         "last_verified": "2026-01-16",
         "confidence": "high",
         "re_verify_after": "2027-01-16"
-      },
-      "language": "javascript"
+      }
     },
     {
       "id": "N3",
       "title": "Ternary Returning Boolean Literals",
       "severity": "NEVER",
       "type": "ast",
+      "language": "javascript",
       "pattern": null,
       "query": "(ternary_expression\n  consequence: [(true) (false)]\n  alternative: [(true) (false)]) @violation",
       "message": "Never write 'condition ? true : false'. The condition is already boolean.",
@@ -62,14 +62,14 @@
         "last_verified": "2026-01-16",
         "confidence": "high",
         "re_verify_after": "2027-01-16"
-      },
-      "language": "javascript"
+      }
     },
     {
       "id": "N4",
       "title": "Redundant Boolean Comparisons",
       "severity": "NEVER",
       "type": "ast",
+      "language": "javascript",
       "pattern": null,
       "query": "(binary_expression\n  operator: [\"===\" \"!==\"]\n  right: [(true) (false)]) @violation",
       "message": "Never write '=== true', '=== false', '!== true', or '!== false'. Use the boolean directly.",
@@ -77,14 +77,14 @@
         "last_verified": "2026-01-16",
         "confidence": "high",
         "re_verify_after": "2027-01-16"
-      },
-      "language": "javascript"
+      }
     },
     {
       "id": "N5",
       "title": "Magic Number Calculations",
       "severity": "NEVER",
       "type": "ast",
+      "language": "javascript",
       "pattern": null,
       "query": "(binary_expression\n  left: (binary_expression\n    left: (number)\n    right: (number))\n  right: (number)) @violation",
       "message": "Never compute at runtime what can be a constant. Pre-calculate time values and other derived constants.",
@@ -92,14 +92,14 @@
         "last_verified": "2026-01-16",
         "confidence": "high",
         "re_verify_after": "2027-01-16"
-      },
-      "language": "javascript"
+      }
     },
     {
       "id": "N6",
       "title": "Generic Function Names",
       "severity": "NEVER",
       "type": "ast",
+      "language": "javascript",
       "pattern": null,
       "query": "(function_declaration\n  name: (identifier) @violation\n  (#match? @violation \"^(handle|process|do|run|execute|manage)(Data|Item|Value|Info|Result|Object)$\"))",
       "message": "Never use generic verbs like handle, process, do, run, execute, manage combined with generic nouns without specific context.",
@@ -107,14 +107,14 @@
         "last_verified": "2026-01-16",
         "confidence": "high",
         "re_verify_after": "2027-01-16"
-      },
-      "language": "javascript"
+      }
     },
     {
       "id": "N7",
       "title": "Single-Letter Variables",
       "severity": "NEVER",
       "type": "ast",
+      "language": "javascript",
       "pattern": null,
       "query": "(variable_declarator\n  name: (identifier) @violation\n  (#match? @violation \"^[a-hln-z]$\"))",
       "message": "Never use single-letter variables except i, j, k as loop counters.",
@@ -122,14 +122,14 @@
         "last_verified": "2026-01-16",
         "confidence": "high",
         "re_verify_after": "2027-01-16"
-      },
-      "language": "javascript"
+      }
     },
     {
       "id": "N8",
       "title": "console.log in Source Files",
       "severity": "NEVER",
       "type": "ast",
+      "language": "javascript",
       "pattern": null,
       "query": "(call_expression\n  function: (member_expression\n    object: (identifier) @obj\n    property: (property_identifier) @prop)\n  (#eq? @obj \"console\")\n  (#eq? @prop \"log\")) @violation",
       "message": "Never leave console.log statements in production source files. Test files are excluded from this rule.",
@@ -137,14 +137,14 @@
         "last_verified": "2026-01-16",
         "confidence": "high",
         "re_verify_after": "2027-01-16"
-      },
-      "language": "javascript"
+      }
     },
     {
       "id": "N9",
       "title": "var Declaration",
       "severity": "NEVER",
       "type": "ast",
+      "language": "javascript",
       "pattern": null,
       "query": "(variable_declaration) @violation",
       "message": "Never use var. Use const for values that won't be reassigned, let for values that will. Block scoping and temporal dead zone prevent common bugs.",
@@ -152,14 +152,14 @@
         "last_verified": "2026-01-16",
         "confidence": "high",
         "re_verify_after": "2027-01-16"
-      },
-      "language": "javascript"
+      }
     },
     {
       "id": "N10",
       "title": "Loose Equality",
       "severity": "NEVER",
       "type": "ast",
+      "language": "javascript",
       "pattern": null,
       "query": "(binary_expression\n  operator: [\"==\" \"!=\"]) @violation",
       "message": "Never use == or !=. Use === and !== to avoid type coercion bugs. Type coercion rules are complex and lead to unexpected behavior.",
@@ -167,14 +167,14 @@
         "last_verified": "2026-01-16",
         "confidence": "high",
         "re_verify_after": "2027-01-16"
-      },
-      "language": "javascript"
+      }
     },
     {
       "id": "S1",
       "title": "Await in Loops",
       "severity": "SHOULD",
       "type": "ast",
+      "language": "javascript",
       "pattern": null,
       "query": "(for_statement\n  body: (statement_block\n    (expression_statement\n      (await_expression) @violation)))\n(for_in_statement\n  body: (statement_block\n    (expression_statement\n      (await_expression) @violation)))\n(while_statement\n  body: (statement_block\n    (expression_statement\n      (await_expression) @violation)))",
       "message": "Avoid await inside loops. Sequential awaits are slow when operations are independent. Use Promise.all() for parallel execution.",
@@ -182,8 +182,7 @@
         "last_verified": "2026-01-16",
         "confidence": "high",
         "re_verify_after": "2027-01-16"
-      },
-      "language": "javascript"
+      }
     }
   ]
 }

@@ -26,7 +26,8 @@ check() {
         ((PASS++)) || true
     else
         red "❌ $name"
-        printf '%s\n' "$result" | head -10 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -10 | sed 's/^/   /') || true
         ((FAIL++)) || true
     fi
 }
@@ -41,7 +42,8 @@ warn() {
         ((PASS++)) || true
     else
         yellow "⚠️  $name"
-        printf '%s\n' "$result" | head -5 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -5 | sed 's/^/   /') || true
         ((WARN++)) || true
     fi
 }
@@ -67,7 +69,8 @@ elif [[ "$FLIGHT_HAS_EXCLUSIONS" == true ]]; then
     mapfile -t FILES < <(flight_get_files "sms*.js" "sms*.ts" "*twilio*.js" "*twilio*.ts" "consent*.js" "consent*.ts" "sms*.py" "twilio*.py")
 else
     # Fallback: use find (works on bash 3.2+, no globstar needed)
-    mapfile -t FILES < <(find . -type f \( -name "sms*.js" -o -name "sms*.ts" -o -name "*twilio*.js" -o -name "*twilio*.ts" -o -name "consent*.js" -o -name "consent*.ts" -o -name "sms*.py" -o -name "twilio*.py" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" 2>/dev/null | sort)
+    # Redirect stdin from /dev/null to prevent hanging in piped contexts (curl | bash)
+    mapfile -t FILES < <(find . -type f \( -name "sms*.js" -o -name "sms*.ts" -o -name "*twilio*.js" -o -name "*twilio*.ts" -o -name "consent*.js" -o -name "consent*.ts" -o -name "sms*.py" -o -name "twilio*.py" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" < /dev/null 2>/dev/null | sort)
 fi
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
@@ -84,7 +87,8 @@ printf '\n%s\n' "## NEVER Rules"
 
 # N1: Consent States Defined
 check "N1: Consent States Defined" \
-    bash -c 'strip_comments() {
+    bash -c 'for file in "$@"; do
+strip_comments() {
   grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
 }
 found=0
@@ -94,11 +98,13 @@ for f in "$@"; do
     break
   fi
 done
-[[ $found -eq 0 ]] && echo "No consent states found"' _ "${FILES[@]}"
+[[ $found -eq 0 ]] && echo "No consent states found"
+done' _ "${FILES[@]}"
 
 # N4: STOP Keyword Triggers State Change
 check "N4: STOP Keyword Triggers State Change" \
-    bash -c 'strip_comments() {
+    bash -c 'for file in "$@"; do
+strip_comments() {
   grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
 }
 for f in "$@"; do
@@ -112,11 +118,13 @@ for f in "$@"; do
       printf "%s: STOP found but no state change\n" "$f"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # N5: Error 21610 Marks OPTED_OUT
 check "N5: Error 21610 Marks OPTED_OUT" \
-    bash -c 'strip_comments() {
+    bash -c 'for file in "$@"; do
+strip_comments() {
   grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
 }
 for f in "$@"; do
@@ -126,11 +134,13 @@ for f in "$@"; do
       printf "%s: no 21610 handling\n" "$f"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # N6: Error 30004 Marks OPTED_OUT
 check "N6: Error 30004 Marks OPTED_OUT" \
-    bash -c 'strip_comments() {
+    bash -c 'for file in "$@"; do
+strip_comments() {
   grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
 }
 for f in "$@"; do
@@ -140,11 +150,13 @@ for f in "$@"; do
       printf "%s: no 30004 handling\n" "$f"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # N7: No Retry on Opt-Out Errors
 check "N7: No Retry on Opt-Out Errors" \
-    bash -c 'strip_comments() {
+    bash -c 'for file in "$@"; do
+strip_comments() {
   grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
 }
 for f in "$@"; do
@@ -152,11 +164,13 @@ for f in "$@"; do
   if [[ -n "$result" ]]; then
     printf "%s:%s\n" "$f" "$result"
   fi
+done
 done' _ "${FILES[@]}"
 
 # N8: Error 30005/30006 Marks Number INVALID
 check "N8: Error 30005/30006 Marks Number INVALID" \
-    bash -c 'strip_comments() {
+    bash -c 'for file in "$@"; do
+strip_comments() {
   grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
 }
 for f in "$@"; do
@@ -166,11 +180,13 @@ for f in "$@"; do
       printf "%s: no 30005/30006 handling\n" "$f"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # N9: First Message Includes Opt-Out Instructions
 check "N9: First Message Includes Opt-Out Instructions" \
-    bash -c 'strip_comments() {
+    bash -c 'for file in "$@"; do
+strip_comments() {
   grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
 }
 for f in "$@"; do
@@ -185,6 +201,7 @@ for f in "$@"; do
       printf "%s: first message may lack opt-out\n" "$f"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # N10: No Hardcoded Phone Numbers
@@ -199,7 +216,8 @@ printf '\n%s\n' "## SHOULD Rules"
 
 # S1: START/UNSTOP Keywords Handled
 warn "S1: START/UNSTOP Keywords Handled" \
-    bash -c 'strip_comments() {
+    bash -c 'for file in "$@"; do
+strip_comments() {
   grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
 }
 found=0
@@ -209,11 +227,13 @@ for f in "$@"; do
     break
   fi
 done
-[[ $found -eq 0 ]] && echo "No START/UNSTOP handling"' _ "${FILES[@]}"
+[[ $found -eq 0 ]] && echo "No START/UNSTOP handling"
+done' _ "${FILES[@]}"
 
 # S2: HELP Keyword Response
 warn "S2: HELP Keyword Response" \
-    bash -c 'strip_comments() {
+    bash -c 'for file in "$@"; do
+strip_comments() {
   grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
 }
 found=0
@@ -223,11 +243,13 @@ for f in "$@"; do
     break
   fi
 done
-[[ $found -eq 0 ]] && echo "No HELP response"' _ "${FILES[@]}"
+[[ $found -eq 0 ]] && echo "No HELP response"
+done' _ "${FILES[@]}"
 
 # S3: Temporary Errors Retry with Backoff
 warn "S3: Temporary Errors Retry with Backoff" \
-    bash -c 'strip_comments() {
+    bash -c 'for file in "$@"; do
+strip_comments() {
   grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
 }
 found=0
@@ -237,11 +259,13 @@ for f in "$@"; do
     break
   fi
 done
-[[ $found -eq 0 ]] && echo "No retry backoff"' _ "${FILES[@]}"
+[[ $found -eq 0 ]] && echo "No retry backoff"
+done' _ "${FILES[@]}"
 
 # S4: Rate Limit Errors Handled
 warn "S4: Rate Limit Errors Handled" \
-    bash -c 'strip_comments() {
+    bash -c 'for file in "$@"; do
+strip_comments() {
   grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
 }
 found=0
@@ -251,11 +275,13 @@ for f in "$@"; do
     break
   fi
 done
-[[ $found -eq 0 ]] && echo "No rate limit handling"' _ "${FILES[@]}"
+[[ $found -eq 0 ]] && echo "No rate limit handling"
+done' _ "${FILES[@]}"
 
 # S5: Business Name in Messages
 warn "S5: Business Name in Messages" \
-    bash -c 'strip_comments() {
+    bash -c 'for file in "$@"; do
+strip_comments() {
   grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
 }
 found=0
@@ -265,11 +291,13 @@ for f in "$@"; do
     break
   fi
 done
-[[ $found -eq 0 ]] && echo "No business name in messages"' _ "${FILES[@]}"
+[[ $found -eq 0 ]] && echo "No business name in messages"
+done' _ "${FILES[@]}"
 
 # S6: Opt-Out Confirmation Message
 warn "S6: Opt-Out Confirmation Message" \
-    bash -c 'strip_comments() {
+    bash -c 'for file in "$@"; do
+strip_comments() {
   grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
 }
 found=0
@@ -279,11 +307,13 @@ for f in "$@"; do
     break
   fi
 done
-[[ $found -eq 0 ]] && echo "No opt-out confirmation"' _ "${FILES[@]}"
+[[ $found -eq 0 ]] && echo "No opt-out confirmation"
+done' _ "${FILES[@]}"
 
 # S7: Double Opt-In Flow
 warn "S7: Double Opt-In Flow" \
-    bash -c 'strip_comments() {
+    bash -c 'for file in "$@"; do
+strip_comments() {
   grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
 }
 found=0
@@ -293,11 +323,13 @@ for f in "$@"; do
     break
   fi
 done
-[[ $found -eq 0 ]] && echo "No double opt-in"' _ "${FILES[@]}"
+[[ $found -eq 0 ]] && echo "No double opt-in"
+done' _ "${FILES[@]}"
 
 # S8: Message Logging for Audit
 warn "S8: Message Logging for Audit" \
-    bash -c 'strip_comments() {
+    bash -c 'for file in "$@"; do
+strip_comments() {
   grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
 }
 found=0
@@ -307,11 +339,13 @@ for f in "$@"; do
     break
   fi
 done
-[[ $found -eq 0 ]] && echo "No message logging"' _ "${FILES[@]}"
+[[ $found -eq 0 ]] && echo "No message logging"
+done' _ "${FILES[@]}"
 
 # S9: Consent Timestamps Tracked
 warn "S9: Consent Timestamps Tracked" \
-    bash -c 'strip_comments() {
+    bash -c 'for file in "$@"; do
+strip_comments() {
   grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
 }
 found=0
@@ -321,7 +355,8 @@ for f in "$@"; do
     break
   fi
 done
-[[ $found -eq 0 ]] && echo "No consent timestamps"' _ "${FILES[@]}"
+[[ $found -eq 0 ]] && echo "No consent timestamps"
+done' _ "${FILES[@]}"
 
 printf '\n%s\n' "═══════════════════════════════════════════"
 printf '  PASS: %d  FAIL: %d  WARN: %d\n' "$PASS" "$FAIL" "$WARN"

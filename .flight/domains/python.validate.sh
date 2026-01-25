@@ -26,7 +26,8 @@ check() {
         ((PASS++)) || true
     else
         red "❌ $name"
-        printf '%s\n' "$result" | head -10 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -10 | sed 's/^/   /') || true
         ((FAIL++)) || true
     fi
 }
@@ -41,7 +42,8 @@ warn() {
         ((PASS++)) || true
     else
         yellow "⚠️  $name"
-        printf '%s\n' "$result" | head -5 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -5 | sed 's/^/   /') || true
         ((WARN++)) || true
     fi
 }
@@ -67,7 +69,8 @@ elif [[ "$FLIGHT_HAS_EXCLUSIONS" == true ]]; then
     mapfile -t FILES < <(flight_get_files "*.py")
 else
     # Fallback: use find (works on bash 3.2+, no globstar needed)
-    mapfile -t FILES < <(find . -type f \( -name "*.py" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" 2>/dev/null | sort)
+    # Redirect stdin from /dev/null to prevent hanging in piped contexts (curl | bash)
+    mapfile -t FILES < <(find . -type f \( -name "*.py" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" < /dev/null 2>/dev/null | sort)
 fi
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
@@ -88,8 +91,10 @@ check "N1: Bare except:" \
 
 # N2: except Exception: pass
 check "N2: except Exception: pass" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   awk '"'"'/except\s+(Exception|BaseException)/ { getline; if (/^\s*pass\s*$/) print FILENAME":"NR-1": except with pass" }'"'"' "$f"
+done
 done' _ "${FILES[@]}"
 
 # N3: Mutable Default Arguments
@@ -110,13 +115,15 @@ check "N6: Generic Variable Names at Module Level" \
 
 # N7: print() Outside __main__
 check "N7: print() Outside __main__" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   awk '"'"'
   /__name__.*__main__/ { in_main=1 }
   /^[^ ]/ && in_main { in_main=0 }
   /print\(/ && !in_main && !/# noqa/ { print FILENAME":"NR": "$0 }
   '"'"' "$f"
-done | head -10' _ "${FILES[@]}"
+done | head -10
+done' _ "${FILES[@]}"
 
 # N8: Hardcoded Absolute Paths
 check "N8: Hardcoded Absolute Paths" \
@@ -124,7 +131,8 @@ check "N8: Hardcoded Absolute Paths" \
 
 # N9: Deeply Nested Conditionals
 check "N9: Deeply Nested Conditionals" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   awk '"'"'
   /^\s+if / {
     spaces = length($0) - length(gensub(/^\s+/, "", "g", $0))
@@ -133,7 +141,8 @@ check "N9: Deeply Nested Conditionals" \
     }
   }
   '"'"' "$f"
-done | head -5' _ "${FILES[@]}"
+done | head -5
+done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## SHOULD Rules"
 
@@ -147,43 +156,52 @@ warn "S2: Magic Numbers in Logic" \
 
 # S3: Type Hints on Public Functions
 warn "S3: Type Hints on Public Functions" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   grep -n '"'"'^def [a-z]'"'"' "$f" | grep -v '"'"'\->'"'"' | grep -v '"'"'__'"'"' | head -3
+done
 done' _ "${FILES[@]}"
 
 # S4: if __name__ == __main__ Guard
 warn "S4: if __name__ == __main__ Guard" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -q '"'"'^def main'"'"' "$f"; then
     if ! grep -q '"'"'__name__.*__main__'"'"' "$f"; then
       echo "$f: has main() but no __name__ guard"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S5: Use pathlib for File Operations
 warn "S5: Use pathlib for File Operations" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -q '"'"'os.path'"'"' "$f"; then
     if ! grep -q '"'"'pathlib'"'"' "$f"; then
       echo "$f: uses os.path, consider pathlib"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S6: Use logging Module
 warn "S6: Use logging Module" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if [ $(wc -l < "$f") -gt 50 ]; then
     if ! grep -q '"'"'import logging\|from logging'"'"' "$f"; then
       echo "$f: large file without logging"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S7: Docstrings on Public Functions
 warn "S7: Docstrings on Public Functions" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   awk '"'"'
   /^def [a-z][a-z_]+\(/ {
     fname=$0; getline;
@@ -192,6 +210,7 @@ warn "S7: Docstrings on Public Functions" \
     }
   }
   '"'"' "$f" | head -3
+done
 done' _ "${FILES[@]}"
 
 printf '\n%s\n' "═══════════════════════════════════════════"

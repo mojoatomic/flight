@@ -26,7 +26,8 @@ check() {
         ((PASS++)) || true
     else
         red "❌ $name"
-        printf '%s\n' "$result" | head -10 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -10 | sed 's/^/   /') || true
         ((FAIL++)) || true
     fi
 }
@@ -41,7 +42,8 @@ warn() {
         ((PASS++)) || true
     else
         yellow "⚠️  $name"
-        printf '%s\n' "$result" | head -5 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -5 | sed 's/^/   /') || true
         ((WARN++)) || true
     fi
 }
@@ -67,7 +69,8 @@ elif [[ "$FLIGHT_HAS_EXCLUSIONS" == true ]]; then
     mapfile -t FILES < <(flight_get_files "Dockerfile" "Dockerfile.*" "*.dockerfile")
 else
     # Fallback: use find (works on bash 3.2+, no globstar needed)
-    mapfile -t FILES < <(find . -type f \( -name "Dockerfile" -o -name "Dockerfile.*" -o -name "*.dockerfile" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" 2>/dev/null | sort)
+    # Redirect stdin from /dev/null to prevent hanging in piped contexts (curl | bash)
+    mapfile -t FILES < <(find . -type f \( -name "Dockerfile" -o -name "Dockerfile.*" -o -name "*.dockerfile" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" < /dev/null 2>/dev/null | sort)
 fi
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
@@ -84,12 +87,14 @@ printf '\n%s\n' "## NEVER Rules"
 
 # N1: Running as Root User
 check "N1: Running as Root User" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if ! grep -qE "^USER\s+" "$f" 2>/dev/null; then
     echo "$f: no USER directive found (container runs as root)"
   elif grep -qE "^USER\s+(root|0)\s*$" "$f" 2>/dev/null; then
     grep -HnE "^USER\s+(root|0)\s*$" "$f"
   fi
+done
 done' _ "${FILES[@]}"
 
 # N2: Secrets in Build Args or Environment
@@ -116,15 +121,19 @@ check "M1: Use Absolute WORKDIR" \
 
 # M2: Pin Base Image Versions
 check "M2: Pin Base Image Versions" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   grep -HnE "^FROM\s+[^:@\s]+\s*$|^FROM\s+[^@\s]+:latest(\s|$)" "$f" 2>/dev/null
+done
 done' _ "${FILES[@]}"
 
 # M3: Use COPY Instead of ADD for Local Files
 check "M3: Use COPY Instead of ADD for Local Files" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   grep -HnE "^ADD\s+[^h][^\s]+\s+" "$f" 2>/dev/null | \
     grep -vE "\.(tar|tar\.gz|tgz|tar\.bz2|tar\.xz)\s"
+done
 done' _ "${FILES[@]}"
 
 # M4: MAINTAINER is Deprecated
@@ -133,23 +142,28 @@ check "M4: MAINTAINER is Deprecated" \
 
 # M5: Use JSON Notation for CMD and ENTRYPOINT
 check "M5: Use JSON Notation for CMD and ENTRYPOINT" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   grep -HnE "^(CMD|ENTRYPOINT)\s+[^\[]" "$f" 2>/dev/null
+done
 done' _ "${FILES[@]}"
 
 # M6: Set SHELL Pipefail Before RUN with Pipes
 check "M6: Set SHELL Pipefail Before RUN with Pipes" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qE "^RUN\s+.*\|" "$f" 2>/dev/null; then
     if ! grep -qE "^SHELL\s+.*pipefail" "$f" 2>/dev/null; then
       echo "$f: RUN commands use pipes but SHELL pipefail not set"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # M7: Invalid EXPOSE Port
 check "M7: Invalid EXPOSE Port" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   grep -HnE "^EXPOSE\s+" "$f" 2>/dev/null | while read -r line; do
     linenum=$(echo "$line" | cut -d: -f2)
     ports=$(echo "$line" | sed '"'"'s/.*EXPOSE\s*//'"'"' | grep -oE '"'"'[0-9]+'"'"')
@@ -159,38 +173,46 @@ check "M7: Invalid EXPOSE Port" \
       fi
     done
   done
+done
 done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## SHOULD Rules"
 
 # S1: Pin Package Versions in apt-get
 warn "S1: Pin Package Versions in apt-get" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   grep -HnE "apt-get\s+install.*\s[a-z][a-z0-9+-]+(\s|$)" "$f" 2>/dev/null | \
     grep -vE "=[0-9]"
+done
 done' _ "${FILES[@]}"
 
 # S2: Clean Package Cache in Same Layer
 warn "S2: Clean Package Cache in Same Layer" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   grep -HnE "^RUN\s+.*apt-get\s+install" "$f" 2>/dev/null | \
     grep -vE "rm\s+-rf\s+/var/lib/apt"
+done
 done' _ "${FILES[@]}"
 
 # S3: Use Multi-Stage Builds
 warn "S3: Use Multi-Stage Builds" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qE "gcc|make|npm\s+install|pip\s+install|go\s+build|cargo\s+build" "$f" 2>/dev/null; then
     from_count=$(grep -cE "^FROM\s+" "$f" 2>/dev/null || echo 0)
     if [ "$from_count" -lt 2 ]; then
       echo "$f: build tools detected but no multi-stage build (single FROM)"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S4: Order Layers for Caching
 warn "S4: Order Layers for Caching" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   copy_all_line=$(grep -nE "^COPY\s+\.\s+" "$f" 2>/dev/null | head -1 | cut -d: -f1)
   copy_pkg_line=$(grep -nE "^COPY\s+package" "$f" 2>/dev/null | head -1 | cut -d: -f1)
   if [ -n "$copy_all_line" ] && [ -n "$copy_pkg_line" ]; then
@@ -198,40 +220,49 @@ warn "S4: Order Layers for Caching" \
       echo "$f:$copy_all_line: COPY . before COPY package* (poor cache efficiency)"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S5: Use .dockerignore
 warn "S5: Use .dockerignore" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   dir=$(dirname "$f")
   if [ ! -f "$dir/.dockerignore" ]; then
     echo "$f: no .dockerignore found in $dir"
   fi
+done
 done' _ "${FILES[@]}"
 
 # S6: Define HEALTHCHECK
 warn "S6: Define HEALTHCHECK" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if ! grep -qE "^HEALTHCHECK\s+" "$f" 2>/dev/null; then
     if grep -qE "^(CMD|ENTRYPOINT)\s+" "$f" 2>/dev/null; then
       echo "$f: no HEALTHCHECK defined for service image"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S7: Combine RUN Commands
 warn "S7: Combine RUN Commands" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   run_count=$(grep -cE "^RUN\s+" "$f" 2>/dev/null || echo 0)
   if [ "$run_count" -gt 10 ]; then
     echo "$f: $run_count RUN commands (consider combining)"
   fi
+done
 done' _ "${FILES[@]}"
 
 # S8: Use Specific COPY Targets
 warn "S8: Use Specific COPY Targets" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   grep -HnE "^COPY\s+\.\s+" "$f" 2>/dev/null
+done
 done' _ "${FILES[@]}"
 
 # S9: Avoid apt-get upgrade

@@ -26,7 +26,8 @@ check() {
         ((PASS++)) || true
     else
         red "❌ $name"
-        printf '%s\n' "$result" | head -10 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -10 | sed 's/^/   /') || true
         ((FAIL++)) || true
     fi
 }
@@ -41,7 +42,8 @@ warn() {
         ((PASS++)) || true
     else
         yellow "⚠️  $name"
-        printf '%s\n' "$result" | head -5 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -5 | sed 's/^/   /') || true
         ((WARN++)) || true
     fi
 }
@@ -64,10 +66,11 @@ if [[ $# -gt 0 ]]; then
     FILES=("$@")
 elif [[ "$FLIGHT_HAS_EXCLUSIONS" == true ]]; then
     # Use exclusions-aware file discovery
-    mapfile -t FILES < <(flight_get_files "routes*.{js,ts}" "controller*.{js,ts}" "*.{js,ts}" "*Router*.java" "*Controller*.java" "views.py" "urls.py")
+    mapfile -t FILES < <(flight_get_files "routes*.js" "routes*.ts" "controller*.js" "controller*.ts" "*.js" "*.ts" "*Router*.java" "*Controller*.java" "views.py" "urls.py")
 else
     # Fallback: use find (works on bash 3.2+, no globstar needed)
-    mapfile -t FILES < <(find . -type f \( -name "routes*.{js,ts}" -o -name "controller*.{js,ts}" -o -name "*.{js,ts}" -o -name "*Router*.java" -o -name "*Controller*.java" -o -name "views.py" -o -name "urls.py" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" 2>/dev/null | sort)
+    # Redirect stdin from /dev/null to prevent hanging in piped contexts (curl | bash)
+    mapfile -t FILES < <(find . -type f \( -name "routes*.js" -o -name "routes*.ts" -o -name "controller*.js" -o -name "controller*.ts" -o -name "*.js" -o -name "*.ts" -o -name "*Router*.java" -o -name "*Controller*.java" -o -name "views.py" -o -name "urls.py" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" < /dev/null 2>/dev/null | sort)
 fi
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
@@ -180,13 +183,15 @@ check "M4: Plural Nouns for Collection URIs" \
 
 # M5: Include Pagination Metadata in Response
 check "M5: Include Pagination Metadata in Response" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Note: after_id|before_id excluded - N3 forbids exposing internal IDs
   if grep -qEi "cursor|next_cursor|page_token|offset.*limit|page.*per_page" "$f" 2>/dev/null; then
     if ! grep -qEi "has_more|next_cursor|prev_cursor|total_pages|total_count|page_info" "$f" 2>/dev/null; then
       echo "$f: pagination patterns found but no response metadata"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # M6: Version Your API from Day One
@@ -199,12 +204,14 @@ check "M7: Rate Limit Headers" \
 
 # M8: Location Header on 201 Created
 check "M8: Location Header on 201 Created" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qEi "status\(201\)|\.created\(" "$f" 2>/dev/null; then
     if ! grep -qEi "location.*header|header.*location|\.header\(.location" "$f" 2>/dev/null; then
       echo "$f: 201 responses found but no Location header"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # M9: Content-Type Header on All Responses
@@ -228,10 +235,12 @@ fi
 
 # S4: Consistent Field Naming Convention
 warn "S4: Consistent Field Naming Convention" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qE '"'"'"[a-z]+_[a-z]+"'"'"' "$f" 2>/dev/null && grep -qE '"'"'"[a-z]+[A-Z][a-z]+"'"'"' "$f" 2>/dev/null; then
     echo "$f: mixed snake_case and camelCase"
   fi
+done
 done' _ "${FILES[@]}"
 
 # S8: Idempotency Keys for Non-Idempotent Operations
@@ -254,7 +263,8 @@ fi
 
 # S10: 202 Accepted for Long-Running Operations
 warn "S10: 202 Accepted for Long-Running Operations" \
-    bash -c 'has_async=false
+    bash -c 'for file in "$@"; do
+has_async=false
 has_202=false
 for f in "$@"; do
   if grep -qEi "job|queue|worker|async.*process|background" "$f" 2>/dev/null; then
@@ -266,7 +276,8 @@ for f in "$@"; do
 done
 if $has_async && ! $has_202; then
   echo "Async/background patterns found but no 202 Accepted responses"
-fi' _ "${FILES[@]}"
+fi
+done' _ "${FILES[@]}"
 
 # S11: OpenAPI/Swagger Specification
 if [[ ${#API_ENDPOINT_FILES[@]} -gt 0 ]]; then
@@ -287,12 +298,14 @@ warn "S12: No Hardcoded URLs" \
 
 # S13: Include Request IDs
 warn "S13: Include Request IDs" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qEi "res\.(status\(4|status\(5|json\(.*error" "$f" 2>/dev/null; then
     if ! grep -qEi "request_id|trace_id|requestId|traceId|x-request-id" "$f" 2>/dev/null; then
       echo "$f: error responses found but no request/trace ID handling"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## Info"

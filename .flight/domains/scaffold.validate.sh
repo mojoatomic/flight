@@ -26,7 +26,8 @@ check() {
         ((PASS++)) || true
     else
         red "❌ $name"
-        printf '%s\n' "$result" | head -10 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -10 | sed 's/^/   /') || true
         ((FAIL++)) || true
     fi
 }
@@ -41,7 +42,8 @@ warn() {
         ((PASS++)) || true
     else
         yellow "⚠️  $name"
-        printf '%s\n' "$result" | head -5 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -5 | sed 's/^/   /') || true
         ((WARN++)) || true
     fi
 }
@@ -67,7 +69,8 @@ elif [[ "$FLIGHT_HAS_EXCLUSIONS" == true ]]; then
     mapfile -t FILES < <(flight_get_files "*.sh" "Makefile" "package.json" "*.yml" "*.yaml")
 else
     # Fallback: use find (works on bash 3.2+, no globstar needed)
-    mapfile -t FILES < <(find . -type f \( -name "*.sh" -o -name "Makefile" -o -name "package.json" -o -name "*.yml" -o -name "*.yaml" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" 2>/dev/null | sort)
+    # Redirect stdin from /dev/null to prevent hanging in piped contexts (curl | bash)
+    mapfile -t FILES < <(find . -type f \( -name "*.sh" -o -name "Makefile" -o -name "package.json" -o -name "*.yml" -o -name "*.yaml" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" < /dev/null 2>/dev/null | sort)
 fi
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
@@ -90,7 +93,8 @@ printf '\n%s\n' "## SHOULD Rules"
 
 # S1: Protected Directories Exist
 warn "S1: Protected Directories Exist" \
-    bash -c 'missing=""
+    bash -c 'for file in "$@"; do
+missing=""
 for d in .flight tasks .git; do
   if [ ! -d "$d" ]; then
     missing="$missing $d"
@@ -98,15 +102,18 @@ for d in .flight tasks .git; do
 done
 if [ -n "$missing" ]; then
   echo "Missing protected directories:$missing"
-fi' _ "${FILES[@]}"
+fi
+done' _ "${FILES[@]}"
 
 # S2: Git Clean Before Scaffold
 warn "S2: Git Clean Before Scaffold" \
-    bash -c 'if [ -d ".git" ]; then
+    bash -c 'for file in "$@"; do
+if [ -d ".git" ]; then
   if git status --porcelain 2>/dev/null | grep -q .; then
     echo "Git has uncommitted changes - commit or stash before scaffolding"
   fi
-fi' _ "${FILES[@]}"
+fi
+done' _ "${FILES[@]}"
 
 printf '\n%s\n' "═══════════════════════════════════════════"
 printf '  PASS: %d  FAIL: %d  WARN: %d\n' "$PASS" "$FAIL" "$WARN"

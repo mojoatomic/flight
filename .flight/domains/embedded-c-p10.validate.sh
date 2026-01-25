@@ -26,7 +26,8 @@ check() {
         ((PASS++)) || true
     else
         red "❌ $name"
-        printf '%s\n' "$result" | head -10 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -10 | sed 's/^/   /') || true
         ((FAIL++)) || true
     fi
 }
@@ -41,7 +42,8 @@ warn() {
         ((PASS++)) || true
     else
         yellow "⚠️  $name"
-        printf '%s\n' "$result" | head -5 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -5 | sed 's/^/   /') || true
         ((WARN++)) || true
     fi
 }
@@ -67,7 +69,8 @@ elif [[ "$FLIGHT_HAS_EXCLUSIONS" == true ]]; then
     mapfile -t FILES < <(flight_get_files "*.c")
 else
     # Fallback: use find (works on bash 3.2+, no globstar needed)
-    mapfile -t FILES < <(find . -type f \( -name "*.c" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" 2>/dev/null | sort)
+    # Redirect stdin from /dev/null to prevent hanging in piped contexts (curl | bash)
+    mapfile -t FILES < <(find . -type f \( -name "*.c" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" < /dev/null 2>/dev/null | sort)
 fi
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
@@ -90,15 +93,17 @@ check "N1: No goto" \
 check "N2: No setjmp/longjmp" \
     grep -n "setjmp\\|longjmp" "${FILES[@]}"
 
-# N3: No Dynamic Memory Allocation - HANDLED BY AST (flight-lint)
-# Detects actual function calls, ignores comments and strings
+# N3: No Dynamic Memory Allocation
+check "N3: No Dynamic Memory Allocation" \
+    # Unknown check type: ast
 
 # N4: No Conditional Compilation
 check "N4: No Conditional Compilation" \
     grep -n "^#ifdef\\|^#if " "${FILES[@]}"
 
-# N5: No Double Pointer Dereference - HANDLED BY AST (flight-lint)
-# Detects actual dereferences, ignores pointer parameter declarations
+# N5: No Double Pointer Dereference
+check "N5: No Double Pointer Dereference" \
+    # Unknown check type: ast
 
 # N6: No Chained Pointer Access
 check "N6: No Chained Pointer Access" \
@@ -108,13 +113,10 @@ check "N6: No Chained Pointer Access" \
 check "N7: No Unbounded Loops" \
     grep -En "while\\s*\\(1\\)|while\\s*\\(true\\)|for\\s*\\(;;\\)" "${FILES[@]}"
 
-# N8: Compile Clean with Strict Warnings - GUIDANCE ONLY
-# Cannot be validated by Flight - requires project-specific toolchain
-# Enforce in your build system: CFLAGS += -Wall -Wextra -Werror -pedantic
-
 # N9: Functions Must Be 60 Lines or Less
 check "N9: Functions Must Be 60 Lines or Less" \
-    bash -c 'awk '"'"'
+    bash -c 'for file in "$@"; do
+awk '"'"'
 /^(status_t|static|void|int|uint[0-9]+_t|bool) [a-z_]+\(/ {
   start=NR; fname=$0; in_func=1
 }
@@ -126,11 +128,13 @@ check "N9: Functions Must Be 60 Lines or Less" \
     print fname": "len" lines"
   }
   in_func=0
-}'"'"' "$@"' _ "${FILES[@]}"
+}'"'"' "$@"
+done' _ "${FILES[@]}"
 
 # N10: Minimum 2 Assertions Per Function
 check "N10: Minimum 2 Assertions Per Function" \
-    bash -c 'awk '"'"'
+    bash -c 'for file in "$@"; do
+awk '"'"'
 /^(status_t|static|void|int|uint[0-9]+_t|bool) [a-z_]+\(/ {
   fname=$0; asserts=0; in_func=1
 }
@@ -142,10 +146,12 @@ check "N10: Minimum 2 Assertions Per Function" \
     print fname": "asserts" asserts"
   }
   in_func=0
-}'"'"' "$@"' _ "${FILES[@]}"
+}'"'"' "$@"
+done' _ "${FILES[@]}"
 
-# N11: Check or Cast All Return Values - HANDLED BY AST (flight-lint)
-# Detects unchecked printf/fprintf calls, ignores comments and (void) casts
+# N11: Check or Cast All Return Values
+check "N11: Check or Cast All Return Values" \
+    # Unknown check type: ast
 
 printf '\n%s\n' "═══════════════════════════════════════════"
 printf '  PASS: %d  FAIL: %d  WARN: %d\n' "$PASS" "$FAIL" "$WARN"

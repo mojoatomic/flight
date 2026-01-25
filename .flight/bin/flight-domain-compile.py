@@ -13,6 +13,7 @@ Single source of truth: .flight YAML generates both spec and validator.
 """
 
 import argparse
+import itertools
 import json
 import re
 import subprocess
@@ -21,6 +22,37 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Optional
+
+
+def expand_brace_pattern(pattern: str) -> list[str]:
+    """Expand brace patterns like '*.{js,ts}' into ['*.js', '*.ts'].
+
+    Handles nested braces and multiple brace groups.
+    Returns original pattern in a list if no braces found.
+    """
+    # Find brace groups like {js,ts}
+    brace_pattern = re.compile(r'\{([^{}]+)\}')
+
+    def expand_once(p: str) -> list[str]:
+        match = brace_pattern.search(p)
+        if not match:
+            return [p]
+
+        prefix = p[:match.start()]
+        suffix = p[match.end():]
+        alternatives = match.group(1).split(',')
+
+        return [prefix + alt + suffix for alt in alternatives]
+
+    # Keep expanding until no more braces
+    patterns = [pattern]
+    while any('{' in p for p in patterns):
+        new_patterns = []
+        for p in patterns:
+            new_patterns.extend(expand_once(p))
+        patterns = new_patterns
+
+    return patterns
 
 
 # Severity levels in order
@@ -527,12 +559,16 @@ def generate_sh_header(spec: DomainSpec) -> str:
     patterns = " ".join(spec.file_patterns)
 
     # Extract just the extensions for flight_get_files (e.g., "*.ts" from "**/*.ts")
+    # Also expand brace patterns like *.{js,ts} into *.js *.ts
     file_exts = []
     for p in spec.file_patterns:
         # Strip **/ prefix and path components, keep just the filename pattern
         ext = p.split("/")[-1] if "/" in p else p
-        if ext and ext not in file_exts:
-            file_exts.append(ext)
+        # Expand brace patterns (e.g., "*.{js,ts}" -> ["*.js", "*.ts"])
+        expanded = expand_brace_pattern(ext)
+        for e in expanded:
+            if e and e not in file_exts:
+                file_exts.append(e)
     file_ext_patterns = " ".join(f'"{ext}"' for ext in file_exts)
 
     # Generate find -name patterns for fallback (e.g., -name "*.ts" -o -name "*.tsx")
@@ -567,7 +603,8 @@ check() {{
         ((PASS++)) || true
     else
         red "❌ $name"
-        printf '%s\\n' "$result" | head -10 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\\n' "$result" | head -10 | sed 's/^/   /') || true
         ((FAIL++)) || true
     fi
 }}
@@ -582,7 +619,8 @@ warn() {{
         ((PASS++)) || true
     else
         yellow "⚠️  $name"
-        printf '%s\\n' "$result" | head -5 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\\n' "$result" | head -5 | sed 's/^/   /') || true
         ((WARN++)) || true
     fi
 }}
@@ -608,7 +646,8 @@ elif [[ "$FLIGHT_HAS_EXCLUSIONS" == true ]]; then
     mapfile -t FILES < <(flight_get_files {file_ext_patterns})
 else
     # Fallback: use find (works on bash 3.2+, no globstar needed)
-    mapfile -t FILES < <(find . -type f \\( {find_patterns} \\) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" 2>/dev/null | sort)
+    # Redirect stdin from /dev/null to prevent hanging in piped contexts (curl | bash)
+    mapfile -t FILES < <(find . -type f \\( {find_patterns} \\) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" < /dev/null 2>/dev/null | sort)
 fi
 
 if [[ ${{#FILES[@]}} -eq 0 ]]; then
@@ -743,7 +782,9 @@ def generate_check_command(rule: Rule) -> str:
         code = check.get("code", "").strip()
         # Escape single quotes for embedding in bash -c
         code = code.replace("'", "'\"'\"'")
-        return f"bash -c '{code}' _ \"${{FILES[@]}}\""
+        # Wrap in a for loop to iterate over files, setting $file for each
+        # This allows scripts to reference $file as expected
+        return f"bash -c 'for file in \"$@\"; do\n{code}\ndone' _ \"${{FILES[@]}}\""
 
     elif check_type == "multi-condition":
         logic = check.get("logic", "AND")
@@ -954,11 +995,16 @@ def infer_language_from_domain(domain_name: str, file_patterns: list) -> str:
     return 'unknown'
 
 
-def convert_check_to_rule(rule: Rule) -> dict | None:
+def convert_check_to_rule(rule: Rule, domain_name: str = '', file_patterns: list | None = None) -> dict | None:
     """Convert a Rule with check config to a JSON rule entry.
 
     Returns None for non-mechanical rules or unsupported check types.
     Supports grep, presence, and ast types.
+
+    Args:
+        rule: The rule to convert
+        domain_name: Domain name for inferring language for AST rules
+        file_patterns: File patterns for inferring language for AST rules
     """
     if not rule.mechanical:
         return None
@@ -980,13 +1026,13 @@ def convert_check_to_rule(rule: Rule) -> dict | None:
         'type': 'ast' if is_ast else 'grep',
     }
 
-    # AST rules require a language field
+    # AST rules require a language field - infer from domain if not specified
     if is_ast:
         rule_language = check.get('language')
-        if rule_language:
+        if not rule_language and domain_name:
+            rule_language = infer_language_from_domain(domain_name, file_patterns or [])
+        if rule_language and rule_language != 'unknown':
             json_rule['language'] = rule_language
-        # Note: language is required for AST rules, but we don't error here
-        # The flight-lint loader will validate this
 
     json_rule['pattern'] = None if is_ast else check.get('pattern', '')
     json_rule['query'] = check.get('query', '').strip() if is_ast else None
@@ -1014,7 +1060,7 @@ def generate_rules_json(spec: DomainSpec) -> str:
     """
     rules_list = []
     for rule in spec.rules.values():
-        json_rule = convert_check_to_rule(rule)
+        json_rule = convert_check_to_rule(rule, spec.domain, spec.file_patterns)
         if json_rule:
             rules_list.append(json_rule)
 
@@ -1112,7 +1158,11 @@ def validate_yaml_syntax(flight_path: Path) -> bool:
         if result.returncode != 0:
             output = result.stdout + result.stderr
             # Only fail on critical NEVER rules that would break parsing:
-            # N1 (tabs) and N2 (duplicate keys)
+            # N1 (tabs) - tabs break YAML indentation
+            # N2 (duplicate keys) - NOT checked here because:
+            #   1. Python's YAML loader already caught actual duplicates during parse
+            #   2. The N2 grep check has false positives with list structures
+            #      (e.g., multiple rules with same keys like "id", "title")
             # N3 (unsafe load) and N4 (YAML bomb) don't apply to .flight files
             critical_failures = []
             in_never_section = False
@@ -1123,8 +1173,6 @@ def validate_yaml_syntax(flight_path: Path) -> bool:
                     in_never_section = False
                 elif in_never_section and "❌ N1:" in line:
                     critical_failures.append(("N1: Tab Characters", []))
-                elif in_never_section and "❌ N2:" in line:
-                    critical_failures.append(("N2: Duplicate Keys", []))
 
             if critical_failures:
                 print(f"ERROR: {flight_path.name} has critical YAML errors:", file=sys.stderr)

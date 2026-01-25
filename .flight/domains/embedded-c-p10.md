@@ -53,6 +53,8 @@ Safety-critical embedded C following NASA JPL's "Power of 10" rules for reliable
    static char buffer[MAX_BUFFER_SIZE];
    // GOOD
    char local_buf[FIXED_SIZE];
+   // GOOD
+   // Comment mentioning malloc is OK
    ```
 
 4. **No Conditional Compilation** - Never use #ifdef or #if. Conditional compilation creates multiple code paths that may not all be tested. Use runtime configuration or compile separate variants.
@@ -81,6 +83,8 @@ Safety-critical embedded C following NASA JPL's "Power of 10" rules for reliable
    *ptr = value;
    // GOOD
    array[index].field = value;
+   // GOOD
+   void func(int **out_param) { ... }  // declarations are OK
    ```
 
 6. **No Chained Pointer Access** - Never chain pointer dereferences (->field->field). It indicates overly coupled data structures. Use local variables to break the chain.
@@ -165,6 +169,8 @@ Safety-critical embedded C following NASA JPL's "Power of 10" rules for reliable
    (void)printf("Hello");
    // GOOD
    int ret = fprintf(fp, "data"); ASSERT(ret > 0);
+   // GOOD
+   // Comment mentioning printf is OK
    ```
 
 ### GUIDANCE (not mechanically checked)

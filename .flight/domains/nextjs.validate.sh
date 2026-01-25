@@ -26,7 +26,8 @@ check() {
         ((PASS++)) || true
     else
         red "❌ $name"
-        printf '%s\n' "$result" | head -10 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -10 | sed 's/^/   /') || true
         ((FAIL++)) || true
     fi
 }
@@ -41,7 +42,8 @@ warn() {
         ((PASS++)) || true
     else
         yellow "⚠️  $name"
-        printf '%s\n' "$result" | head -5 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -5 | sed 's/^/   /') || true
         ((WARN++)) || true
     fi
 }
@@ -67,7 +69,8 @@ elif [[ "$FLIGHT_HAS_EXCLUSIONS" == true ]]; then
     mapfile -t FILES < <(flight_get_files "*.tsx" "*.ts")
 else
     # Fallback: use find (works on bash 3.2+, no globstar needed)
-    mapfile -t FILES < <(find . -type f \( -name "*.tsx" -o -name "*.ts" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" 2>/dev/null | sort)
+    # Redirect stdin from /dev/null to prevent hanging in piped contexts (curl | bash)
+    mapfile -t FILES < <(find . -type f \( -name "*.tsx" -o -name "*.ts" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" < /dev/null 2>/dev/null | sort)
 fi
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
@@ -84,7 +87,8 @@ printf '\n%s\n' "## NEVER Rules"
 
 # N0: Inconsistent Source Directory Structure
 check "N0: Inconsistent Source Directory Structure" \
-    bash -c '# Only check if src/ exists (indicates src/ convention chosen)
+    bash -c 'for file in "$@"; do
+# Only check if src/ exists (indicates src/ convention chosen)
 if [ -d "src" ]; then
     found=0
     # Check for parallel directories that should be under src/
@@ -104,26 +108,31 @@ if [ -d "src" ]; then
             echo "  $dir/ should be src/$dir/"
         fi
     done
-fi' _ "${FILES[@]}"
+fi
+done' _ "${FILES[@]}"
 
 # N1: 'use client' in page.tsx Files
 check "N1: 'use client' in page.tsx Files" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     if [[ "$f" == *page.tsx ]]; then
         if head -5 "$f" | grep -q "'"'"'use client'"'"'\|\"use client\""; then
             echo "$f: page.tsx should be server component"
         fi
     fi
+done
 done' _ "${FILES[@]}"
 
 # N2: React Hooks in Server Components
 check "N2: React Hooks in Server Components" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     if ! grep -q "'"'"'use client'"'"'\|\"use client\"" "$f"; then
         if grep -qE '"'"'useState|useEffect|useRef|useCallback|useMemo|useReducer'"'"' "$f"; then
             echo "$f: has hooks but no '"'"'use client'"'"'"
         fi
     fi
+done
 done' _ "${FILES[@]}"
 
 # N3: useEffect Fetch for Initial Page Data
@@ -132,22 +141,26 @@ check "N3: useEffect Fetch for Initial Page Data" \
 
 # N4: process.env in Client Components
 check "N4: process.env in Client Components" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     if grep -q "'"'"'use client'"'"'\|\"use client\"" "$f"; then
         if grep -E '"'"'process\.env\.'"'"' "$f" | grep -v '"'"'NEXT_PUBLIC_'"'"'; then
             echo "$f: uses non-public env in client"
         fi
     fi
+done
 done' _ "${FILES[@]}"
 
 # N5: 'any' Type in Route Handlers
 check "N5: 'any' Type in Route Handlers" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     if [[ "$f" == *route.ts ]]; then
         if grep -n '"'"': any'"'"' "$f"; then
             echo "$f"
         fi
     fi
+done
 done' _ "${FILES[@]}"
 
 # N6: Hardcoded Multi-segment Routes
@@ -160,18 +173,21 @@ check "N7: console.log in App Directory" \
 
 # N8: Fat Route Handlers (>100 lines)
 check "N8: Fat Route Handlers (>100 lines)" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     if [[ "$f" == *route.ts ]]; then
         lines=$(wc -l < "$f")
         if [ "$lines" -gt 100 ]; then
             echo "$f: $lines lines (max 100)"
         fi
     fi
+done
 done' _ "${FILES[@]}"
 
-# S6: Deprecated middleware.ts File (Next.js 16+)
-warn "S6: Deprecated middleware.ts File (Next.js 16+)" \
-    bash -c '# Check for middleware files at root or src level
+# N9: Deprecated middleware.ts File (Next.js 16+)
+check "N9: Deprecated middleware.ts File (Next.js 16+)" \
+    bash -c 'for file in "$@"; do
+# Check for middleware files at root or src level
 for loc in "." "src"; do
   for ext in ts js; do
     if [ -f "$loc/middleware.$ext" ]; then
@@ -179,57 +195,68 @@ for loc in "." "src"; do
       echo "  Migration: npx @next/codemod@canary middleware-to-proxy ."
     fi
   done
+done
 done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## SHOULD Rules"
 
 # S1: Dynamic Routes Should Use notFound()
 warn "S1: Dynamic Routes Should Use notFound()" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     if [[ "$f" == *\[*\]*page.tsx ]]; then
         if ! grep -q '"'"'notFound'"'"' "$f"; then
             echo "$f: dynamic route without notFound()"
         fi
     fi
+done
 done' _ "${FILES[@]}"
 
 # S2: Consider Promise.all for Independent Fetches
 warn "S2: Consider Promise.all for Independent Fetches" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     count=$(grep -c '"'"'await '"'"' "$f" 2>/dev/null || echo 0)
     if [ "$count" -gt 3 ]; then
         if ! grep -q '"'"'Promise.all'"'"' "$f"; then
             echo "$f: $count awaits without Promise.all"
         fi
     fi
+done
 done' _ "${FILES[@]}"
 
 # S3: Pages Should Have loading.tsx
 warn "S3: Pages Should Have loading.tsx" \
-    bash -c 'find app -name '"'"'page.tsx'"'"' 2>/dev/null | while read page; do
+    bash -c 'for file in "$@"; do
+find app -name '"'"'page.tsx'"'"' 2>/dev/null | while read page; do
     dir=$(dirname "$page")
     if [ ! -f "$dir/loading.tsx" ]; then
         echo "$dir: missing loading.tsx"
     fi
-done | head -5' _ "${FILES[@]}"
+done | head -5
+done' _ "${FILES[@]}"
 
 # S4: Pages Should Have error.tsx
 warn "S4: Pages Should Have error.tsx" \
-    bash -c 'find app -name '"'"'page.tsx'"'"' 2>/dev/null | while read page; do
+    bash -c 'for file in "$@"; do
+find app -name '"'"'page.tsx'"'"' 2>/dev/null | while read page; do
     dir=$(dirname "$page")
     if [ ! -f "$dir/error.tsx" ]; then
         echo "$dir: missing error.tsx"
     fi
-done | head -5' _ "${FILES[@]}"
+done | head -5
+done' _ "${FILES[@]}"
 
 # S5: Server-Only Import for Sensitive Files
 warn "S5: Server-Only Import for Sensitive Files" \
-    bash -c 'for f in lib/db.ts lib/auth.ts lib/database.ts; do
+    bash -c 'for file in "$@"; do
+for f in lib/db.ts lib/auth.ts lib/database.ts; do
     if [ -f "$f" ]; then
         if ! grep -q "import '"'"'server-only'"'"'" "$f"; then
             echo "$f: should import '"'"'server-only'"'"'"
         fi
     fi
+done
 done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## Info"

@@ -63,6 +63,7 @@ FLIGHT_EXCLUDE_DIRS=(
 
     # Framework directories (never scan framework config/tooling)
     ".flight"
+    ".flight/tests"
     ".claude"
 
     # Flight tooling (linter should not lint itself)
@@ -209,7 +210,8 @@ flight_get_files() {
     # Execute and output results
     # Use subshell to isolate potential errors from set -e
     # Filter through flight_filter_excluded to remove auto-generated files
-    (eval "$find_cmd" 2>/dev/null || true) | flight_filter_excluded | sort
+    # Redirect stdin from /dev/null to prevent hanging in piped contexts (curl | bash)
+    (eval "$find_cmd" < /dev/null 2>/dev/null || true) | flight_filter_excluded | sort
 }
 
 # -----------------------------------------------------------------------------
@@ -256,8 +258,8 @@ flight_get_files_for_patterns() {
             find_excludes="$find_excludes -not -path \"*/$excl_dir/*\""
         done
 
-        # Run find
-        eval "find \"$dir_part\" -type f -name \"$name_part\" $find_excludes 2>/dev/null"
+        # Run find - redirect stdin from /dev/null to prevent hanging in piped contexts
+        eval "find \"$dir_part\" -type f -name \"$name_part\" $find_excludes < /dev/null 2>/dev/null"
     done | flight_filter_excluded | sort -u
 }
 

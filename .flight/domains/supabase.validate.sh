@@ -26,7 +26,8 @@ check() {
         ((PASS++)) || true
     else
         red "❌ $name"
-        printf '%s\n' "$result" | head -10 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -10 | sed 's/^/   /') || true
         ((FAIL++)) || true
     fi
 }
@@ -41,7 +42,8 @@ warn() {
         ((PASS++)) || true
     else
         yellow "⚠️  $name"
-        printf '%s\n' "$result" | head -5 | sed 's/^/   /'
+        # Use subshell to prevent SIGPIPE from killing script with pipefail
+        (printf '%s\n' "$result" | head -5 | sed 's/^/   /') || true
         ((WARN++)) || true
     fi
 }
@@ -67,7 +69,8 @@ elif [[ "$FLIGHT_HAS_EXCLUSIONS" == true ]]; then
     mapfile -t FILES < <(flight_get_files "*.ts" "*.tsx")
 else
     # Fallback: use find (works on bash 3.2+, no globstar needed)
-    mapfile -t FILES < <(find . -type f \( -name "*.ts" -o -name "*.tsx" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" 2>/dev/null | sort)
+    # Redirect stdin from /dev/null to prevent hanging in piped contexts (curl | bash)
+    mapfile -t FILES < <(find . -type f \( -name "*.ts" -o -name "*.tsx" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" < /dev/null 2>/dev/null | sort)
 fi
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
@@ -84,12 +87,14 @@ printf '\n%s\n' "## NEVER Rules"
 
 # N1: service_role Key in Client Code
 check "N1: service_role Key in Client Code" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Check for service_role in any client-accessible file
   # Skip files that are clearly server-only (api/, server/, actions/)
   if [[ "$f" != *"/api/"* ]] && [[ "$f" != *"/server/"* ]] && [[ "$f" != *".server."* ]] && [[ "$f" != *"/actions/"* ]]; then
     grep -HnE '"'"'service_role|SERVICE_ROLE'"'"' "$f" 2>/dev/null
   fi
+done
 done' _ "${FILES[@]}"
 
 # N2: Deprecated @supabase/auth-helpers-nextjs
@@ -98,7 +103,8 @@ check "N2: Deprecated @supabase/auth-helpers-nextjs" \
 
 # N3: Raw @supabase/supabase-js in Next.js App Router
 check "N3: Raw @supabase/supabase-js in Next.js App Router" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Only flag if it'"'"'s importing createClient from supabase-js directly
   # AND it looks like a Next.js app (has '"'"'use client'"'"' or next imports)
   if grep -q "from ['"'"'\"]@supabase/supabase-js['"'"'\"]" "$f" 2>/dev/null; then
@@ -106,6 +112,7 @@ check "N3: Raw @supabase/supabase-js in Next.js App Router" \
       grep -Hn "from ['"'"'\"]@supabase/supabase-js['"'"'\"]" "$f"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # N4: Hardcoded Supabase Credentials
@@ -114,7 +121,8 @@ check "N4: Hardcoded Supabase Credentials" \
 
 # N5: .single() Without Error Handling
 check "N5: .single() Without Error Handling" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Find .single() calls that don'"'"'t have error handling nearby
   awk '"'"'
   /\.single\(\)/ {
@@ -128,11 +136,13 @@ check "N5: .single() Without Error Handling" \
     }
   }
   '"'"' "$f" 2>/dev/null
+done
 done' _ "${FILES[@]}"
 
 # N6: Realtime Subscription Without Cleanup
 check "N6: Realtime Subscription Without Cleanup" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Find files with realtime subscriptions
   if grep -q "\.channel\|\.on.*postgres_changes\|\.subscribe()" "$f" 2>/dev/null; then
     # Check if there'"'"'s cleanup (removeChannel, unsubscribe, or cleanup return)
@@ -140,11 +150,13 @@ check "N6: Realtime Subscription Without Cleanup" \
       echo "$f: realtime subscription without cleanup"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # N7: getSession() in Server Code for Auth Checks
 check "N7: getSession() in Server Code for Auth Checks" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Check server files (api routes, server components, middleware)
   if [[ "$f" == *"/api/"* ]] || [[ "$f" == *".server."* ]] || [[ "$f" == *"middleware"* ]] || [[ "$f" == *"/actions/"* ]]; then
     # Flag getSession used for auth decisions without getClaims/getUser
@@ -154,21 +166,25 @@ check "N7: getSession() in Server Code for Auth Checks" \
       fi
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## MUST Rules"
 
 # M1: Type Database Schema
 check "M1: Type Database Schema" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Find createBrowserClient or createServerClient without type param
   grep -En "create(Browser|Server)Client\([^<]*\)" "$f" 2>/dev/null | \
     grep -v "<Database>" | head -3
+done
 done' _ "${FILES[@]}"
 
 # M2: Handle Auth State Changes
 check "M2: Handle Auth State Changes" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Find client files that use auth but don'"'"'t have onAuthStateChange
   if grep -q "'"'"'use client'"'"'" "$f" 2>/dev/null; then
     if grep -qE "supabase\.auth\.(getUser|getSession|signIn|signOut)" "$f" 2>/dev/null; then
@@ -177,6 +193,7 @@ check "M2: Handle Auth State Changes" \
       fi
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## Info"
