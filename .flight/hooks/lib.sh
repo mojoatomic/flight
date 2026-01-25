@@ -254,3 +254,26 @@ get_tool_name() {
 
     printf '%s' "$tool_name"
 }
+
+# -----------------------------------------------------------------------------
+# has_tool_use - Check if stop hook input contains tool use
+# -----------------------------------------------------------------------------
+# Arguments:
+#   $1 - json_string: JSON input from Claude Code stop hook
+# Returns:
+#   0 if tool use is present, 1 if text-only response
+# -----------------------------------------------------------------------------
+has_tool_use() {
+    local json_string="$1"
+
+    if check_jq_available; then
+        # Check if stop_hook_input.message contains tool_use content blocks
+        local tool_use_count
+        tool_use_count="$(printf '%s' "$json_string" | \
+            jq '[.stop_hook_input.message[]? | select(.type == "tool_use")] | length' 2>/dev/null)" || tool_use_count=0
+        [[ "$tool_use_count" -gt 0 ]]
+    else
+        # Fallback: check for tool_use string in input
+        printf '%s' "$json_string" | grep -q '"type":"tool_use"'
+    fi
+}
