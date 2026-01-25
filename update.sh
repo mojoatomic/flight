@@ -63,13 +63,13 @@ if [[ -d "$TMP_DIR/flight-lint" ]]; then
     if [[ ! -d "flight-lint/dist" ]] || [[ ! -d "flight-lint/node_modules" ]]; then
         echo "Building flight-lint..."
         echo "  Installing dependencies (including tree-sitter native modules)..."
-        (cd flight-lint && npm install --include=optional < /dev/null) || {
+        (cd flight-lint && npm install --include=optional) || {
             echo "Warning: npm install had issues. tree-sitter requires build tools."
             echo "  On macOS: xcode-select --install"
             echo "  On Ubuntu: apt-get install build-essential"
         }
         echo "  Compiling TypeScript..."
-        (cd flight-lint && npm run build < /dev/null) || {
+        (cd flight-lint && npm run build) || {
             echo "Warning: flight-lint build failed. AST rules will be skipped."
         }
     fi
