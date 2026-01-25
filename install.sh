@@ -28,7 +28,7 @@ if [[ -d "$TMP_DIR/flight-lint" ]]; then
     cp -r "$TMP_DIR/flight-lint" .
     echo "Building flight-lint..."
     echo "  Installing dependencies (including tree-sitter native modules)..."
-    (cd flight-lint && CI=true npm install --include=optional) || {
+    (cd flight-lint && CI=true npm install --include=optional --legacy-peer-deps) || {
         echo "Warning: npm install had issues. tree-sitter requires build tools."
         echo "  On macOS: xcode-select --install"
         echo "  On Ubuntu: apt-get install build-essential"
