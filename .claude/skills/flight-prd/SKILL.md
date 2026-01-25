@@ -236,7 +236,51 @@ Error handling, edge cases, UX improvements.
 **Validation**: `.flight/validate-all.sh` should pass after each task.
 ```
 
-#### C. `tasks/` - Atomic Task Files
+#### C. `.flight/flight.json` - Domain Configuration
+
+**CRITICAL:** Update flight.json with domains the project WILL need based on the tech stack.
+
+The default flight.json only has `code-hygiene` and `testing`. For a new project, the validator won't know about TypeScript, React, etc. until you configure it.
+
+**Tech Stack → Domain Mapping:**
+
+| Tech Stack | Source Domains |
+|------------|----------------|
+| TypeScript | `code-hygiene`, `typescript` |
+| React | `code-hygiene`, `react` |
+| React + TypeScript | `code-hygiene`, `typescript`, `react` |
+| Next.js | `code-hygiene`, `typescript`, `react`, `nextjs` |
+| Python | `code-hygiene`, `python` |
+| Rust (Tauri) | `code-hygiene`, `bash` (for scripts) |
+
+**Example for a React + TypeScript project:**
+
+```json
+{
+  "version": "2",
+  "generated": "2026-01-25T00:00:00Z",
+  "scan_root": ".",
+  "paths": {
+    "source": ["src"],
+    "test": ["tests", "**/*.test.*", "**/*.spec.*"],
+    "exclude": ["node_modules", "dist", "build"]
+  },
+  "domains": {
+    "source": ["code-hygiene", "typescript", "react"],
+    "test": ["testing"]
+  },
+  "detection_log": {
+    "code-hygiene": "always enabled",
+    "typescript": "planned tech stack",
+    "react": "planned tech stack",
+    "testing": "default for test files"
+  }
+}
+```
+
+**Why this matters:** Without this, flight-lint will skip validation of newly created .ts/.tsx files because it doesn't know those domains apply. The validator runs BEFORE files exist, so it must be pre-configured.
+
+#### D. `tasks/` - Atomic Task Files
 
 Create 8-15 task files, each following this structure:
 
@@ -586,6 +630,7 @@ Run after implementing:
 
 ### Workflow Ready
 - [ ] tasks/ directory created
+- [ ] .flight/flight.json updated with planned tech stack domains
 - [ ] .flight/known-landmines.md created/updated (if issues found)
 - [ ] User knows to run `/flight-prime tasks/001-*.md` next
 - [ ] User knows to run `.flight/validate-all.sh` after each task
@@ -602,6 +647,7 @@ After running `/flight-prd`, report:
 
 - **PRD.md** - Product vision (for reference)
 - **MILESTONES.md** - [X] milestones, [Y] tasks total
+- **.flight/flight.json** - Updated with planned tech stack domains
 - **.flight/known-landmines.md** - Temporal issues discovered (if any)
 - **tasks/**
   - 001-project-setup.md (with version pins from research)
