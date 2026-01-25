@@ -1,0 +1,5 @@
+# Next.js fixture expectations (AST rules via flight-lint)
+# N3: useEffect with fetch (1 violation)
+# N6: Hardcoded multi-segment routes (2 violations - href + router.push)
+# N7: console.log in app directory (2 violations)
+EXPECT_FAIL=5

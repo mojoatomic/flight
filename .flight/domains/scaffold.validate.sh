@@ -93,7 +93,8 @@ printf '\n%s\n' "## SHOULD Rules"
 
 # S1: Protected Directories Exist
 warn "S1: Protected Directories Exist" \
-    bash -c 'missing=""
+    bash -c 'for file in "$@"; do
+missing=""
 for d in .flight tasks .git; do
   if [ ! -d "$d" ]; then
     missing="$missing $d"
@@ -101,15 +102,18 @@ for d in .flight tasks .git; do
 done
 if [ -n "$missing" ]; then
   echo "Missing protected directories:$missing"
-fi' _ "${FILES[@]}"
+fi
+done' _ "${FILES[@]}"
 
 # S2: Git Clean Before Scaffold
 warn "S2: Git Clean Before Scaffold" \
-    bash -c 'if [ -d ".git" ]; then
+    bash -c 'for file in "$@"; do
+if [ -d ".git" ]; then
   if git status --porcelain 2>/dev/null | grep -q .; then
     echo "Git has uncommitted changes - commit or stash before scaffolding"
   fi
-fi' _ "${FILES[@]}"
+fi
+done' _ "${FILES[@]}"
 
 printf '\n%s\n' "═══════════════════════════════════════════"
 printf '  PASS: %d  FAIL: %d  WARN: %d\n' "$PASS" "$FAIL" "$WARN"

@@ -87,151 +87,193 @@ printf '\n%s\n' "## NEVER Rules"
 
 # N1: Unquoted Variables in Commands
 check "N1: Unquoted Variables in Commands" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     grep -En '"'"'\b(rm|cp|mv|cd|cat|chmod|chown)\s+[^"'"'"'\'"'"''"'"'|&;>]*\$[a-zA-Z_]'"'"' "$f" 2>/dev/null | grep -v '"'"'# shellcheck'"'"'
+done
 done' _ "${FILES[@]}"
 
 # N2: Unquoted $(cmd) Substitution
 check "N2: Unquoted \$(cmd) Substitution" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     grep -En '"'"'[^"=]\$\([^)]+\)[^"]'"'"' "$f" 2>/dev/null | grep -v '"'"'#'"'"' | grep -v '"'"'check "'"'"' | head -5
+done
 done' _ "${FILES[@]}"
 
 # N3: Parsing ls Output
 check "N3: Parsing ls Output" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     grep -En '"'"'for\s+\w+\s+in\s+\$\(ls|\`ls|ls\s+\|'"'"' "$f" 2>/dev/null | grep -v '"'"'#'"'"'
+done
 done' _ "${FILES[@]}"
 
 # N4: Backticks for Command Substitution
 check "N4: Backticks for Command Substitution" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     grep -En '"'"'\`[^\`]+\`'"'"' "$f" 2>/dev/null | grep -v '"'"'#'"'"'
+done
 done' _ "${FILES[@]}"
 
 # N5: Single Brackets [ ] in Bash
 check "N5: Single Brackets [ ] in Bash" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     if head -1 "$f" | grep -q '"'"'bash'"'"'; then
         grep -En '"'"'^\s*\[\s+|\s+\[\s+[^[]'"'"' "$f" | grep -v '"'"'\[\['"'"' | grep -v '"'"'#'"'"' | grep -v '"'"'check "'"'"' | head -5
     fi
+done
 done' _ "${FILES[@]}"
 
 # N6: 'function' Keyword
 check "N6: 'function' Keyword" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     grep -En '"'"'^\s*function\s+\w+'"'"' "$f" 2>/dev/null | grep -v '"'"'#'"'"'
+done
 done' _ "${FILES[@]}"
 
 # N7: Bare 'cd' Without Error Handling
 check "N7: Bare 'cd' Without Error Handling" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     grep -En '"'"'^\s*cd\s+'"'"' "$f" | grep -v '"'"'\|\||&&\|exit\|return\|;\|#'"'"' | head -5
+done
 done' _ "${FILES[@]}"
 
 # N8: Useless Cat
 check "N8: Useless Cat" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     grep -En '"'"'cat\s+[^|]+\|\s*(grep|awk|sed|head|tail|wc|sort|uniq|cut)'"'"' "$f" 2>/dev/null | grep -v '"'"'#'"'"'
+done
 done' _ "${FILES[@]}"
 
 # N9: eval Usage
 check "N9: eval Usage" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     grep -En '"'"'^\s*eval\s|\seval\s'"'"' "$f" | grep -v '"'"'grep.*eval\|check.*eval\|#'"'"' | head -5
+done
 done' _ "${FILES[@]}"
 
 # N10: Hardcoded /tmp Files
 check "N10: Hardcoded /tmp Files" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     grep -En '"'"'"/tmp/[^\$]'"'"' "$f" | grep -v '"'"'mktemp\|#'"'"' | head -5
+done
 done' _ "${FILES[@]}"
 
 # N11: curl|bash Remote Code Execution
 check "N11: curl|bash Remote Code Execution" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     grep -En '"'"'curl\s+.*\|\s*(ba)?sh|wget\s+.*\|\s*(ba)?sh'"'"' "$f" 2>/dev/null | grep -v '"'"'#'"'"'
+done
 done' _ "${FILES[@]}"
 
 # N12: Unquoted Array Expansion
 check "N12: Unquoted Array Expansion" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     grep -En '"'"'\$\{[a-zA-Z_]+\[\*\]\}'"'"' "$f" | head -3
+done
 done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## MUST Rules"
 
 # M1: Shebang Required
 check "M1: Shebang Required" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     if ! head -1 "$f" | grep -qE '"'"'^#!.*(bash|sh)'"'"'; then
         printf '"'"'%s: missing shebang\n'"'"' "$f"
     fi
+done
 done' _ "${FILES[@]}"
 
 # M2: Strict Mode Required
 check "M2: Strict Mode Required" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     if ! grep -q '"'"'set -euo pipefail'"'"' "$f"; then
         if ! (grep -q '"'"'set.*-e'"'"' "$f" && grep -q '"'"'set.*-u'"'"' "$f" && grep -q '"'"'pipefail'"'"' "$f"); then
             printf '"'"'%s: missing strict mode\n'"'"' "$f"
         fi
     fi
+done
 done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## SHOULD Rules"
 
 # S1: Safe Path Pattern Before cd
 warn "S1: Safe Path Pattern Before cd" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     grep -qE '"'"'^\s*cd\s+'"'"' "$f" || continue
     if grep -q '"'"'pushd'"'"' "$f" 2>/dev/null; then continue; fi
     if grep -qE '"'"'(pwd|realpath|SCRIPT_DIR).*=|original.*=.*pwd'"'"' "$f" 2>/dev/null; then continue; fi
     grep -En '"'"'^\s*cd\s+"\$'"'"' "$f" 2>/dev/null | head -3 | while IFS= read -r line; do
         printf '"'"'%s (review: paths resolved before cd?)\n'"'"' "$line"
     done
+done
 done' _ "${FILES[@]}"
 
 # S2: Functions Should Use 'local'
 warn "S2: Functions Should Use 'local'" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     awk '"'"'/^[a-zA-Z_][a-zA-Z0-9_]*\s*\(\)\s*\{/,/^\}/ {
         if (/^\s+[a-zA-Z_][a-zA-Z0-9_]*=/ && !/local\s|readonly\s|declare\s|export\s/) {
             print FILENAME":"NR": "$0
         }
     }'"'"' "$f"
-done | head -10' _ "${FILES[@]}"
+done | head -10
+done' _ "${FILES[@]}"
 
 # S3: mktemp Needs Cleanup Trap
 warn "S3: mktemp Needs Cleanup Trap" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     if grep -q '"'"'mktemp'"'"' "$f" && ! grep -q '"'"'trap.*EXIT'"'"' "$f"; then
         printf '"'"'%s: mktemp without trap\n'"'"' "$f"
     fi
+done
 done' _ "${FILES[@]}"
 
 # S4: Constants Should Use readonly
 warn "S4: Constants Should Use readonly" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     grep -En '"'"'^[A-Z_]+='"'"' "$f" | grep -v '"'"'readonly\|declare -r\|export\|local'"'"' | head -3
+done
 done' _ "${FILES[@]}"
 
 # S5: Read Loops Need 'IFS= read -r'
 warn "S5: Read Loops Need 'IFS= read -r'" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     grep -En '"'"'while\s+read\s'"'"' "$f" | grep -v '"'"'IFS=\|read -r'"'"' | head -3
+done
 done' _ "${FILES[@]}"
 
 # S6: Lines Under 100 Characters
 warn "S6: Lines Under 100 Characters" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     awk '"'"'length > 100 { print FILENAME":"NR": "length" chars" }'"'"' "$f" | head -3
+done
 done' _ "${FILES[@]}"
 
 # S7: Prefer printf Over echo
 warn "S7: Prefer printf Over echo" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     grep -En '"'"'echo\s+"\$|echo\s+-e'"'"' "$f" | head -3
+done
 done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## Info"

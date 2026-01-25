@@ -103,11 +103,13 @@ check "N4: HostPath Volume Mounts" \
 
 # N5: Privilege Escalation Allowed
 check "N5: Privilege Escalation Allowed" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Check for explicit true setting
   if grep -qE '"'"'allowPrivilegeEscalation:\s*true'"'"' "$f" 2>/dev/null; then
     grep -HnE '"'"'allowPrivilegeEscalation:\s*true'"'"' "$f"
   fi
+done
 done' _ "${FILES[@]}"
 
 # N6: Running as Root User
@@ -120,28 +122,33 @@ check "N7: Secrets in Environment Variables" \
 
 # N8: Default ServiceAccount
 check "N8: Default ServiceAccount" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qE '"'"'kind:\s*(Deployment|StatefulSet|DaemonSet|Job|CronJob|Pod)'"'"' "$f" 2>/dev/null; then
     if grep -qE '"'"'serviceAccountName:\s*default\s*$'"'"' "$f" 2>/dev/null; then
       grep -HnE '"'"'serviceAccountName:\s*default\s*$'"'"' "$f"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## MUST Rules"
 
 # M1: Container Image Tag Required
 check "M1: Container Image Tag Required" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Match image: without tag or with :latest
   grep -HnE '"'"'image:\s*["\x27]?[a-zA-Z0-9._/-]+(:latest)?\s*["\x27]?\s*$'"'"' "$f" 2>/dev/null | \
     grep -v '"'"':[0-9]'"'"' | \
     grep -v '"'"'@sha256:'"'"'
+done
 done' _ "${FILES[@]}"
 
 # M2: Resource Requests Required
 check "M2: Resource Requests Required" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qE '"'"'kind:\s*(Deployment|StatefulSet|DaemonSet|Job|Pod)'"'"' "$f" 2>/dev/null; then
     if grep -qE '"'"'containers:'"'"' "$f" 2>/dev/null; then
       if ! grep -qE '"'"'requests:'"'"' "$f" 2>/dev/null; then
@@ -149,11 +156,13 @@ check "M2: Resource Requests Required" \
       fi
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # M3: Resource Limits Required
 check "M3: Resource Limits Required" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qE '"'"'kind:\s*(Deployment|StatefulSet|DaemonSet|Job|Pod)'"'"' "$f" 2>/dev/null; then
     if grep -qE '"'"'containers:'"'"' "$f" 2>/dev/null; then
       if ! grep -qE '"'"'limits:'"'"' "$f" 2>/dev/null; then
@@ -161,11 +170,13 @@ check "M3: Resource Limits Required" \
       fi
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # M4: Liveness Probe Required
 check "M4: Liveness Probe Required" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qE '"'"'kind:\s*(Deployment|StatefulSet|DaemonSet)'"'"' "$f" 2>/dev/null; then
     if grep -qE '"'"'containers:'"'"' "$f" 2>/dev/null; then
       if ! grep -qE '"'"'livenessProbe:'"'"' "$f" 2>/dev/null; then
@@ -173,11 +184,13 @@ check "M4: Liveness Probe Required" \
       fi
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # M5: Readiness Probe Required
 check "M5: Readiness Probe Required" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qE '"'"'kind:\s*(Deployment|StatefulSet|DaemonSet)'"'"' "$f" 2>/dev/null; then
     if grep -qE '"'"'containers:'"'"' "$f" 2>/dev/null; then
       if ! grep -qE '"'"'readinessProbe:'"'"' "$f" 2>/dev/null; then
@@ -185,31 +198,37 @@ check "M5: Readiness Probe Required" \
       fi
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # M6: Deployment Replicas
 check "M6: Deployment Replicas" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qE '"'"'kind:\s*Deployment'"'"' "$f" 2>/dev/null; then
     if grep -qE '"'"'replicas:\s*1\s*$'"'"' "$f" 2>/dev/null; then
       grep -HnE '"'"'replicas:\s*1\s*$'"'"' "$f"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # M7: Labels Required
 check "M7: Labels Required" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qE '"'"'kind:\s*(Deployment|StatefulSet|DaemonSet|Pod)'"'"' "$f" 2>/dev/null; then
     if ! grep -qE '"'"'labels:'"'"' "$f" 2>/dev/null; then
       echo "$f: workload without labels defined"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # M8: Namespace Required
 check "M8: Namespace Required" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qE '"'"'kind:\s*(Deployment|StatefulSet|DaemonSet|Service|ConfigMap|Secret|Pod)'"'"' "$f" 2>/dev/null; then
     if ! grep -qE '"'"'namespace:'"'"' "$f" 2>/dev/null; then
       echo "$f: resource without explicit namespace"
@@ -217,23 +236,27 @@ check "M8: Namespace Required" \
       grep -HnE '"'"'namespace:\s*default\s*$'"'"' "$f"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## SHOULD Rules"
 
 # S1: Run as Non-Root
 warn "S1: Run as Non-Root" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qE '"'"'kind:\s*(Deployment|StatefulSet|DaemonSet|Pod)'"'"' "$f" 2>/dev/null; then
     if ! grep -qE '"'"'runAsNonRoot:\s*true'"'"' "$f" 2>/dev/null; then
       echo "$f: securityContext.runAsNonRoot not set to true"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S2: Read-Only Root Filesystem
 warn "S2: Read-Only Root Filesystem" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qE '"'"'kind:\s*(Deployment|StatefulSet|DaemonSet|Pod)'"'"' "$f" 2>/dev/null; then
     if grep -qE '"'"'containers:'"'"' "$f" 2>/dev/null; then
       if ! grep -qE '"'"'readOnlyRootFilesystem:\s*true'"'"' "$f" 2>/dev/null; then
@@ -241,11 +264,13 @@ warn "S2: Read-Only Root Filesystem" \
       fi
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S3: Drop All Capabilities
 warn "S3: Drop All Capabilities" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qE '"'"'kind:\s*(Deployment|StatefulSet|DaemonSet|Pod)'"'"' "$f" 2>/dev/null; then
     if grep -qE '"'"'containers:'"'"' "$f" 2>/dev/null; then
       # Check for drop: ["ALL"] or drop: - ALL patterns
@@ -254,11 +279,13 @@ warn "S3: Drop All Capabilities" \
       fi
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S4: PodDisruptionBudget Required
 warn "S4: PodDisruptionBudget Required" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qE '"'"'kind:\s*(Deployment|StatefulSet)'"'"' "$f" 2>/dev/null; then
     name=$(grep -A1 '"'"'metadata:'"'"' "$f" 2>/dev/null | grep '"'"'name:'"'"' | head -1 | sed '"'"'s/.*name:\s*//'"'"' | tr -d '"'"'"\x27 '"'"')
     if [ -n "$name" ]; then
@@ -269,11 +296,13 @@ warn "S4: PodDisruptionBudget Required" \
       fi
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S5: Pod Anti-Affinity
 warn "S5: Pod Anti-Affinity" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qE '"'"'kind:\s*(Deployment|StatefulSet)'"'"' "$f" 2>/dev/null; then
     if grep -qE '"'"'replicas:\s*[2-9]'"'"' "$f" 2>/dev/null; then
       if ! grep -qE '"'"'podAntiAffinity:'"'"' "$f" 2>/dev/null; then
@@ -281,53 +310,63 @@ warn "S5: Pod Anti-Affinity" \
       fi
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S6: Image Pull Policy Always
 warn "S6: Image Pull Policy Always" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qE '"'"'kind:\s*(Deployment|StatefulSet|DaemonSet|Pod)'"'"' "$f" 2>/dev/null; then
     if grep -qE '"'"'imagePullPolicy:\s*(Never|IfNotPresent)'"'"' "$f" 2>/dev/null; then
       grep -HnE '"'"'imagePullPolicy:\s*(Never|IfNotPresent)'"'"' "$f"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S7: Seccomp Profile
 warn "S7: Seccomp Profile" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qE '"'"'kind:\s*(Deployment|StatefulSet|DaemonSet|Pod)'"'"' "$f" 2>/dev/null; then
     if ! grep -qE '"'"'seccompProfile:'"'"' "$f" 2>/dev/null; then
       echo "$f: no seccompProfile configured"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S8: Service Account Token Automount
 warn "S8: Service Account Token Automount" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qE '"'"'kind:\s*(Deployment|StatefulSet|DaemonSet|Pod)'"'"' "$f" 2>/dev/null; then
     # Only warn if automountServiceAccountToken is not explicitly set
     if ! grep -qE '"'"'automountServiceAccountToken:'"'"' "$f" 2>/dev/null; then
       echo "$f: automountServiceAccountToken not explicitly configured"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S9: Network Policy
 warn "S9: Network Policy" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qE '"'"'kind:\s*(Deployment|StatefulSet|DaemonSet)'"'"' "$f" 2>/dev/null; then
     dir=$(dirname "$f")
     if ! grep -rqE "kind:\s*NetworkPolicy" "$dir" 2>/dev/null; then
       echo "$f: no NetworkPolicy found in directory"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S10: Probes Must Differ
 warn "S10: Probes Must Differ" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qE '"'"'livenessProbe:'"'"' "$f" 2>/dev/null && grep -qE '"'"'readinessProbe:'"'"' "$f" 2>/dev/null; then
     liveness=$(grep -A5 '"'"'livenessProbe:'"'"' "$f" 2>/dev/null | head -6)
     readiness=$(grep -A5 '"'"'readinessProbe:'"'"' "$f" 2>/dev/null | head -6)
@@ -338,6 +377,7 @@ warn "S10: Probes Must Differ" \
       echo "$f: liveness and readiness probes appear identical"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## Info"

@@ -99,13 +99,17 @@ check "N3: Index as Key" \
 
 # N4: Direct State Mutation
 check "N4: Direct State Mutation" \
-    bash -c '# Exclude navigation methods: router.push, history.push, navigate
+    bash -c 'for file in "$@"; do
+# Exclude navigation methods: router.push, history.push, navigate
 grep -En '"'"'\.push\(|\.splice\(|\.pop\(|\.shift\(|\.unshift\('"'"' "$@" 2>/dev/null | \
-grep -v '"'"'router\.push\|history\.push\|navigate\.'"'"' || true' _ "${FILES[@]}"
+grep -v '"'"'router\.push\|history\.push\|navigate\.'"'"' || true
+done' _ "${FILES[@]}"
 
 # N5: Missing Dependency Arrays
 check "N5: Missing Dependency Arrays" \
-    bash -c 'grep -Pzo '"'"'useEffect\(\s*\(\)\s*=>\s*\{[^}]*[a-zA-Z]+[^}]*\},\s*\[\]\)'"'"' "$@" 2>/dev/null | head -5 || true' _ "${FILES[@]}"
+    bash -c 'for file in "$@"; do
+grep -Pzo '"'"'useEffect\(\s*\(\)\s*=>\s*\{[^}]*[a-zA-Z]+[^}]*\},\s*\[\]\)'"'"' "$@" 2>/dev/null | head -5 || true
+done' _ "${FILES[@]}"
 
 # N6: Conditional Hooks
 check "N6: Conditional Hooks" \
@@ -117,18 +121,22 @@ check "N7: Generic Component Names" \
 
 # N8: Export Default (except Next.js special files)
 check "N8: Export Default (except Next.js special files)" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
     basename=$(basename "$f")
     # Skip Next.js special files that require export default
     if [[ "$basename" =~ ^(page|layout|loading|error|global-error|not-found|template|default|main)\.(tsx|jsx|ts|js)$ ]]; then
         continue
     fi
     grep -En '"'"'^export default'"'"' "$f" 2>/dev/null || true
+done
 done' _ "${FILES[@]}"
 
 # N9: Props Named data/info/item/value
 check "N9: Props Named data/info/item/value" \
-    bash -c 'grep -En '"'"'\{\s*(data|info|item|value)\s*\}'"'"' "$@" | grep -v '"'"'const\|let\|var'"'"' || true' _ "${FILES[@]}"
+    bash -c 'for file in "$@"; do
+grep -En '"'"'\{\s*(data|info|item|value)\s*\}'"'"' "$@" | grep -v '"'"'const\|let\|var'"'"' || true
+done' _ "${FILES[@]}"
 
 # N10: Console.log in Components
 check "N10: Console.log in Components" \
@@ -146,22 +154,26 @@ printf '\n%s\n' "## SHOULD Rules"
 
 # S1: Handle Loading State
 warn "S1: Handle Loading State" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -q '"'"'fetch\|useQuery\|useSWR\|useEffect.*async'"'"' "$f"; then
     if ! grep -q '"'"'isLoading\|loading'"'"' "$f"; then
       echo "$f: has async but no loading state"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S2: Handle Error State
 warn "S2: Handle Error State" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -q '"'"'fetch\|useQuery\|useSWR\|useEffect.*async'"'"' "$f"; then
     if ! grep -q '"'"'error\|Error'"'"' "$f"; then
       echo "$f: has async but no error handling"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S3: Boolean Props Use Prefix
@@ -170,7 +182,8 @@ warn "S3: Boolean Props Use Prefix" \
 
 # S4: useCallback for Handlers
 warn "S4: useCallback for Handlers" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -q '"'"'const handle'"'"' "$f"; then
     if ! grep -q '"'"'useCallback'"'"' "$f"; then
       handlers=$(grep -c '"'"'const handle'"'"' "$f")
@@ -179,6 +192,7 @@ warn "S4: useCallback for Handlers" \
       fi
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## Info"

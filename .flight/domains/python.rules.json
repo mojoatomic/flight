@@ -1,7 +1,6 @@
 {
   "domain": "python",
   "version": "1.1.0",
-  "language": "python",
   "file_patterns": [
     "**/*.py"
   ],
@@ -25,6 +24,7 @@
       "title": "Bare except:",
       "severity": "NEVER",
       "type": "ast",
+      "language": "python",
       "pattern": null,
       "query": "(except_clause\n  . \"except\"\n  . \":\" @violation)",
       "message": "Never use bare 'except:' which catches everything including KeyboardInterrupt and SystemExit.",
@@ -32,14 +32,14 @@
         "last_verified": "2026-01-20",
         "confidence": "high",
         "re_verify_after": "2027-01-20"
-      },
-      "language": "python"
+      }
     },
     {
       "id": "N3",
       "title": "Mutable Default Arguments",
       "severity": "NEVER",
       "type": "ast",
+      "language": "python",
       "pattern": null,
       "query": "(default_parameter\n  value: (list) @violation)\n(default_parameter\n  value: (dictionary) @violation)\n(default_parameter\n  value: (call\n    function: (identifier) @fn\n    (#eq? @fn \"set\")) @violation)",
       "message": "Never use mutable default arguments (=[], ={}, =set()). Default arguments are evaluated once at function definition, causing shared state across calls.",
@@ -47,8 +47,7 @@
         "last_verified": "2026-01-20",
         "confidence": "high",
         "re_verify_after": "2027-01-20"
-      },
-      "language": "python"
+      }
     },
     {
       "id": "N4",

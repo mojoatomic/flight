@@ -91,7 +91,8 @@ check "N1: SELECT *" \
 
 # N2: String Interpolation in SQL
 check "N2: String Interpolation in SQL" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   case "$f" in
     *.js|*.ts|*.tsx)
       # Template literals with SQL keywords
@@ -104,16 +105,19 @@ check "N2: String Interpolation in SQL" \
       grep -En '"'"'f"[^"]*SELECT.*\{|f"[^"]*INSERT.*\{|f"[^"]*UPDATE.*\{'"'"' "$f" 2>/dev/null
       ;;
   esac
-done | head -10' _ "${FILES[@]}"
+done | head -10
+done' _ "${FILES[@]}"
 
 # N3: UPDATE/DELETE Without WHERE
 check "N3: UPDATE/DELETE Without WHERE" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # DELETE FROM table; without WHERE
   grep -Ein '"'"'DELETE\s+FROM\s+\w+\s*;'"'"' "$f" 2>/dev/null
   # UPDATE without WHERE on same line (basic check)
   grep -Ein '"'"'UPDATE\s+\w+\s+SET\s+.*;'"'"' "$f" 2>/dev/null | grep -iv '"'"'WHERE'"'"'
-done | head -5' _ "${FILES[@]}"
+done | head -5
+done' _ "${FILES[@]}"
 
 # N4: LIKE with Leading Wildcard
 check "N4: LIKE with Leading Wildcard" \
@@ -129,49 +133,58 @@ check "N6: Large OFFSET Values" \
 
 # N7: Plain Text Password Column
 check "N7: Plain Text Password Column" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   case "$f" in
     *.sql)
       grep -Ein '"'"'password\s+(varchar|text|char)'"'"' "$f" 2>/dev/null | grep -iv '"'"'password_hash\|password_digest\|hashed_password'"'"'
       ;;
   esac
+done
 done' _ "${FILES[@]}"
 
 # N8: timestamp Without Timezone
 check "N8: timestamp Without Timezone" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   case "$f" in
     *.sql)
       grep -Ein '"'"'\stimestamp\s'"'"' "$f" 2>/dev/null | grep -iv '"'"'timestamptz\|timestamp with time zone'"'"'
       ;;
   esac
+done
 done' _ "${FILES[@]}"
 
 # N9: float/real for Money
 check "N9: float/real for Money" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   case "$f" in
     *.sql)
       grep -Ein '"'"'(price|cost|total|amount|balance|fee|rate)\s+(float|real|double)'"'"' "$f" 2>/dev/null
       ;;
   esac
+done
 done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## SHOULD Rules"
 
 # S1: Boolean Without NOT NULL DEFAULT
 warn "S1: Boolean Without NOT NULL DEFAULT" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   case "$f" in
     *.sql)
       grep -Ein '"'"'\s+boolean\s*[,)]'"'"' "$f" 2>/dev/null | grep -iv '"'"'NOT NULL'"'"'
       ;;
   esac
+done
 done' _ "${FILES[@]}"
 
 # S2: Missing RLS on user_id Tables
 warn "S2: Missing RLS on user_id Tables" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   case "$f" in
     *.sql)
       if grep -qi '"'"'user_id.*REFERENCES\|user_id\s+uuid'"'"' "$f"; then
@@ -181,11 +194,13 @@ warn "S2: Missing RLS on user_id Tables" \
       fi
       ;;
   esac
+done
 done' _ "${FILES[@]}"
 
 # S3: Missing Index on Foreign Key
 warn "S3: Missing Index on Foreign Key" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   case "$f" in
     *.sql)
       grep -Eo '"'"'[a-z_]+\s+uuid\s+REFERENCES'"'"' "$f" 2>/dev/null | while read -r line; do
@@ -196,21 +211,25 @@ warn "S3: Missing Index on Foreign Key" \
       done
       ;;
   esac
-done | head -5' _ "${FILES[@]}"
+done | head -5
+done' _ "${FILES[@]}"
 
 # S4: N+1 Query Pattern
 warn "S4: N+1 Query Pattern" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   case "$f" in
     *.js|*.ts|*.tsx|*.py)
       awk '"'"'/for\s*\(|while\s*\(|for .* in/{inloop=5} inloop>0{inloop--; if(/await.*(query|select|execute|from\()/) print FILENAME":"NR": "$0}'"'"' "$f"
       ;;
   esac
-done | head -5' _ "${FILES[@]}"
+done | head -5
+done' _ "${FILES[@]}"
 
 # S5: Multiple Writes Without Transaction
 warn "S5: Multiple Writes Without Transaction" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   case "$f" in
     *.js|*.ts|*.tsx|*.py)
       inserts=$(grep -c '"'"'INSERT INTO\|UPDATE.*SET'"'"' "$f" 2>/dev/null || echo 0)
@@ -221,6 +240,7 @@ warn "S5: Multiple Writes Without Transaction" \
       fi
       ;;
   esac
+done
 done' _ "${FILES[@]}"
 
 # S6: Supabase .select() Without Columns

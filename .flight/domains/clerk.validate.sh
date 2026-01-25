@@ -87,12 +87,14 @@ printf '\n%s\n' "## NEVER Rules"
 
 # N1: Secret Key in Client Code
 check "N1: Secret Key in Client Code" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Check for secret key in any client-accessible file
   # Skip files that are clearly server-only (api/, server/, actions/)
   if [[ "$f" != *"/api/"* ]] && [[ "$f" != *"/server/"* ]] && [[ "$f" != *".server."* ]] && [[ "$f" != *"/actions/"* ]] && [[ "$f" != *"middleware"* ]]; then
     grep -HnE '"'"'CLERK_SECRET_KEY|secretKey.*clerk'"'"' "$f" 2>/dev/null
   fi
+done
 done' _ "${FILES[@]}"
 
 # N2: Deprecated authMiddleware
@@ -101,7 +103,8 @@ check "N2: Deprecated authMiddleware" \
 
 # N3: auth() in Client Components
 check "N3: auth() in Client Components" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Check if file is a client component
   if grep -q "'"'"'use client'"'"'" "$f" 2>/dev/null; then
     # Flag if importing auth from server
@@ -109,15 +112,18 @@ check "N3: auth() in Client Components" \
       grep -Hn "from ['"'"'\"]@clerk/nextjs/server['"'"'\"]" "$f"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # N4: Synchronous auth() Call in Next.js 15+
 check "N4: Synchronous auth() Call in Next.js 15+" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Find auth() calls that aren'"'"'t awaited or in async context
   # Look for patterns like: const { userId } = auth() without await
   grep -HnE "const\s*\{[^}]*\}\s*=\s*auth\(\)" "$f" 2>/dev/null | \
     grep -v "await"
+done
 done' _ "${FILES[@]}"
 
 # N5: Hardcoded Clerk Keys
@@ -126,7 +132,8 @@ check "N5: Hardcoded Clerk Keys" \
 
 # N6: Missing Webhook Signature Verification
 check "N6: Missing Webhook Signature Verification" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Check webhook handler files
   if [[ "$f" == *"webhook"* ]] && [[ "$f" == *"/api/"* ]]; then
     # Must have svix verification
@@ -134,11 +141,13 @@ check "N6: Missing Webhook Signature Verification" \
       echo "$f: webhook handler without signature verification"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # N7: Using userId When orgId is Required
 check "N7: Using userId When orgId is Required" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Skip test files
   if [[ "$f" == *".test."* ]] || [[ "$f" == *".spec."* ]]; then
     continue
@@ -153,11 +162,13 @@ check "N7: Using userId When orgId is Required" \
       fi
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # N8: Missing Organization Context in Protected Routes
 check "N8: Missing Organization Context in Protected Routes" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Check API routes and server actions
   if [[ "$f" == *"/api/"* ]] || [[ "$f" == *"/actions/"* ]]; then
     # If file uses auth() but doesn'"'"'t check orgId
@@ -169,11 +180,13 @@ check "N8: Missing Organization Context in Protected Routes" \
       fi
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # N9: Missing Null Checks for Auth Values
 check "N9: Missing Null Checks for Auth Values" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Check files using auth()
   if grep -q "await auth()" "$f" 2>/dev/null; then
     # Find destructured values being used directly without checks
@@ -186,13 +199,15 @@ check "N9: Missing Null Checks for Auth Values" \
       fi
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## MUST Rules"
 
 # M1: ClerkProvider at Root
 check "M1: ClerkProvider at Root" \
-    bash -c '# Check if any layout file has ClerkProvider
+    bash -c 'for file in "$@"; do
+# Check if any layout file has ClerkProvider
 for f in "$@"; do
   if [[ "$f" == *"layout"* ]]; then
     if grep -q "ClerkProvider" "$f" 2>/dev/null; then
@@ -201,11 +216,13 @@ for f in "$@"; do
   fi
 done
 # If we get here, no layout has ClerkProvider
-echo "No ClerkProvider found in layout files"' _ "${FILES[@]}"
+echo "No ClerkProvider found in layout files"
+done' _ "${FILES[@]}"
 
 # M2: Middleware Matcher Configuration
 check "M2: Middleware Matcher Configuration" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if [[ "$f" == *"middleware"* ]]; then
     if grep -q "clerkMiddleware" "$f" 2>/dev/null; then
       if ! grep -q "matcher" "$f" 2>/dev/null; then
@@ -213,11 +230,13 @@ check "M2: Middleware Matcher Configuration" \
       fi
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # M3: Use createRouteMatcher for Route Protection
 check "M3: Use createRouteMatcher for Route Protection" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if [[ "$f" == *"middleware"* ]]; then
     if grep -q "clerkMiddleware" "$f" 2>/dev/null; then
       # Check if using auth.protect() without createRouteMatcher
@@ -228,11 +247,13 @@ check "M3: Use createRouteMatcher for Route Protection" \
       fi
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # M4: Validate Organization Slug in Routes
 check "M4: Validate Organization Slug in Routes" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Check route files with orgSlug parameter
   if [[ "$f" == *"[orgSlug]"* ]] || [[ "$f" == *"[slug]"* ]]; then
     # Should have validation against auth orgSlug
@@ -240,11 +261,13 @@ check "M4: Validate Organization Slug in Routes" \
       echo "$f: org slug route without slug validation"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # M5: Include orgId in Database Queries
 check "M5: Include orgId in Database Queries" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Check data access files
   if [[ "$f" == *"/api/"* ]] || [[ "$f" == *"/actions/"* ]] || [[ "$f" == *".server."* ]]; then
     # If file has database queries (Prisma or Drizzle)
@@ -256,11 +279,13 @@ check "M5: Include orgId in Database Queries" \
       fi
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # M6: Handle Organization Switching
 check "M6: Handle Organization Switching" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Check client files using OrganizationSwitcher
   if grep -q "'"'"'use client'"'"'" "$f" 2>/dev/null; then
     if grep -qE "OrganizationSwitcher" "$f" 2>/dev/null; then
@@ -270,6 +295,7 @@ check "M6: Handle Organization Switching" \
       fi
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## Info"

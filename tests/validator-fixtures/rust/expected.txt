@@ -1,0 +1,5 @@
+# Rust fixture expectations
+# Bash validator FAIL: 6 (N5, N6, N7, M3, M4, M5)
+# flight-lint AST: 4 errors (N1x3, N2x1)
+# Total: 6 + 4 = 10
+EXPECT_FAIL=10

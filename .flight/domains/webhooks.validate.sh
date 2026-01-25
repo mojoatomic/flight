@@ -87,7 +87,9 @@ printf '\n%s\n' "## NEVER Rules"
 
 # N1: Plain HTTP Webhook URLs
 check "N1: Plain HTTP Webhook URLs" \
-    bash -c 'grep -Ein "webhook.*http://[^l]|http://.*webhook" "$@" | grep -v "localhost\|127\.0\.0\.1"' _ "${FILES[@]}"
+    bash -c 'for file in "$@"; do
+grep -Ein "webhook.*http://[^l]|http://.*webhook" "$@" | grep -v "localhost\|127\.0\.0\.1"
+done' _ "${FILES[@]}"
 
 # N2: Secrets in Webhook Payloads
 check "N2: Secrets in Webhook Payloads" \
@@ -117,121 +119,159 @@ printf '\n%s\n' "## SHOULD Rules"
 
 # S1: Signature Verification Present
 warn "S1: Signature Verification Present" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qEi "webhook|hook" "$f" 2>/dev/null; then
     if ! grep -qEi "signature|hmac|verify|x-.*-signature|createHmac|hash_hmac" "$f" 2>/dev/null; then
       echo "$f: webhook handler without signature verification"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S2: Async Processing
 warn "S2: Async Processing" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qEi "await.*process|await.*handle|await.*save.*res\.(send|status|json)" "$f" 2>/dev/null; then
     if ! grep -qEi "queue|enqueue|publish|dispatch|bull|sqs|rabbitmq|kafka" "$f" 2>/dev/null; then
       echo "$f: possible sync processing before response"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S3: Idempotency Handling
 warn "S3: Idempotency Handling" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qEi "webhook|hook" "$f" 2>/dev/null; then
     if ! grep -qEi "idempoten|delivery.?id|webhook.?id|x-.*-id|dedup|already.?processed" "$f" 2>/dev/null; then
       echo "$f: no idempotency handling detected"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S4: URL/IP Validation for SSRF Prevention
 warn "S4: URL/IP Validation for SSRF Prevention" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qEi "webhook.*url|url.*webhook|register.*hook|endpoint" "$f" 2>/dev/null; then
     if ! grep -qEi "isPrivate|privateIP|private.*range|internal.*ip|isValidUrl|validateUrl|blockList|allowList|dns\.resolve|dns\.lookup" "$f" 2>/dev/null; then
       echo "$f: webhook URL handling without IP validation"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S5: Event Type Handling
 warn "S5: Event Type Handling" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qEi "webhook|hook" "$f" 2>/dev/null; then
     if ! grep -qEi "event.?type|event_type|eventType|\.type|\.event|x-.*-event" "$f" 2>/dev/null; then
       echo "$f: no event type handling detected"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S6: Timestamp Handling
 warn "S6: Timestamp Handling" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qEi "webhook|hook" "$f" 2>/dev/null; then
     if ! grep -qEi "timestamp|created.?at|x-.*-timestamp|time" "$f" 2>/dev/null; then
       echo "$f: no timestamp handling detected"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S7: HMAC Signature Implementation
 warn "S7: HMAC Signature Implementation" \
-    bash -c 'grep -qEi "createHmac|hash_hmac|hmac\.new|HMACSHA|HmacUtils" "$@" || echo "No HMAC implementation detected"' _ "${FILES[@]}"
+    bash -c 'for file in "$@"; do
+grep -qEi "createHmac|hash_hmac|hmac\.new|HMACSHA|HmacUtils" "$@" || echo "No HMAC implementation detected"
+done' _ "${FILES[@]}"
 
 # S8: Proper Response Codes
 warn "S8: Proper Response Codes" \
-    bash -c 'grep -qEi "status\(200\)|status\(202\)|sendStatus\(200\)|\.ok\(|res\.send\(" "$@" || echo "No 2xx response handling detected"' _ "${FILES[@]}"
+    bash -c 'for file in "$@"; do
+grep -qEi "status\(200\)|status\(202\)|sendStatus\(200\)|\.ok\(|res\.send\(" "$@" || echo "No 2xx response handling detected"
+done' _ "${FILES[@]}"
 
 # S9: Retry with Backoff Logic
 warn "S9: Retry with Backoff Logic" \
-    bash -c 'grep -qEi "backoff|retry|exponential|attempt|max.?retries" "$@" || echo "No retry/backoff logic detected"' _ "${FILES[@]}"
+    bash -c 'for file in "$@"; do
+grep -qEi "backoff|retry|exponential|attempt|max.?retries" "$@" || echo "No retry/backoff logic detected"
+done' _ "${FILES[@]}"
 
 # S10: Dead Letter Queue Handling
 warn "S10: Dead Letter Queue Handling" \
-    bash -c 'grep -qEi "dead.?letter|dlq|failed.?queue|poison.?queue" "$@" || echo "No dead letter queue handling detected"' _ "${FILES[@]}"
+    bash -c 'for file in "$@"; do
+grep -qEi "dead.?letter|dlq|failed.?queue|poison.?queue" "$@" || echo "No dead letter queue handling detected"
+done' _ "${FILES[@]}"
 
 # S11: Webhook URL Validation on Registration
 warn "S11: Webhook URL Validation on Registration" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -qEi "register.*webhook|webhook.*register|save.*webhook.*url|add.*endpoint" "$f" 2>/dev/null; then
     if ! grep -qEi "validateUrl|isValidUrl|url.*valid|dns\.resolve|lookup|parseUrl" "$f" 2>/dev/null; then
       echo "$f: webhook registration without URL validation"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # S12: Payload Size Limits
 warn "S12: Payload Size Limits" \
-    bash -c 'grep -qEi "payload.?size|max.?size|body.?limit|20.?kb|size.?limit" "$@" || echo "No payload size limits detected"' _ "${FILES[@]}"
+    bash -c 'for file in "$@"; do
+grep -qEi "payload.?size|max.?size|body.?limit|20.?kb|size.?limit" "$@" || echo "No payload size limits detected"
+done' _ "${FILES[@]}"
 
 # S13: Webhook Logging
 warn "S13: Webhook Logging" \
-    bash -c 'grep -qEi "log.*webhook|webhook.*log|logger|console\.(log|info|error).*webhook" "$@" || echo "No webhook-specific logging detected"' _ "${FILES[@]}"
+    bash -c 'for file in "$@"; do
+grep -qEi "log.*webhook|webhook.*log|logger|console\.(log|info|error).*webhook" "$@" || echo "No webhook-specific logging detected"
+done' _ "${FILES[@]}"
 
 # S14: Secret Rotation Support
 warn "S14: Secret Rotation Support" \
-    bash -c 'grep -qEi "rotate|multiple.?secret|old.?secret|new.?secret|secret.?version" "$@" || echo "No secret rotation support detected"' _ "${FILES[@]}"
+    bash -c 'for file in "$@"; do
+grep -qEi "rotate|multiple.?secret|old.?secret|new.?secret|secret.?version" "$@" || echo "No secret rotation support detected"
+done' _ "${FILES[@]}"
 
 # S15: Timing-Safe Comparison Used
 warn "S15: Timing-Safe Comparison Used" \
-    bash -c 'grep -qEi "timingSafeEqual|constant.?time|secure.?compare|MessageDigest\.isEqual|hmac\.compare" "$@" || echo "No timing-safe comparison detected"' _ "${FILES[@]}"
+    bash -c 'for file in "$@"; do
+grep -qEi "timingSafeEqual|constant.?time|secure.?compare|MessageDigest\.isEqual|hmac\.compare" "$@" || echo "No timing-safe comparison detected"
+done' _ "${FILES[@]}"
 
 # S16: Queue Integration
 warn "S16: Queue Integration" \
-    bash -c 'grep -qEi "queue|bull|sqs|rabbitmq|kafka|redis.*publish|pub.?sub|enqueue" "$@" || echo "No queue integration detected"' _ "${FILES[@]}"
+    bash -c 'for file in "$@"; do
+grep -qEi "queue|bull|sqs|rabbitmq|kafka|redis.*publish|pub.?sub|enqueue" "$@" || echo "No queue integration detected"
+done' _ "${FILES[@]}"
 
 # S17: Schema Validation
 warn "S17: Schema Validation" \
-    bash -c 'grep -qEi "joi|zod|yup|ajv|schema.*valid|validate.*schema|json.?schema" "$@" || echo "No schema validation detected"' _ "${FILES[@]}"
+    bash -c 'for file in "$@"; do
+grep -qEi "joi|zod|yup|ajv|schema.*valid|validate.*schema|json.?schema" "$@" || echo "No schema validation detected"
+done' _ "${FILES[@]}"
 
 # S18: Registration Verification Challenge
 warn "S18: Registration Verification Challenge" \
-    bash -c 'grep -qEi "challenge|verification.*webhook|webhook.*verification|verify.*endpoint|test.*webhook" "$@" || echo "No registration verification detected"' _ "${FILES[@]}"
+    bash -c 'for file in "$@"; do
+grep -qEi "challenge|verification.*webhook|webhook.*verification|verify.*endpoint|test.*webhook" "$@" || echo "No registration verification detected"
+done' _ "${FILES[@]}"
 
 # S19: Egress Proxy for Webhook Delivery
 warn "S19: Egress Proxy for Webhook Delivery" \
-    bash -c 'grep -qEi "smokescreen|egress.*proxy|webhook.*proxy|proxy.*webhook|sentry" "$@" || echo "No egress proxy detected (optional but recommended)"' _ "${FILES[@]}"
+    bash -c 'for file in "$@"; do
+grep -qEi "smokescreen|egress.*proxy|webhook.*proxy|proxy.*webhook|sentry" "$@" || echo "No egress proxy detected (optional but recommended)"
+done' _ "${FILES[@]}"
 
 printf '\n%s\n' "═══════════════════════════════════════════"
 printf '  PASS: %d  FAIL: %d  WARN: %d\n' "$PASS" "$FAIL" "$WARN"

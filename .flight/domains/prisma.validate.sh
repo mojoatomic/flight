@@ -87,7 +87,8 @@ printf '\n%s\n' "## NEVER Rules"
 
 # N1: Queries Without orgId (Multi-tenant)
 check "N1: Queries Without orgId (Multi-tenant)" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Skip test files and schema files
   if [[ "$f" == *".test."* ]] || [[ "$f" == *".spec."* ]] || [[ "$f" == *"schema.prisma"* ]]; then
     continue
@@ -102,6 +103,7 @@ check "N1: Queries Without orgId (Multi-tenant)" \
       fi
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # N2: $queryRawUnsafe with User Input
@@ -110,7 +112,8 @@ check "N2: \$queryRawUnsafe with User Input" \
 
 # N3: N+1 Query Pattern
 check "N3: N+1 Query Pattern" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Skip test files
   if [[ "$f" == *".test."* ]] || [[ "$f" == *".spec."* ]]; then
     continue
@@ -131,11 +134,13 @@ check "N3: N+1 Query Pattern" \
     in_loop = 0
   }
   '"'"' "$f" 2>/dev/null
+done
 done' _ "${FILES[@]}"
 
 # N4: Unhandled Prisma Errors
 check "N4: Unhandled Prisma Errors" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Skip test files
   if [[ "$f" == *".test."* ]] || [[ "$f" == *".spec."* ]]; then
     continue
@@ -149,11 +154,13 @@ check "N4: Unhandled Prisma Errors" \
       fi
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # N5: New PrismaClient Per Request
 check "N5: New PrismaClient Per Request" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Skip the singleton file itself (usually lib/prisma.ts or db.ts)
   if [[ "$f" == *"lib/prisma"* ]] || [[ "$f" == *"lib/db"* ]] || [[ "$f" == *"prisma/client"* ]]; then
     continue
@@ -164,11 +171,13 @@ check "N5: New PrismaClient Per Request" \
       grep -Hn "new PrismaClient()" "$f"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # N7: Missing Unique Constraint Handling
 check "N7: Missing Unique Constraint Handling" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   # Skip test files
   if [[ "$f" == *".test."* ]] || [[ "$f" == *".spec."* ]]; then
     continue
@@ -180,13 +189,15 @@ check "N7: Missing Unique Constraint Handling" \
       grep -Hn "\.create\s*(" "$f" | head -3
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## MUST Rules"
 
 # M4: Singleton Client Pattern
 check "M4: Singleton Client Pattern" \
-    bash -c '# Check if there'"'"'s a singleton pattern in the codebase
+    bash -c 'for file in "$@"; do
+# Check if there'"'"'s a singleton pattern in the codebase
 found_singleton=0
 for f in "$@"; do
   if grep -qE "globalThis.*prisma|global.*prisma.*PrismaClient" "$f" 2>/dev/null; then
@@ -204,11 +215,13 @@ for f in "$@"; do
 done
 if [[ $has_prisma -eq 1 ]] && [[ $found_singleton -eq 0 ]]; then
   echo "No PrismaClient singleton pattern found (expected in lib/prisma.ts or similar)"
-fi' _ "${FILES[@]}"
+fi
+done' _ "${FILES[@]}"
 
 # M6: Include orgId in Schema
 check "M6: Include orgId in Schema" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if [[ "$f" == *"schema.prisma"* ]]; then
     # Find models that look like tenant data (not User, Organization, etc)
     # Check if they have orgId
@@ -233,6 +246,7 @@ check "M6: Include orgId in Schema" \
     }
     '"'"' "$f" 2>/dev/null
   fi
+done
 done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## Info"

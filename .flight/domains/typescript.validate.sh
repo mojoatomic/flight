@@ -111,18 +111,23 @@ check "N6: String Type for Status/Type/Kind Fields" \
 
 # N7: Exported Functions Must Have Return Type
 check "N7: Exported Functions Must Have Return Type" \
-    bash -c 'grep -En '"'"'^export (async )?function \w+\([^)]*\)\s*\{'"'"' "$@" | grep -v '"'"'):'"'"'' _ "${FILES[@]}"
+    bash -c 'for file in "$@"; do
+grep -En '"'"'^export (async )?function \w+\([^)]*\)\s*\{'"'"' "$@" | grep -v '"'"'):'"'"'
+done' _ "${FILES[@]}"
 
 # N8: Implicit Any in Callbacks (JSON.parse, as any)
 check "N8: Implicit Any in Callbacks (JSON.parse, as any)" \
-    bash -c 'grep -En '"'"'JSON\.parse\([^)]*\)\.(map|filter|reduce|forEach|find|some|every)\('"'"' "$@"
-grep -En '"'"'as any\)\.(map|filter|reduce|forEach|find|some|every)\('"'"' "$@"' _ "${FILES[@]}"
+    bash -c 'for file in "$@"; do
+grep -En '"'"'JSON\.parse\([^)]*\)\.(map|filter|reduce|forEach|find|some|every)\('"'"' "$@"
+grep -En '"'"'as any\)\.(map|filter|reduce|forEach|find|some|every)\('"'"' "$@"
+done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## MUST Rules"
 
 # M1: tsconfig strict Mode
 check "M1: tsconfig strict Mode" \
-    bash -c 'STRICT_FOUND=false
+    bash -c 'for file in "$@"; do
+STRICT_FOUND=false
 if [ -f tsconfig.json ]; then
   if grep -qE '"'"'"strict"[[:space:]]*:[[:space:]]*true'"'"' tsconfig.json 2>/dev/null; then
     STRICT_FOUND=true
@@ -137,28 +142,35 @@ if [ "$STRICT_FOUND" = false ]; then
   if [ -f tsconfig.json ] || [ -f tsconfig.app.json ]; then
     echo '"'"'No tsconfig file has strict: true enabled'"'"'
   fi
-fi' _ "${FILES[@]}"
+fi
+done' _ "${FILES[@]}"
 
 # M2: Type Guards for unknown
 check "M2: Type Guards for unknown" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   if grep -q '"'"': unknown'"'"' "$f"; then
     if ! grep -q '"'"'is [A-Z]'"'"' "$f"; then
       echo "$f: uses '"'"'unknown'"'"' but no type guard found"
     fi
   fi
+done
 done' _ "${FILES[@]}"
 
 # M3: Interface for Object Shapes
 check "M3: Interface for Object Shapes" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   grep -Hn '"'"'type [A-Z][a-zA-Z]* = {'"'"' "$f" 2>/dev/null | head -3
+done
 done' _ "${FILES[@]}"
 
 # M4: Readonly for Array Parameters
 check "M4: Readonly for Array Parameters" \
-    bash -c 'for f in "$@"; do
+    bash -c 'for file in "$@"; do
+for f in "$@"; do
   grep -En '"'"'function.*\([^)]*:\s*[A-Za-z]+\[\]'"'"' "$f" 2>/dev/null | grep -v '"'"'readonly'"'"' | head -3
+done
 done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## Info"

@@ -1,0 +1,4 @@
+# Supabase fixture expectations (AST rules via flight-lint)
+# N2: Deprecated auth-helpers import (2 violations)
+# N4: Hardcoded Supabase credentials (2 violations)
+EXPECT_FAIL=4

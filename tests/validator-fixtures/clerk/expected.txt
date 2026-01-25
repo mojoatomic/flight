@@ -1,0 +1,6 @@
+# Clerk fixture expectations
+# Bash validator counts rule violations (not match lines):
+# - N2: Deprecated authMiddleware (1 rule violation)
+# - N5: Hardcoded Clerk Keys (1 rule violation)
+# - M1: Missing ClerkProvider (1 rule violation)
+EXPECT_FAIL=3

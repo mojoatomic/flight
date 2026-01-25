@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test
+  template:
+    metadata:
+      labels:
+        app: test
+    spec:
+      containers:
+      - name: app
+        image: myapp:latest
+        securityContext:
+          privileged: true
+          runAsRoot: true
+        env:
+        - name: DB_PASSWORD
+          value: "secret123"

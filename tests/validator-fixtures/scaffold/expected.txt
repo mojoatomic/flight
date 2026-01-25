@@ -1,0 +1,4 @@
+# Scaffold fixture expectations
+# Bash validator counts rule violations (not match lines):
+# - N1: Destructive scaffold flags (1 rule violation)
+EXPECT_FAIL=1

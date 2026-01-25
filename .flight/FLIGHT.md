@@ -605,6 +605,8 @@ If MCP tools aren't available, fall back to web search.
 | `.flight/bin/flight-domain-compile.py` | Domain compiler (generates .md + .sh) |
 | `.flight/templates/domain-schema-v2.flight` | Schema v2 template with provenance |
 | `.flight/validate-all.sh` | Runs bash validators + flight-lint (AST) automatically |
+| `.flight/tests/run-tests.sh` | Validator test suite runner |
+| `tests/validator-fixtures/` | Test fixtures for each validator |
 | `.flight/known-landmines.md` | Temporal issues discovered during research |
 | `update.sh` | Update Flight (preserves customizations) |
 | `PRIME.md` | Output of /flight-prime |
@@ -713,6 +715,132 @@ Write code → npm run preflight → Fix failures → Commit → Push
 ```
 
 Run `npm run preflight` before every commit. If it passes locally, CI will pass.
+
+---
+
+## Testing Validators
+
+Flight includes a test suite to verify validators work correctly against known fixtures. This ensures rules detect what they should and don't regress over time.
+
+### Running Tests
+
+```bash
+# Run all 24 validator tests
+.flight/tests/run-tests.sh
+
+# Run specific validators
+.flight/tests/run-tests.sh python rust
+
+# Run a single validator
+.flight/tests/run-tests.sh clerk
+```
+
+### Test Structure
+
+```
+tests/validator-fixtures/
+├── python/
+│   ├── test.py          # Code with known violations
+│   └── expected.txt     # Expected detection counts
+├── rust/
+│   ├── test.rs
+│   └── expected.txt
+└── ...
+```
+
+Each validator has a fixture directory containing:
+1. **Source files** with intentional violations
+2. **expected.txt** with pass/fail thresholds
+
+### How Tests Work
+
+```
+1. Test runner sets FLIGHT_SEARCH_DIR to fixture directory
+2. Runs bash validator (.validate.sh)
+3. Runs flight-lint for AST rules (if available)
+4. Combines: bash FAIL count + flight-lint error count
+5. Compares against expected.txt thresholds
+6. PASS if detected >= expected, FAIL otherwise
+```
+
+### expected.txt Format
+
+```bash
+# Comments start with #
+EXPECT_FAIL=4   # At least 4 NEVER/MUST violations
+EXPECT_PASS=2   # At least 2 rules passing (optional)
+```
+
+The test passes if actual counts **meet or exceed** expectations. This prevents regressions while allowing validators to catch more issues over time.
+
+### Creating Fixtures
+
+When adding a new validator or updating rules:
+
+1. **Read the rules file** to understand actual patterns:
+   ```bash
+   cat .flight/domains/python.rules.json
+   ```
+
+2. **Create violations that match** the exact patterns:
+   ```python
+   # N4: from x import * (grep pattern: "^from .+ import \*")
+   from collections import *  # This will be detected
+
+   # N1: Bare except (AST query matches "except:")
+   try:
+       risky()
+   except:  # This will be detected
+       pass
+   ```
+
+3. **Document violations** in comments:
+   ```python
+   # N1: Bare except (NEVER) - AST rule
+   # N4: from x import * (NEVER) - grep rule
+   ```
+
+4. **Set realistic expectations** in expected.txt:
+   ```bash
+   # Count rule violations, not match lines
+   # Bash validators count rules triggered (not occurrences)
+   # flight-lint counts individual errors
+   EXPECT_FAIL=8  # 4 grep rules + 4 AST errors
+   ```
+
+### Common Pitfalls
+
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| Fixture has violations but test fails | Pattern doesn't match actual rule | Read `.rules.json`, match exact pattern |
+| Expected too high | Counted matches instead of rule violations | Bash counts rules, not lines |
+| AST rules not detected | flight-lint not built | `cd flight-lint && npm run build` |
+| Wrong file type | Rule has specific file_patterns | Check rule's `file_patterns` field |
+
+### Fixture Alignment
+
+Fixtures must contain violations that **exactly match** rule patterns:
+
+| Rule Type | What to Create |
+|-----------|----------------|
+| `grep` | Text matching the regex pattern |
+| `ast` | Code matching the tree-sitter query |
+| `presence` | File with/without required pattern |
+| `script` | Code triggering the custom script |
+
+**Key insight:** Rule IDs in fixture comments are documentation only. The validator detects by pattern, not by comment.
+
+### Debugging Failures
+
+```bash
+# See what validator actually detects
+FLIGHT_SEARCH_DIR=tests/validator-fixtures/python \
+  .flight/domains/python.validate.sh
+
+# See what flight-lint detects (AST rules)
+cd tests/validator-fixtures/python && \
+  ../../../flight-lint/bin/flight-lint ../../../.flight/domains/python.rules.json
+```
 
 ---
 

@@ -1,0 +1,24 @@
+# YAML with violations
+
+# N1: Tab character (using actual tab)
+	indented_with_tab: bad
+
+# M1: Norway problem - unquoted no
+country: no
+
+# M2: Sexagesimal number
+time: 12:30:00
+
+# M3: Octal number
+permissions: 0755
+
+# M4: Version coercion
+version: 1.0
+
+# M5: Scientific notation
+count: 1e10
+
+# Good values
+name: "test"
+enabled: true
+count: 42
