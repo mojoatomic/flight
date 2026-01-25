@@ -114,12 +114,7 @@ remove_existing_block() {
 inject_protocol() {
     local claude_md="$1"
     local temp_file
-    local protocol_file
     temp_file=$(mktemp)
-    protocol_file=$(mktemp)
-
-    # Write protocol to temp file
-    echo "$PROTOCOL_BLOCK" > "$protocol_file"
 
     # Find first --- (end of about section or frontmatter)
     local injection_line
@@ -130,18 +125,15 @@ inject_protocol() {
 
     injection_line=${injection_line:-1}
 
-    # Inject the protocol block after the found line
-    awk -v line="$injection_line" -v pfile="$protocol_file" '
-        { print }
-        NR == line {
-            print ""
-            while ((getline pline < pfile) > 0) print pline
-            close(pfile)
-        }
-    ' "$claude_md" > "$temp_file"
+    # Inject protocol block using head/tail (portable, avoids awk getline issues on macOS)
+    {
+        head -n "$injection_line" "$claude_md"
+        echo ""
+        echo "$PROTOCOL_BLOCK"
+        tail -n +"$((injection_line + 1))" "$claude_md"
+    } > "$temp_file"
 
     mv "$temp_file" "$claude_md"
-    rm -f "$protocol_file"
 }
 
 create_claude_md_with_protocol() {

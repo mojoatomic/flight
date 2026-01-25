@@ -5,6 +5,8 @@ set -euo pipefail
 readonly REPO="https://github.com/mojoatomic/flight.git"
 readonly TMP_DIR="$(mktemp -d)"
 
+log() { echo "[install] $*"; }
+
 cleanup() {
     local exit_code=$?
     rm -rf "$TMP_DIR"
@@ -12,31 +14,48 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "Installing Flight..."
+log "Starting Flight installation..."
+log "TMP_DIR=$TMP_DIR"
 
+log "Cloning repository..."
 git clone --depth 1 "$REPO" "$TMP_DIR" 2>/dev/null
+log "Clone complete"
 
 # Copy Flight core
+log "Copying .flight directory..."
 cp -r "$TMP_DIR/.flight" .
+log "Creating .claude directory..."
 mkdir -p .claude
 cp "$TMP_DIR/.flight/templates/claude-settings.json" .claude/settings.json
 cp -r "$TMP_DIR/.claude/skills" .claude/
 cp "$TMP_DIR/update.sh" .
+log "Core files copied"
 
 # Copy flight-lint (AST validation tool)
 if [[ -d "$TMP_DIR/flight-lint" ]]; then
+    log "Copying flight-lint..."
     cp -r "$TMP_DIR/flight-lint" .
+    log "flight-lint copied"
+
     echo "Building flight-lint..."
     echo "  Installing dependencies (including tree-sitter native modules)..."
+    log "Running: npm install --include=optional"
     (cd flight-lint && CI=true npm install --include=optional) || {
         echo "Warning: npm install had issues. tree-sitter requires build tools."
         echo "  On macOS: xcode-select --install"
         echo "  On Ubuntu: apt-get install build-essential"
     }
+    log "npm install complete"
+
     echo "  Compiling TypeScript..."
+    log "Running: npm run build (node ./node_modules/typescript/lib/tsc.js)"
+    log "Current directory: $(pwd)"
+    log "flight-lint/node_modules exists: $(test -d flight-lint/node_modules && echo yes || echo no)"
+    log "flight-lint/node_modules/typescript exists: $(test -d flight-lint/node_modules/typescript && echo yes || echo no)"
     (cd flight-lint && CI=true npm run build) || {
         echo "Warning: flight-lint build failed. AST rules will be skipped."
     }
+    log "npm run build complete"
 fi
 
 # Copy project files only if they don't exist
@@ -53,7 +72,9 @@ chmod +x .flight/inject-flight-protocol.sh 2>/dev/null || true
 chmod +x .flight/hooks/*.sh 2>/dev/null || true
 
 # Inject Flight Execution Protocol into CLAUDE.md
+log "Running inject-flight-protocol.sh..."
 ./.flight/inject-flight-protocol.sh .
+log "inject-flight-protocol.sh complete"
 
 # Add npm scripts if package.json exists
 if [[ -f package.json ]]; then
