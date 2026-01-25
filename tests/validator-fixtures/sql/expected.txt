@@ -1,1 +1,5 @@
-EXPECT_FAIL=3
+# SQL fixture expectations
+# N1: SELECT * (3 matches), N2: String interpolation (1)
+# N3: UPDATE without WHERE (1), N4: LIKE leading wildcard (1)
+# Note: N1 counts each SELECT * separately
+EXPECT_FAIL=4

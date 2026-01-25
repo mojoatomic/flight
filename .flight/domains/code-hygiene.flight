@@ -572,6 +572,75 @@ rules:
           node debug-script.mjs
           rm debug-script.mjs
 
+  N12:
+    title: Hardcoded API Keys
+    severity: NEVER
+    mechanical: true
+    provenance:
+      last_verified: "2026-01-25"
+      confidence: high
+      re_verify_after: "2026-07-25"
+      sources:
+        - url: "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/01-Information_Gathering/02-Fingerprint_Web_Server"
+          accessed: "2026-01-25"
+          quote: "Never store sensitive information such as API keys in source code"
+    description: >
+      Do not hardcode API keys, tokens, or secrets in source code. Use environment
+      variables or secret management systems instead.
+    check:
+      type: grep
+      pattern: '(api[_-]?key|apikey|api[_-]?secret|secret[_-]?key)\s*[=:]\s*[''"][a-zA-Z0-9_\-]{16,}[''"]'
+      flags: -Eni
+    note: |
+      Hardcoded credentials in source code are a critical security vulnerability.
+      They get committed to version control, exposed in logs, and leaked in builds.
+      Always use environment variables: process.env.API_KEY, os.environ['API_KEY'].
+    examples:
+      bad:
+        - "const API_KEY = 'sk-proj-abc123def456';"
+        - "apiKey: 'live_key_1234567890abcdef'"
+        - "const secret_key = \"ghp_xxxxxxxxxxxxxxxxxxxx\";"
+        - "API_SECRET = 'abcdefghijklmnopqrstuvwxyz'"
+      good:
+        - "const API_KEY = process.env.API_KEY;"
+        - "apiKey: process.env.STRIPE_API_KEY"
+        - "const secretKey = os.environ.get('SECRET_KEY')"
+        - "# API keys loaded from .env file via dotenv"
+
+  N13:
+    title: Hardcoded Passwords and Secrets
+    severity: NEVER
+    mechanical: true
+    provenance:
+      last_verified: "2026-01-25"
+      confidence: high
+      re_verify_after: "2026-07-25"
+      sources:
+        - url: "https://cwe.mitre.org/data/definitions/798.html"
+          accessed: "2026-01-25"
+          quote: "CWE-798: Use of Hard-coded Credentials"
+    description: >
+      Do not hardcode passwords, database credentials, or authentication tokens
+      in source code. These must come from environment variables or secret stores.
+    check:
+      type: grep
+      pattern: '(password|passwd|pwd|db_pass|database_password|auth_token|bearer_token)\s*[=:]\s*[''"][^''"]{8,}[''"]'
+      flags: -Eni
+    note: |
+      Hardcoded passwords are among the most common causes of data breaches.
+      Even in development, use environment variables to build the right habits.
+    examples:
+      bad:
+        - "const password = 'mysecretpassword123';"
+        - "db_pass: 'production_db_password'"
+        - "PASSWORD = \"admin123456\""
+        - "auth_token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'"
+      good:
+        - "const password = process.env.DB_PASSWORD;"
+        - "db_pass: process.env.DATABASE_PASSWORD"
+        - "PASSWORD = os.environ['PASSWORD']"
+        - "auth_token = getSecretFromVault('auth_token')"
+
   # =========================================================================
   # MUST - Important patterns (validator warns)
   # =========================================================================
@@ -993,6 +1062,14 @@ anti_patterns:
   - pattern: "cat > /tmp/*.mjs ... import"
     description: "/tmp scripts can't import project deps"
     fix: "Run from project dir or use existing tooling"
+
+  - pattern: "API_KEY = 'sk-...'"
+    description: "Hardcoded API key"
+    fix: "Use process.env.API_KEY or secret management"
+
+  - pattern: "password = 'secret123'"
+    description: "Hardcoded password"
+    fix: "Use process.env.PASSWORD or secret store"
 
 # ===========================================================================
 # SOURCES

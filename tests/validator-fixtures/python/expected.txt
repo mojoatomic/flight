@@ -1,5 +1,5 @@
 # Python fixture expectations
-# Bash validator FAIL: 4 (N4, N5, N6, N8)
-# flight-lint AST: 4 errors (N1x1, N3x3)
-# Total: 4 + 4 = 8
-EXPECT_FAIL=8
+# Bash validator FAIL: 5 (N4, N5, N6, N8, N10)
+# flight-lint AST: 8 errors (N1x1, N3x3, N11, N12, N13, N14)
+# Total: 5 + 8 = 13
+EXPECT_FAIL=13

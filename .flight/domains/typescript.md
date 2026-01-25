@@ -147,6 +147,54 @@ Type-safe TypeScript patterns that catch errors at compile time. Don't lie to th
    
    ```
 
+9. **eval() Usage** - Never use eval() to execute arbitrary code. It allows code injection attacks if any part of the input is user-controlled, and prevents JavaScript engine optimizations.
+
+   ```
+   // BAD
+   const result = eval(userInput);
+   // BAD
+   eval('var x = ' + data);
+
+   // GOOD
+   const data = JSON.parse(jsonString);
+   // GOOD
+   const fn = new Function('return ' + expression);  // Still risky
+   ```
+
+10. **innerHTML Assignment** - Never assign to innerHTML with user-controlled content. This creates XSS vulnerabilities. Use textContent for text or DOM methods for elements.
+
+   ```
+   // BAD
+   element.innerHTML = userInput;
+   // BAD
+   div.innerHTML = '<span>' + name + '</span>';
+
+   // GOOD
+   element.textContent = userInput;
+   // GOOD
+   const span = document.createElement('span');
+   // GOOD
+   span.textContent = name;
+   // GOOD
+   div.appendChild(span);
+   ```
+
+11. **document.write() Usage** - Never use document.write(). It overwrites the entire document if called after page load, creates XSS vulnerabilities, and blocks page rendering.
+
+   ```
+   // BAD
+   document.write('<h1>' + title + '</h1>');
+   // BAD
+   document.writeln(userContent);
+
+   // GOOD
+   const h1 = document.createElement('h1');
+   // GOOD
+   h1.textContent = title;
+   // GOOD
+   document.body.appendChild(h1);
+   ```
+
 ### MUST (validator will reject)
 
 1. **tsconfig strict Mode** - Enable `strict: true` in tsconfig.json or tsconfig.app.json. This enables all strict type-checking options.

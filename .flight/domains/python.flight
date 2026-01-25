@@ -403,6 +403,182 @@ rules:
               return
           do_action()
 
+  N10:
+    title: Hardcoded Credentials
+    severity: NEVER
+    mechanical: true
+    provenance:
+      last_verified: "2026-01-25"
+      confidence: high
+      re_verify_after: "2026-07-25"
+      sources:
+        - url: "https://cwe.mitre.org/data/definitions/798.html"
+          accessed: "2026-01-25"
+          quote: "CWE-798: Use of Hard-coded Credentials"
+    description: >
+      Never hardcode passwords, API keys, or secrets in source code.
+      Use environment variables or secret management systems.
+    check:
+      type: grep
+      pattern: "(password|passwd|api_key|api_secret|secret_key|auth_token|access_token)\\s*=\\s*['\"][^'\"]{8,}['\"]"
+      flags: -Eni
+    note: |
+      Hardcoded credentials are a critical security vulnerability.
+      Use os.environ.get() or a secrets manager for sensitive values.
+    examples:
+      bad:
+        - "password = 'mysecretpassword123'"
+        - "API_KEY = 'sk-proj-abc123def456ghi'"
+        - "auth_token = 'eyJhbGciOiJIUzI1NiIs...'"
+      good:
+        - "password = os.environ.get('DB_PASSWORD')"
+        - "API_KEY = os.environ['OPENAI_API_KEY']"
+        - "auth_token = get_secret('auth_token')"
+
+  N11:
+    title: eval() Usage
+    severity: NEVER
+    mechanical: true
+    provenance:
+      last_verified: "2026-01-25"
+      confidence: high
+      re_verify_after: "2026-07-25"
+      sources:
+        - url: "https://cwe.mitre.org/data/definitions/95.html"
+          accessed: "2026-01-25"
+          quote: "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+    description: >
+      Never use eval() to execute arbitrary code. It allows code injection
+      attacks if any part of the input is user-controlled.
+    check:
+      type: ast
+      language: python
+      query: |
+        (call
+          function: (identifier) @fn
+          (#eq? @fn "eval")) @violation
+    note: |
+      eval() executes arbitrary Python code. Even "sanitized" input can be
+      exploited. Use ast.literal_eval() for safe literal parsing, or find
+      a domain-specific parser for your use case.
+    examples:
+      bad:
+        - "result = eval(user_input)"
+        - "config = eval(f'dict({params})')"
+      good:
+        - "result = ast.literal_eval(user_input)  # Safe for literals only"
+        - "config = json.loads(params)"
+
+  N12:
+    title: exec() Usage
+    severity: NEVER
+    mechanical: true
+    provenance:
+      last_verified: "2026-01-25"
+      confidence: high
+      re_verify_after: "2026-07-25"
+      sources:
+        - url: "https://cwe.mitre.org/data/definitions/94.html"
+          accessed: "2026-01-25"
+          quote: "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+    description: >
+      Never use exec() to execute code strings. It allows arbitrary code
+      execution and is almost never necessary.
+    check:
+      type: ast
+      language: python
+      query: |
+        (call
+          function: (identifier) @fn
+          (#eq? @fn "exec")) @violation
+    note: |
+      exec() is even more dangerous than eval() - it can execute multiple
+      statements. There's almost always a safer alternative.
+    examples:
+      bad:
+        - "exec(code_string)"
+        - "exec(f'import {module_name}')"
+      good:
+        - "importlib.import_module(module_name)"
+        - "# Redesign to avoid dynamic code execution"
+
+  N13:
+    title: subprocess shell=True
+    severity: NEVER
+    mechanical: true
+    provenance:
+      last_verified: "2026-01-25"
+      confidence: high
+      re_verify_after: "2026-07-25"
+      sources:
+        - url: "https://cwe.mitre.org/data/definitions/78.html"
+          accessed: "2026-01-25"
+          quote: "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+    description: >
+      Never use shell=True with subprocess. It enables shell injection
+      attacks when any part of the command is user-controlled.
+    check:
+      type: ast
+      language: python
+      query: |
+        (call
+          function: (attribute
+            object: (identifier) @mod
+            attribute: (identifier) @method)
+          arguments: (argument_list
+            (keyword_argument
+              name: (identifier) @kwarg
+              value: (true)))
+          (#eq? @mod "subprocess")
+          (#match? @method "^(run|call|Popen|check_output|check_call)$")
+          (#eq? @kwarg "shell")) @violation
+    note: |
+      With shell=True, command strings are passed through the shell,
+      enabling injection via metacharacters. Pass args as a list instead.
+    examples:
+      bad:
+        - "subprocess.run(f'ls {user_dir}', shell=True)"
+        - "subprocess.call(cmd_string, shell=True)"
+      good:
+        - "subprocess.run(['ls', user_dir])"
+        - "subprocess.call(shlex.split(cmd_string))"
+
+  N14:
+    title: pickle.loads() on Untrusted Data
+    severity: NEVER
+    mechanical: true
+    provenance:
+      last_verified: "2026-01-25"
+      confidence: high
+      re_verify_after: "2026-07-25"
+      sources:
+        - url: "https://cwe.mitre.org/data/definitions/502.html"
+          accessed: "2026-01-25"
+          quote: "CWE-502: Deserialization of Untrusted Data"
+    description: >
+      Never unpickle data from untrusted sources. Pickle can execute
+      arbitrary code during deserialization.
+    check:
+      type: ast
+      language: python
+      query: |
+        (call
+          function: (attribute
+            object: (identifier) @mod
+            attribute: (identifier) @method)
+          (#eq? @mod "pickle")
+          (#match? @method "^(loads?|Unpickler)$")) @violation
+    note: |
+      Pickle is not secure. Malicious pickle data can execute arbitrary
+      code. Use JSON, msgpack, or other safe serialization formats.
+    examples:
+      bad:
+        - "data = pickle.loads(request.body)"
+        - "obj = pickle.load(open(user_file, 'rb'))"
+      good:
+        - "data = json.loads(request.body)"
+        - "obj = msgpack.unpackb(content)"
+
   # =========================================================================
   # SHOULD - Best practices (validator warns)
   # =========================================================================
@@ -917,3 +1093,18 @@ anti_patterns:
   - pattern: "Generic names"
     problem: "Unclear purpose"
     fix: "Domain terms"
+  - pattern: "password = 'secret'"
+    problem: "Hardcoded credentials"
+    fix: "os.environ.get()"
+  - pattern: "eval(user_input)"
+    problem: "Code injection"
+    fix: "ast.literal_eval() or json.loads()"
+  - pattern: "exec(code_string)"
+    problem: "Arbitrary code execution"
+    fix: "Redesign without dynamic code"
+  - pattern: "shell=True"
+    problem: "Command injection"
+    fix: "Pass args as list"
+  - pattern: "pickle.loads()"
+    problem: "Deserialization RCE"
+    fix: "Use JSON or msgpack"

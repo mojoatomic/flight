@@ -22,6 +22,22 @@ function implicitAny(x, y) {
   return x + y;
 }
 
+// N9: eval() usage - AST rule
+function badEval(userInput: string): unknown {
+  return eval(userInput);
+}
+
+// N10: innerHTML assignment - AST rule
+function badInnerHTML(element: HTMLElement, content: string): void {
+  element.innerHTML = content;
+}
+
+// N11: document.write() - AST rule
+function badDocumentWrite(content: string): void {
+  document.write(content);
+  document.writeln(content);
+}
+
 // Good code for pass count
 function goodTyped(x: string): number {
   return x.length;

@@ -346,6 +346,113 @@ rules:
           const items = JSON.parse(data) as Item[];  // with validation elsewhere
           items.map((item: Item) => item.name);
 
+  N9:
+    title: eval() Usage
+    severity: NEVER
+    mechanical: true
+    provenance:
+      last_verified: "2026-01-25"
+      confidence: high
+      re_verify_after: "2026-07-25"
+      sources:
+        - url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/eval#never_use_direct_eval!"
+          accessed: "2026-01-25"
+          quote: "Never use direct eval()! eval() is a dangerous function, which executes the code it's passed with the privileges of the caller."
+    description: >
+      Never use eval() to execute arbitrary code. It allows code injection attacks
+      if any part of the input is user-controlled, and prevents JavaScript engine
+      optimizations.
+    check:
+      type: ast
+      query: |
+        (call_expression
+          function: (identifier) @fn
+          (#eq? @fn "eval")) @violation
+    note: |
+      eval() executes arbitrary JavaScript code with full privileges. Even for
+      non-malicious use cases, there are safer alternatives like JSON.parse()
+      for data, or Function() constructor for dynamic code (though still risky).
+    examples:
+      bad:
+        - "const result = eval(userInput);"
+        - "eval('var x = ' + data);"
+      good:
+        - "const data = JSON.parse(jsonString);"
+        - "const fn = new Function('return ' + expression);  // Still risky"
+
+  N10:
+    title: innerHTML Assignment
+    severity: NEVER
+    mechanical: true
+    provenance:
+      last_verified: "2026-01-25"
+      confidence: high
+      re_verify_after: "2026-07-25"
+      sources:
+        - url: "https://developer.mozilla.org/en-US/docs/Web/API/Element/innerHTML#security_considerations"
+          accessed: "2026-01-25"
+          quote: "It is not uncommon to see innerHTML used to insert text into a web page. There is potential for this to become an attack vector on a site, creating a potential security risk."
+    description: >
+      Never assign to innerHTML with user-controlled content. This creates XSS
+      vulnerabilities. Use textContent for text or DOM methods for elements.
+    check:
+      type: ast
+      query: |
+        (assignment_expression
+          left: (member_expression
+            property: (property_identifier) @prop)
+          (#eq? @prop "innerHTML")) @violation
+    note: |
+      innerHTML parses and executes HTML, including script tags and event handlers.
+      Use textContent for text (escapes HTML), or createElement/appendChild for
+      structured content.
+    examples:
+      bad:
+        - "element.innerHTML = userInput;"
+        - "div.innerHTML = '<span>' + name + '</span>';"
+      good:
+        - "element.textContent = userInput;"
+        - "const span = document.createElement('span');"
+        - "span.textContent = name;"
+        - "div.appendChild(span);"
+
+  N11:
+    title: document.write() Usage
+    severity: NEVER
+    mechanical: true
+    provenance:
+      last_verified: "2026-01-25"
+      confidence: high
+      re_verify_after: "2026-07-25"
+      sources:
+        - url: "https://developer.mozilla.org/en-US/docs/Web/API/Document/write#notes"
+          accessed: "2026-01-25"
+          quote: "Use of document.write() is strongly discouraged... It can block page rendering and cause synchronous reflows."
+    description: >
+      Never use document.write(). It overwrites the entire document if called
+      after page load, creates XSS vulnerabilities, and blocks page rendering.
+    check:
+      type: ast
+      query: |
+        (call_expression
+          function: (member_expression
+            object: (identifier) @obj
+            property: (property_identifier) @method)
+          (#eq? @obj "document")
+          (#match? @method "^(write|writeln)$")) @violation
+    note: |
+      document.write() is a legacy API that should not be used in modern code.
+      If called after page load, it completely replaces the document. Use
+      DOM manipulation methods instead.
+    examples:
+      bad:
+        - "document.write('<h1>' + title + '</h1>');"
+        - "document.writeln(userContent);"
+      good:
+        - "const h1 = document.createElement('h1');"
+        - "h1.textContent = title;"
+        - "document.body.appendChild(h1);"
+
   # =========================================================================
   # MUST - Important patterns (validator warns)
   # =========================================================================

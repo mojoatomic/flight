@@ -151,6 +151,14 @@ check "N10_js: snake_case Declaration in JavaScript/TypeScript" \
 check "N10_py: camelCase Declaration in Python" \
     # Unknown check type: ast
 
+# N12: Hardcoded API Keys
+check "N12: Hardcoded API Keys" \
+    grep -Eni "(api[_-]?key|apikey|api[_-]?secret|secret[_-]?key)\\s*[=:]\\s*['\"][a-zA-Z0-9_\\-]{16,}['\"]" "${FILES[@]}"
+
+# N13: Hardcoded Passwords and Secrets
+check "N13: Hardcoded Passwords and Secrets" \
+    grep -Eni "(password|passwd|pwd|db_pass|database_password|auth_token|bearer_token)\\s*[=:]\\s*['\"][^'\"]{8,}['\"]" "${FILES[@]}"
+
 printf '\n%s\n' "## MUST Rules"
 
 # M1: Boolean Variables Use Proper Prefixes
