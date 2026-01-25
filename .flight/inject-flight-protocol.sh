@@ -101,14 +101,17 @@ remove_existing_block() {
     local temp_file
     temp_file=$(mktemp)
 
+    echo "[inject] remove_existing_block: starting" >&2
     # Remove any existing protocol block
     awk '
         /<!-- FLIGHT_PROTOCOL.*START -->/ { skip=1; next }
         /<!-- FLIGHT_PROTOCOL.*END -->/ { skip=0; next }
         !skip { print }
     ' "$claude_md" > "$temp_file"
+    echo "[inject] remove_existing_block: awk complete" >&2
 
     mv "$temp_file" "$claude_md"
+    echo "[inject] remove_existing_block: done" >&2
 }
 
 inject_protocol() {
@@ -116,24 +119,29 @@ inject_protocol() {
     local temp_file
     temp_file=$(mktemp)
 
+    echo "[inject] inject_protocol: starting" >&2
     # Find first --- (end of about section or frontmatter)
     local injection_line
     injection_line=$(awk '
         /^---[[:space:]]*$/ && !found { found=1; print NR; exit }
         END { if (!found) print 1 }
     ' "$claude_md")
+    echo "[inject] inject_protocol: found injection_line=$injection_line" >&2
 
     injection_line=${injection_line:-1}
 
     # Inject protocol block using head/tail (portable, avoids awk getline issues on macOS)
+    echo "[inject] inject_protocol: running head/tail" >&2
     {
         head -n "$injection_line" "$claude_md"
         echo ""
         echo "$PROTOCOL_BLOCK"
         tail -n +"$((injection_line + 1))" "$claude_md"
     } > "$temp_file"
+    echo "[inject] inject_protocol: head/tail complete" >&2
 
     mv "$temp_file" "$claude_md"
+    echo "[inject] inject_protocol: done" >&2
 }
 
 create_claude_md_with_protocol() {
@@ -212,14 +220,18 @@ main() {
     fi
 
     # Inject mode: remove existing, inject current
+    echo "[inject] main: claude_md=$claude_md" >&2
     if [[ ! -f "$claude_md" ]]; then
+        echo "[inject] main: CLAUDE.md not found, creating" >&2
         create_claude_md_with_protocol "$claude_md"
         info "OK - Created $claude_md with protocol"
     else
+        echo "[inject] main: CLAUDE.md exists, updating" >&2
         remove_existing_block "$claude_md"
         inject_protocol "$claude_md"
         info "OK - Updated protocol in $claude_md"
     fi
+    echo "[inject] main: complete" >&2
 }
 
 main "$@"
