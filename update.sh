@@ -63,7 +63,7 @@ if [[ -d "$TMP_DIR/flight-lint" ]]; then
     if [[ ! -d "flight-lint/dist" ]] || [[ ! -d "flight-lint/node_modules" ]]; then
         echo "Building flight-lint..."
         echo "  Installing dependencies (including tree-sitter native modules)..."
-        (cd flight-lint && CI=true npm install --include=optional) || {
+        (cd flight-lint && CI=true npm install --include=optional --legacy-peer-deps) || {
             echo "Warning: npm install had issues. tree-sitter requires build tools."
             echo "  On macOS: xcode-select --install"
             echo "  On Ubuntu: apt-get install build-essential"
@@ -128,4 +128,4 @@ echo "  - .flight/known-landmines.md (your project's temporal data)"
 echo "  - Custom domains (any .md/.sh not in Flight repo)"
 echo ""
 echo "If AST validation fails (missing tree-sitter packages), rebuild flight-lint:"
-echo "  cd flight-lint && npm install && npm run build"
+echo "  cd flight-lint && npm install --legacy-peer-deps && npm run build"
