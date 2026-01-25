@@ -92,28 +92,84 @@ check "N1: Tab Characters" \
 # N2: Duplicate Keys
 check "N2: Duplicate Keys" \
     bash -c 'for file in "$@"; do
-# Check for duplicate keys at the same indentation level
+# Check for duplicate keys at the same mapping context
+# Properly handles:
+# - Nested objects (on.push.branches vs on.pull_request.branches)
+# - YAML arrays (each - item is a separate context)
 awk '"'"'
-/^[[:space:]]*[^#[:space:]][^:]*:/ {
-  # Extract indentation and key
+BEGIN {
+  # path_stack[indent] = key path at that indent level
+  # array_idx[indent] = array item index at that indent level
+  # seen[full_path] = 1 if weve seen this path
+}
+
+{
+  # Skip comments and empty lines
+  if (/^[[:space:]]*#/ || /^[[:space:]]*$/) next;
+
+  # Get indentation
   match($0, /^[[:space:]]*/);
   indent = RLENGTH;
-  key = $0;
-  gsub(/^[[:space:]]*/, "", key);
-  gsub(/:.*$/, "", key);
 
-  # Create unique identifier for indent level + key
-  id = indent ":" key;
-
-  if (seen[id] && seen[id] == indent_context) {
-    print FILENAME ":" NR ": duplicate key \"" key "\" at same level";
-    found = 1;
+  # Clear path_stack and array_idx for levels deeper than current
+  for (i in path_stack) {
+    if (i > indent) delete path_stack[i];
   }
-  seen[id] = indent_context;
+  for (i in array_idx) {
+    if (i > indent) delete array_idx[i];
+  }
 
-  # Track context changes
-  if (indent == 0) indent_context++;
+  line = $0;
+  gsub(/^[[:space:]]*/, "", line);
+
+  # Check if this is an array item
+  if (line ~ /^-[[:space:]]/ || line ~ /^-$/) {
+    # Increment array index at this indent
+    array_idx[indent]++;
+    # Remove "- " prefix
+    gsub(/^-[[:space:]]*/, "", line);
+    # If nothing left, skip (bare array value)
+    if (line == "" || line !~ /:/) next;
+  }
+
+  # Check if this line has a key
+  if (line ~ /^[^#[:space:]][^:]*:/) {
+    # Extract key
+    key = line;
+    gsub(/:.*$/, "", key);
+    # Trim whitespace
+    gsub(/^[[:space:]]+|[[:space:]]+$/, "", key);
+
+    if (key == "") next;
+
+    # Build full path from parent keys
+    full_path = "";
+    for (i = 0; i < indent; i += 2) {
+      if (i in path_stack && path_stack[i] != "") {
+        full_path = full_path path_stack[i] ".";
+      }
+      if (i in array_idx && array_idx[i] > 0) {
+        full_path = full_path "[" array_idx[i] "].";
+      }
+    }
+    # Add current array index if exists at this level
+    if (indent in array_idx && array_idx[indent] > 0) {
+      full_path = full_path "[" array_idx[indent] "].";
+    }
+    full_path = full_path key;
+
+    # Check for duplicate
+    if (seen[full_path]) {
+      print FILENAME ":" NR ": duplicate key \"" key "\" at same level";
+      found = 1;
+    }
+    seen[full_path] = 1;
+
+    # Store this key for children to build their path
+    path_stack[indent] = key;
+  }
 }
+
 END { exit found ? 1 : 0 }
 '"'"' "$file"
 done' _ "${FILES[@]}"
