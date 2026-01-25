@@ -40,6 +40,13 @@ const DEFAULT_EXCLUDES = [
 
   // Test fixtures (intentionally contain violations for testing)
   '**/fixtures/**',
+  '**/validator-fixtures/**',
+
+  // Test directories (framework tests, not user code)
+  '**/tests/**',
+  '**/test/**',
+  '**/__tests__/**',
+  '**/e2e/**',
 
   // Cache directories
   '**/.cache/**',

@@ -64,8 +64,8 @@ if [[ -f package.json ]]; then
         if [[ -n "$HAS_LINT" ]]; then
             # Lint exists - add validate and preflight
             jq '.scripts.validate = ".flight/validate-all.sh" |
-                .scripts.preflight = "npm run validate && npm run lint"' package.json > package.json.tmp \
-                && mv package.json.tmp package.json
+              .scripts.preflight = "npm run validate && npm run lint"' \
+              package.json > package.json.tmp && mv package.json.tmp package.json
             echo "Added npm scripts (validate, preflight) to package.json"
         else
             # No lint - add validate only, warn about lint
