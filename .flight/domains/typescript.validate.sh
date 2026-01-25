@@ -122,6 +122,18 @@ grep -En '"'"'JSON\.parse\([^)]*\)\.(map|filter|reduce|forEach|find|some|every)\
 grep -En '"'"'as any\)\.(map|filter|reduce|forEach|find|some|every)\('"'"' "$@"
 done' _ "${FILES[@]}"
 
+# N9: eval() Usage
+check "N9: eval() Usage" \
+    # Unknown check type: ast
+
+# N10: innerHTML Assignment
+check "N10: innerHTML Assignment" \
+    # Unknown check type: ast
+
+# N11: document.write() Usage
+check "N11: document.write() Usage" \
+    # Unknown check type: ast
+
 printf '\n%s\n' "## MUST Rules"
 
 # M1: tsconfig strict Mode

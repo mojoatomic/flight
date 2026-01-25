@@ -125,6 +125,18 @@ check "N9: var Declaration" \
 check "N10: Loose Equality" \
     # Unknown check type: ast
 
+# N11: eval() Usage
+check "N11: eval() Usage" \
+    # Unknown check type: ast
+
+# N12: innerHTML Assignment
+check "N12: innerHTML Assignment" \
+    # Unknown check type: ast
+
+# N13: document.write() Usage
+check "N13: document.write() Usage" \
+    # Unknown check type: ast
+
 printf '\n%s\n' "## SHOULD Rules"
 
 # S1: Await in Loops

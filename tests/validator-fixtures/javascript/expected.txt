@@ -1,2 +1,9 @@
-EXPECT_FAIL=2
-EXPECT_PASS=5
+# JavaScript fixture expectations
+# All rules are AST-based (detected by flight-lint only)
+# Bash validator: FAIL=0 (all AST rules)
+# flight-lint AST violations:
+#   N9: var (1), N10: loose equality (2)
+#   N11: eval (1), N12: innerHTML (1), N13: document.write (2)
+#   N7: single-letter vars (3) - x, y in conditions
+# Total: 10
+EXPECT_FAIL=10

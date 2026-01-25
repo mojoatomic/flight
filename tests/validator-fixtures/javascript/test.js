@@ -11,6 +11,22 @@ if (y != undefined) {
     console.log('also loose');
 }
 
+// N11: eval() usage - AST rule
+function badEval(userInput) {
+    return eval(userInput);
+}
+
+// N12: innerHTML assignment - AST rule
+function badInnerHTML(element, content) {
+    element.innerHTML = content;
+}
+
+// N13: document.write() - AST rule
+function badDocumentWrite(content) {
+    document.write(content);
+    document.writeln(content);
+}
+
 // Good code for pass count
 const goodVar = 'good';
 let mutableVar = 1;

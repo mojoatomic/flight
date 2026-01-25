@@ -1,1 +1,8 @@
-EXPECT_FAIL=2
+# TypeScript fixture expectations
+# Mix of AST and grep rules
+# Violations:
+#   N1: any (2), N2: ts-ignore (1), N3: chained! (0 - fixture doesn't have)
+#   N9: eval (1), N10: innerHTML (1), N11: document.write (2)
+#   N4-N8: grep rules (2 from fixture)
+# Total: 9
+EXPECT_FAIL=9
