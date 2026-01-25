@@ -80,8 +80,9 @@ fi
 [[ -d "$TMP_DIR/.flight/exercises" ]] && cp -r "$TMP_DIR/.flight/exercises" .flight/
 [[ -d "$TMP_DIR/.flight/templates" ]] && cp -r "$TMP_DIR/.flight/templates" .flight/
 
-# Update inject-flight-protocol.sh
+# Update inject-flight-protocol.sh and its dependency
 [[ -f "$TMP_DIR/.flight/inject-flight-protocol.sh" ]] && cp "$TMP_DIR/.flight/inject-flight-protocol.sh" .flight/
+[[ -f "$TMP_DIR/.flight/protocol-block.md" ]] && cp "$TMP_DIR/.flight/protocol-block.md" .flight/
 
 # Update update.sh itself (so consumers always get latest version)
 [[ -f "$TMP_DIR/update.sh" ]] && cp "$TMP_DIR/update.sh" ./update.sh && chmod +x ./update.sh
@@ -116,6 +117,7 @@ echo "  - .flight/domains/* (all stock domains)"
 echo "  - .flight/hooks/* (self-validation hooks)"
 echo "  - .flight/bin/* (tooling scripts)"
 echo "  - .flight/examples/, exercises/, templates/"
+echo "  - .flight/inject-flight-protocol.sh, protocol-block.md"
 echo "  - flight-lint/* (AST validation tool)"
 echo "  - CLAUDE.md (Flight Execution Protocol injected/updated)"
 echo ""
