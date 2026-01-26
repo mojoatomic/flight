@@ -365,6 +365,20 @@
         "confidence": "high",
         "re_verify_after": "2027-01-20"
       }
+    },
+    {
+      "id": "S4",
+      "title": "Logic in Tests",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "^\\s+(if|for|while)\\s*\\(",
+      "query": null,
+      "message": "Avoid if/for/while logic in test bodies. Logic obscures what's being tested and can hide bugs. Use explicit test cases or parameterized tests instead.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
     }
   ]
 }

@@ -19,6 +19,20 @@
   },
   "rules": [
     {
+      "id": "N1",
+      "title": "Secret Key in Client Code",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "CLERK_SECRET_KEY|secretKey.*clerk",
+      "query": null,
+      "message": "CLERK_SECRET_KEY must never appear in client-accessible code. It has admin privileges. Only use in server-side code that is never bundled to client.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
       "id": "N2",
       "title": "Deprecated authMiddleware",
       "severity": "NEVER",
@@ -26,6 +40,20 @@
       "pattern": "authMiddleware|from ['\"]@clerk/nextjs['\"].*authMiddleware",
       "query": null,
       "message": "authMiddleware is deprecated. Use clerkMiddleware() instead. authMiddleware has known issues with Next.js 14+ and doesn't support the new routing patterns.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N4",
+      "title": "Synchronous auth() Call in Next.js 15+",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "const\\s*\\{[^}]*\\}\\s*=\\s*auth\\(\\)",
+      "query": null,
+      "message": "In Next.js 15+, auth() returns a Promise. Must be awaited. Synchronous usage causes runtime errors.",
       "provenance": {
         "last_verified": "2026-01-16",
         "confidence": "high",

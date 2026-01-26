@@ -206,6 +206,20 @@
         "confidence": "high",
         "re_verify_after": "2027-01-20"
       }
+    },
+    {
+      "id": "S3",
+      "title": "Type Hints on Public Functions",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "^def [a-z][a-z_]*\\([^)]*\\):",
+      "query": null,
+      "message": "Public functions should have type hints for parameters and return values to enable static analysis and documentation.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
     }
   ]
 }

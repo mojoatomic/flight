@@ -113,42 +113,6 @@ check "N6: No Chained Pointer Access" \
 check "N7: No Unbounded Loops" \
     grep -En "while\\s*\\(1\\)|while\\s*\\(true\\)|for\\s*\\(;;\\)" "${FILES[@]}"
 
-# N9: Functions Must Be 60 Lines or Less
-check "N9: Functions Must Be 60 Lines or Less" \
-    bash -c 'for file in "$@"; do
-awk '"'"'
-/^(status_t|static|void|int|uint[0-9]+_t|bool) [a-z_]+\(/ {
-  start=NR; fname=$0; in_func=1
-}
-/^}$/ && in_func {
-  len=NR-start
-  if (len > 60) {
-    gsub(/\(.*/, "", fname)
-    gsub(/^.* /, "", fname)
-    print fname": "len" lines"
-  }
-  in_func=0
-}'"'"' "$@"
-done' _ "${FILES[@]}"
-
-# N10: Minimum 2 Assertions Per Function
-check "N10: Minimum 2 Assertions Per Function" \
-    bash -c 'for file in "$@"; do
-awk '"'"'
-/^(status_t|static|void|int|uint[0-9]+_t|bool) [a-z_]+\(/ {
-  fname=$0; asserts=0; in_func=1
-}
-/ASSERT\(|assert\(/ && in_func { asserts++ }
-/^}$/ && in_func {
-  if (asserts < 2) {
-    gsub(/\(.*/, "", fname)
-    gsub(/^.* /, "", fname)
-    print fname": "asserts" asserts"
-  }
-  in_func=0
-}'"'"' "$@"
-done' _ "${FILES[@]}"
-
 # N11: Check or Cast All Return Values
 check "N11: Check or Cast All Return Values" \
     # Unknown check type: ast

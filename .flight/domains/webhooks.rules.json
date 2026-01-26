@@ -24,6 +24,20 @@
   },
   "rules": [
     {
+      "id": "N1",
+      "title": "Plain HTTP Webhook URLs",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "webhook.*http://[^l]|http://.*webhook",
+      "query": null,
+      "message": "All webhook traffic must be encrypted. Plain HTTP exposes payloads to attackers via MITM attacks.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
       "id": "N2",
       "title": "Secrets in Webhook Payloads",
       "severity": "NEVER",

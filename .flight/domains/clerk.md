@@ -46,6 +46,13 @@ Clerk authentication and multi-tenant organization patterns for SaaS application
 
 3. **auth() in Client Components** - auth() from @clerk/nextjs/server cannot be used in client components. It's a server-only function. Use useAuth() hook in client components.
 
+
+   > @clerk/nextjs/server exports are server-only. In client components:
+- Use useAuth() for auth state
+- Use useUser() for user data
+- Use useOrganization() for org data
+- Use useOrganizationList() for org switching
+
    ```
    // BAD
    'use client'
@@ -105,6 +112,16 @@ Clerk authentication and multi-tenant organization patterns for SaaS application
 
 7. **Using userId When orgId is Required** - In multi-tenant apps, data must be scoped to orgId, not userId. A user can be in multiple orgs. Using userId creates data leaks.
 
+
+   > In multi-tenant SaaS, the organization is the tenant boundary:
+- Data belongs to organizations, not individual users
+- Users can access data in orgs they belong to
+- Always filter by orgId, optionally also by userId for user-specific data
+
+BAD:  where: { userId }        // User sees data across all their orgs
+GOOD: where: { orgId }         // User only sees current org's data
+GOOD: where: { orgId, userId } // User's items within current org
+
    ```
    // BAD
    prisma.posts.findMany({ where: { userId } })
@@ -123,6 +140,15 @@ Clerk authentication and multi-tenant organization patterns for SaaS application
 
 8. **Missing Organization Context in Protected Routes** - Protected routes in multi-tenant apps must check for orgId. A valid session without org context means the user hasn't selected an org.
 
+
+   > In multi-tenant apps, always destructure and check orgId:
+
+const { userId, orgId } = await auth()
+if (!userId) return unauthorized()
+if (!orgId) return redirect('/select-org')  // Or handle appropriately
+
+A user can be authenticated but not have selected an organization.
+
    ```
    // BAD
    const { userId } = await auth()
@@ -138,6 +164,17 @@ Clerk authentication and multi-tenant organization patterns for SaaS application
    ```
 
 9. **Missing Null Checks for Auth Values** - auth() can return null for userId and orgId. Using them without null checks causes runtime errors and security issues.
+
+
+   > Always check for null before using auth values:
+
+const { userId, orgId } = await auth()
+if (!userId) throw new Error('Unauthorized')
+if (!orgId) throw new Error('No organization')
+
+// Now safe to use userId and orgId
+
+Never use non-null assertion (!) without prior validation.
 
    ```
    // BAD
@@ -155,6 +192,19 @@ Clerk authentication and multi-tenant organization patterns for SaaS application
 ### MUST (validator will reject)
 
 1. **ClerkProvider at Root** - ClerkProvider must wrap the application at the root layout. Without it, Clerk hooks and components won't work.
+
+
+   > ClerkProvider must be in your root layout.tsx:
+
+import { ClerkProvider } from '@clerk/nextjs'
+
+export default function RootLayout({ children }) {
+  return (
+    <ClerkProvider>
+      <html><body>{children}</body></html>
+    </ClerkProvider>
+  )
+}
 
    ```
    import { ClerkProvider } from '@clerk/nextjs'
@@ -216,6 +266,18 @@ Clerk authentication and multi-tenant organization patterns for SaaS application
    ```
 
 5. **Include orgId in Database Queries** - All data queries must include orgId to enforce tenant isolation. This is the fundamental multi-tenant security boundary.
+
+
+   > Every database query for tenant data must filter by orgId:
+
+const { orgId } = await auth()
+
+// All queries must include orgId
+const posts = await prisma.posts.findMany({
+  where: { orgId }
+})
+
+This prevents users from accessing other organizations' data.
 
    ```
    // BAD

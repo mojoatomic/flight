@@ -234,10 +234,11 @@ rules:
     description: >
       Do not use raw arithmetic for time/size calculations. Define named constants.
     check:
-      type: script
-      code: |
-        grep -HnE '60\s*\*\s*60|24\s*\*\s*60|1000\s*\*\s*60|7\s*\*\s*24|1024\s*\*\s*1024' "$file" 2>/dev/null | \
-          grep -v '[A-Z_]\{2,\}\s*='
+      type: grep
+      pattern: '60\s*\*\s*60|24\s*\*\s*60|1000\s*\*\s*60|7\s*\*\s*24|1024\s*\*\s*1024'
+      flags: -HnE
+      ignore_when:
+        - '[A-Z_]\{2,\}\s*='
     note: |
       Magic calculations are hard to understand and easy to get wrong.
       Named constants document the intent and prevent errors.
@@ -313,12 +314,12 @@ rules:
       Single-letter variables are only acceptable as loop counters (i, j, k)
       or in very short lambdas. Otherwise use descriptive names.
     check:
-      type: script
-      code: |
-        # Find single letter assignments not in for/while lines
-        # Exclude i, j for loops and x for simple lambdas
-        grep -HnE '^\s*(const|let|var|)\s+[a-hk-wyz]\s*=' "$file" 2>/dev/null | \
-          grep -v 'for\s*(' | grep -v 'while\s*('
+      type: grep
+      pattern: '^\s*(const|let|var|)\s+[a-hk-wyz]\s*='
+      flags: -HnE
+      ignore_when:
+        - 'for\s*('
+        - 'while\s*('
     note: |
       Single-letter names provide no context. They force readers to trace
       back to understand what the variable represents.
@@ -351,16 +352,17 @@ rules:
     description: >
       Do not leave console.log, print, or similar debugging statements in
       production code. Use a proper logging framework.
+    skip_paths:
+      - '**/*_test.*'
+      - '**/*.test.*'
+      - '**/test_*'
+      - '**/tests/**'
+      - '**/*_spec.*'
+      - '**/*.spec.*'
     check:
-      type: script
-      code: |
-        # Skip test files
-        if [[ "$file" == *"_test."* ]] || [[ "$file" == *".test."* ]] || \
-           [[ "$file" == *"test_"* ]] || [[ "$file" == *"/tests/"* ]] || \
-           [[ "$file" == *"_spec."* ]] || [[ "$file" == *".spec."* ]]; then
-          exit 0
-        fi
-        grep -HnE 'console\.(log|warn|error)\s*\(|print\s*\(|System\.out\.print|println!\s*\(|fmt\.Print' "$file" 2>/dev/null || true
+      type: grep
+      pattern: 'console\.(log|warn|error)\s*\(|print\s*\(|System\.out\.print|println!\s*\(|fmt\.Print'
+      flags: -En
     note: |
       Debug logging pollutes output and may leak sensitive information.
       Use structured logging with appropriate log levels.
@@ -655,11 +657,11 @@ rules:
       Boolean variables and functions should use is/has/can/should/will/was/did/does
       prefixes to clearly indicate they return a boolean.
     check:
-      type: script
-      code: |
-        # Find boolean assignments without proper prefix
-        grep -HnE '(const|let|var)\s+[a-z]+\s*=\s*(true|false)\s*;' "$file" 2>/dev/null | \
-          grep -vE '(is|has|can|should|will|was|did|does)[A-Z]'
+      type: grep
+      pattern: '(const|let|var)\s+[a-z]+\s*=\s*(true|false)\s*;'
+      flags: -HnE
+      ignore_when:
+        - '(is|has|can|should|will|was|did|does)[A-Z]'
     note: |
       Boolean prefixes make code self-documenting. Readers immediately know
       the variable holds a true/false value.
@@ -692,10 +694,9 @@ rules:
       Arrays, lists, sets, and other collections should use plural names.
       Singular names should be used for single items.
     check:
-      type: script
-      code: |
-        # Find array literals assigned to singular names
-        grep -HnE '(const|let|var)\s+(user|item|order|product|result|file|row|record|entry)\s*=\s*\[' "$file" 2>/dev/null || true
+      type: grep
+      pattern: '(const|let|var)\s+(user|item|order|product|result|file|row|record|entry)\s*=\s*\['
+      flags: -HnE
     note: |
       Plural names for collections make iteration code read naturally:
       for (const user of users) - not for (const users of user).
@@ -725,11 +726,11 @@ rules:
       Constants (values that never change) should use UPPER_SNAKE_CASE
       to distinguish them from mutable variables.
     check:
-      type: script
-      code: |
-        # Find const with numeric value not in UPPER_CASE
-        grep -HnE 'const\s+[a-z][a-zA-Z]*\s*=\s*[0-9]+\s*;' "$file" 2>/dev/null | \
-          grep -vE 'const\s+[A-Z_]+\s*='
+      type: grep
+      pattern: 'const\s+[a-z][a-zA-Z]*\s*=\s*[0-9]+\s*;'
+      flags: -HnE
+      ignore_when:
+        - 'const\s+[A-Z_]+\s*='
     note: |
       UPPER_SNAKE_CASE immediately signals that a value is constant.
       camelCase constants look like mutable variables.
@@ -760,10 +761,9 @@ rules:
       Error messages should include enough context to understand what
       failed and why. Generic messages like "Invalid" or "Failed" are useless.
     check:
-      type: script
-      code: |
-        # Find short/generic error messages (less than 15 chars)
-        grep -HnE "throw\s+new\s+Error\(['\"][^'\"]{0,15}['\"]|raise\s+.*Exception\(['\"][^'\"]{0,15}['\"]" "$file" 2>/dev/null || true
+      type: grep
+      pattern: "throw\\s+new\\s+Error\\(['\"][^'\"]{0,15}['\"]|raise\\s+.*Exception\\(['\"][^'\"]{0,15}['\"]"
+      flags: -HnE
     note: |
       When an error occurs in production, the message is often all you have
       to diagnose the problem. Include relevant variable values and context.
@@ -795,11 +795,11 @@ rules:
       Function names should start with a verb that describes the action.
       Noun-only names don't describe what the function does.
     check:
-      type: script
-      code: |
-        # Find function names that don't start with common verb prefixes
-        grep -HnE '^(export\s+)?(async\s+)?function\s+[a-z]+\s*\(' "$file" 2>/dev/null | \
-          grep -vE 'function\s+(get|set|fetch|load|save|send|create|update|delete|remove|add|find|check|validate|is|has|can|should|handle|process|render|init|start|stop|on|do|make|build|parse|format|convert|to|from|ensure|assert|verify|compute|calculate|generate|transform|map|filter|reduce|sort|merge|split|join|open|close|read|write|run|execute|apply|reset|clear|register|subscribe|unsubscribe|publish|emit|dispatch|trigger|mount|unmount|connect|disconnect|enable|disable|show|hide|toggle|select|deselect|activate|deactivate|delay|wait|sleep|pause|retry|poll|defer|schedule|queue|batch|throttle|debounce)([A-Z]|\s*\()'
+      type: grep
+      pattern: '^(export\s+)?(async\s+)?function\s+[a-z]+\s*\('
+      flags: -HnE
+      ignore_when:
+        - 'function\s+(get|set|fetch|load|save|send|create|update|delete|remove|add|find|check|validate|is|has|can|should|handle|process|render|init|start|stop|on|do|make|build|parse|format|convert|to|from|ensure|assert|verify|compute|calculate|generate|transform|map|filter|reduce|sort|merge|split|join|open|close|read|write|run|execute|apply|reset|clear|register|subscribe|unsubscribe|publish|emit|dispatch|trigger|mount|unmount|connect|disconnect|enable|disable|show|hide|toggle|select|deselect|activate|deactivate|delay|wait|sleep|pause|retry|poll|defer|schedule|queue|batch|throttle|debounce)([A-Z]|\s*\()'
     note: |
       Functions perform actions. Their names should describe what action they
       perform. Nouns describe things, not actions.

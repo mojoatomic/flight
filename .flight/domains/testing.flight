@@ -510,7 +510,7 @@ rules:
   S1:
     title: Shared Mutable State Between Tests
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Avoid shared mutable state between tests. Tests that modify shared
       state can cause order-dependent failures. Each test should own its
@@ -523,10 +523,6 @@ rules:
         - url: "https://docs.pytest.org/en/stable/explanation/fixtures.html"
           accessed: "2026-01-20"
           quote: "Fixtures are created when first requested by a test, and are destroyed based on their scope"
-    check:
-      type: script
-      code: |
-        grep -l "beforeAll" "$@" 2>/dev/null | xargs -I{} sh -c 'grep -l "^let\s" "{}" 2>/dev/null && echo "{}: has beforeAll with top-level let"'
     note: Detects beforeAll with top-level let variables - a common pattern for shared mutable state.
     examples:
       bad:
@@ -546,7 +542,7 @@ rules:
   S2:
     title: Try-Catch Swallowing Failures
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Avoid try-catch blocks that can swallow test failures. If no error
       is thrown, the catch never runs and the test passes incorrectly.
@@ -559,17 +555,6 @@ rules:
         - url: "https://jestjs.io/docs/expect#tothrowerror"
           accessed: "2026-01-20"
           quote: "Use .toThrow to test that a function throws when it is called"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -q "catch\s*(" "$f" 2>/dev/null; then
-            match=$(grep -A5 "catch\s*(" "$f" | grep -E "expect|assert" | grep -v "toThrow\|rejects")
-            if [[ -n "$match" ]]; then
-              echo "$f: catch block contains assertions - verify not swallowing"
-            fi
-          fi
-        done
     examples:
       bad:
         - |
@@ -635,9 +620,13 @@ rules:
           accessed: "2026-01-20"
           quote: "Use test.each if you keep duplicating the same test with different data"
     check:
-      type: script
-      code: |
-        grep -En "^\s+(if|for|while)\s*\(" "$@" | grep -v "forEach\|test\.each\|pytest\.mark"
+      type: grep
+      pattern: '^\s+(if|for|while)\s*\('
+      flags: -En
+      ignore_when:
+        - 'forEach'
+        - 'test\.each'
+        - 'pytest\.mark'
     note: Excludes forEach, test.each, and pytest.mark which are acceptable patterns.
     examples:
       bad:

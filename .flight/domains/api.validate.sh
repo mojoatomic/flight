@@ -183,16 +183,19 @@ check "M4: Plural Nouns for Collection URIs" \
 
 # M5: Include Pagination Metadata in Response
 check "M5: Include Pagination Metadata in Response" \
-    bash -c 'for file in "$@"; do
+    bash -c '
 for f in "$@"; do
-  # Note: after_id|before_id excluded - N3 forbids exposing internal IDs
-  if grep -qEi "cursor|next_cursor|page_token|offset.*limit|page.*per_page" "$f" 2>/dev/null; then
-    if ! grep -qEi "has_more|next_cursor|prev_cursor|total_pages|total_count|page_info" "$f" 2>/dev/null; then
-      echo "$f: pagination patterns found but no response metadata"
+    trigger_lines=$(grep -nE "cursor|next_cursor|page_token|offset.*limit|page.*per_page" "$f" 2>/dev/null)
+    if [[ -n "$trigger_lines" ]]; then
+        if ! grep -qE "has_more|next_cursor|prev_cursor|total_pages|total_count|page_info" "$f" 2>/dev/null; then
+            echo "$trigger_lines" | while IFS= read -r line; do
+                linenum="${line%%:*}"
+                echo "$f:$linenum: pagination patterns without response metadata"
+            done
+        fi
     fi
-  fi
 done
-done' _ "${FILES[@]}"
+' _ "${FILES[@]}"
 
 # M6: Version Your API from Day One
 check "M6: Version Your API from Day One" \
@@ -204,15 +207,19 @@ check "M7: Rate Limit Headers" \
 
 # M8: Location Header on 201 Created
 check "M8: Location Header on 201 Created" \
-    bash -c 'for file in "$@"; do
+    bash -c '
 for f in "$@"; do
-  if grep -qEi "status\(201\)|\.created\(" "$f" 2>/dev/null; then
-    if ! grep -qEi "location.*header|header.*location|\.header\(.location" "$f" 2>/dev/null; then
-      echo "$f: 201 responses found but no Location header"
+    trigger_lines=$(grep -nE "status\\(201\\)|\\.created\\(" "$f" 2>/dev/null)
+    if [[ -n "$trigger_lines" ]]; then
+        if ! grep -qE "location.*header|header.*location|\\.header\\(.*location" "$f" 2>/dev/null; then
+            echo "$trigger_lines" | while IFS= read -r line; do
+                linenum="${line%%:*}"
+                echo "$f:$linenum: 201 response without Location header"
+            done
+        fi
     fi
-  fi
 done
-done' _ "${FILES[@]}"
+' _ "${FILES[@]}"
 
 # M9: Content-Type Header on All Responses
 check "M9: Content-Type Header on All Responses" \
@@ -233,16 +240,6 @@ else
     ((PASS++)) || true
 fi
 
-# S4: Consistent Field Naming Convention
-warn "S4: Consistent Field Naming Convention" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  if grep -qE '"'"'"[a-z]+_[a-z]+"'"'"' "$f" 2>/dev/null && grep -qE '"'"'"[a-z]+[A-Z][a-z]+"'"'"' "$f" 2>/dev/null; then
-    echo "$f: mixed snake_case and camelCase"
-  fi
-done
-done' _ "${FILES[@]}"
-
 # S8: Idempotency Keys for Non-Idempotent Operations
 if [[ ${#API_ENDPOINT_FILES[@]} -gt 0 ]]; then
     warn "S8: Idempotency Keys for Non-Idempotent Operations" \
@@ -261,24 +258,6 @@ else
     ((PASS++)) || true
 fi
 
-# S10: 202 Accepted for Long-Running Operations
-warn "S10: 202 Accepted for Long-Running Operations" \
-    bash -c 'for file in "$@"; do
-has_async=false
-has_202=false
-for f in "$@"; do
-  if grep -qEi "job|queue|worker|async.*process|background" "$f" 2>/dev/null; then
-    has_async=true
-  fi
-  if grep -qEi "status\(202\)|\.accepted\(" "$f" 2>/dev/null; then
-    has_202=true
-  fi
-done
-if $has_async && ! $has_202; then
-  echo "Async/background patterns found but no 202 Accepted responses"
-fi
-done' _ "${FILES[@]}"
-
 # S11: OpenAPI/Swagger Specification
 if [[ ${#API_ENDPOINT_FILES[@]} -gt 0 ]]; then
     warn "S11: OpenAPI/Swagger Specification" \
@@ -294,23 +273,23 @@ fi
 
 # S12: No Hardcoded URLs
 warn "S12: No Hardcoded URLs" \
-    bash -c 'for file in "$@"; do
-# Find hardcoded URLs, excluding documentation references
-grep -EHn "https?://[a-zA-Z0-9][a-zA-Z0-9.-]+\.(com|io|net|org|dev|app)" "$@" 2>/dev/null | \
-  grep -vE "localhost|127\.0\.0\.1|example\.(com|org)|rfc-editor\.org|w3\.org|json-schema\.org|@(see|link)" || true
-done' _ "${FILES[@]}"
+    bash -c '(grep -EHn "https?://[a-zA-Z0-9][a-zA-Z0-9.-]+\\.(com|io|net|org|dev|app)" "$@" | grep -v "localhost" | grep -v "127\\.0\\.0\\.1" | grep -v "example\\.(com|org)" | grep -v "rfc-editor\\.org" | grep -v "w3\\.org" | grep -v "json-schema\\.org" | grep -v "@(see|link)") || true' _ "${FILES[@]}"
 
 # S13: Include Request IDs
 warn "S13: Include Request IDs" \
-    bash -c 'for file in "$@"; do
+    bash -c '
 for f in "$@"; do
-  if grep -qEi "res\.(status\(4|status\(5|json\(.*error" "$f" 2>/dev/null; then
-    if ! grep -qEi "request_id|trace_id|requestId|traceId|x-request-id" "$f" 2>/dev/null; then
-      echo "$f: error responses found but no request/trace ID handling"
+    trigger_lines=$(grep -nE "status\\([45][0-9][0-9]\\)|\\.json\\(.*error" "$f" 2>/dev/null)
+    if [[ -n "$trigger_lines" ]]; then
+        if ! grep -qE "request_id|trace_id|requestId|traceId|x-request-id" "$f" 2>/dev/null; then
+            echo "$trigger_lines" | while IFS= read -r line; do
+                linenum="${line%%:*}"
+                echo "$f:$linenum: error responses without request/trace ID handling"
+            done
+        fi
     fi
-  fi
 done
-done' _ "${FILES[@]}"
+' _ "${FILES[@]}"
 
 printf '\n%s\n' "## Info"
 

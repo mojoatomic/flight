@@ -96,16 +96,16 @@ rules:
       CLERK_SECRET_KEY must never appear in client-accessible code.
       It has admin privileges. Only use in server-side code that is
       never bundled to client.
+    skip_paths:
+      - '**/api/**'
+      - '**/server/**'
+      - '**/*.server.*'
+      - '**/actions/**'
+      - '**/middleware*'
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Check for secret key in any client-accessible file
-          # Skip files that are clearly server-only (api/, server/, actions/)
-          if [[ "$f" != *"/api/"* ]] && [[ "$f" != *"/server/"* ]] && [[ "$f" != *".server."* ]] && [[ "$f" != *"/actions/"* ]] && [[ "$f" != *"middleware"* ]]; then
-            grep -HnE 'CLERK_SECRET_KEY|secretKey.*clerk' "$f" 2>/dev/null
-          fi
-        done
+      type: grep
+      pattern: 'CLERK_SECRET_KEY|secretKey.*clerk'
+      flags: -En
     note: |
       CLERK_SECRET_KEY has admin privileges and can impersonate any user.
       If exposed to the browser, attackers can create sessions for any user.
@@ -165,7 +165,7 @@ rules:
   N3:
     title: auth() in Client Components
     severity: NEVER
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -177,18 +177,6 @@ rules:
     description: >
       auth() from @clerk/nextjs/server cannot be used in client components.
       It's a server-only function. Use useAuth() hook in client components.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Check if file is a client component
-          if grep -q "'use client'" "$f" 2>/dev/null; then
-            # Flag if importing auth from server
-            if grep -qE "from ['\"]@clerk/nextjs/server['\"]" "$f" 2>/dev/null; then
-              grep -Hn "from ['\"]@clerk/nextjs/server['\"]" "$f"
-            fi
-          fi
-        done
     note: |
       @clerk/nextjs/server exports are server-only. In client components:
       - Use useAuth() for auth state
@@ -221,14 +209,11 @@ rules:
       In Next.js 15+, auth() returns a Promise. Must be awaited.
       Synchronous usage causes runtime errors.
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Find auth() calls that aren't awaited or in async context
-          # Look for patterns like: const { userId } = auth() without await
-          grep -HnE "const\s*\{[^}]*\}\s*=\s*auth\(\)" "$f" 2>/dev/null | \
-            grep -v "await"
-        done
+      type: grep
+      pattern: 'const\s*\{[^}]*\}\s*=\s*auth\(\)'
+      flags: -En
+      ignore_when:
+        - 'await'
     note: |
       Next.js 15 changed auth() to be async. Always await:
       - const { userId, orgId } = await auth()
@@ -287,18 +272,13 @@ rules:
     description: >
       Clerk webhooks must verify the svix signature. Without verification,
       attackers can send fake webhook events to your API.
+    only_paths:
+      - '**/api/**webhook*/**'
+      - '**/api/**/webhook*'
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Check webhook handler files
-          if [[ "$f" == *"webhook"* ]] && [[ "$f" == *"/api/"* ]]; then
-            # Must have svix verification
-            if ! grep -qE "Webhook|verifyWebhook|svix-id|svix-timestamp|svix-signature" "$f" 2>/dev/null; then
-              echo "$f: webhook handler without signature verification"
-            fi
-          fi
-        done
+      type: requires
+      must_exist: 'Webhook|verifyWebhook|svix-id|svix-timestamp|svix-signature'
+      message: "webhook handler without signature verification"
     note: |
       Always verify webhook signatures using Clerk's verifyWebhook or svix:
 
@@ -327,7 +307,7 @@ rules:
   N7:
     title: Using userId When orgId is Required
     severity: NEVER
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -339,25 +319,6 @@ rules:
     description: >
       In multi-tenant apps, data must be scoped to orgId, not userId.
       A user can be in multiple orgs. Using userId creates data leaks.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Skip test files
-          if [[ "$f" == *".test."* ]] || [[ "$f" == *".spec."* ]]; then
-            continue
-          fi
-          # In server files that query data
-          if [[ "$f" == *"/api/"* ]] || [[ "$f" == *"/actions/"* ]] || [[ "$f" == *".server."* ]]; then
-            # Flag if using userId for data filtering without orgId
-            # Covers Prisma (where: { userId }) and Drizzle (eq(*.userId, ...))
-            if grep -qE "where.*userId|userId.*=|eq\(.*userId" "$f" 2>/dev/null; then
-              if ! grep -qE "orgId|organizationId|organization_id|org_id" "$f" 2>/dev/null; then
-                grep -Hn "userId" "$f" 2>/dev/null | head -3
-              fi
-            fi
-          fi
-        done
     note: |
       In multi-tenant SaaS, the organization is the tenant boundary:
       - Data belongs to organizations, not individual users
@@ -380,7 +341,7 @@ rules:
   N8:
     title: Missing Organization Context in Protected Routes
     severity: NEVER
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -392,22 +353,6 @@ rules:
     description: >
       Protected routes in multi-tenant apps must check for orgId.
       A valid session without org context means the user hasn't selected an org.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Check API routes and server actions
-          if [[ "$f" == *"/api/"* ]] || [[ "$f" == *"/actions/"* ]]; then
-            # If file uses auth() but doesn't check orgId
-            if grep -q "await auth()" "$f" 2>/dev/null; then
-              if grep -qE "userId\s*\}" "$f" 2>/dev/null; then
-                if ! grep -qE "orgId|organizationId|organization_id|org_id|!.*org" "$f" 2>/dev/null; then
-                  echo "$f: auth check without orgId verification"
-                fi
-              fi
-            fi
-          fi
-        done
     note: |
       In multi-tenant apps, always destructure and check orgId:
 
@@ -431,7 +376,7 @@ rules:
   N9:
     title: Missing Null Checks for Auth Values
     severity: NEVER
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -443,23 +388,6 @@ rules:
     description: >
       auth() can return null for userId and orgId. Using them without
       null checks causes runtime errors and security issues.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Check files using auth()
-          if grep -q "await auth()" "$f" 2>/dev/null; then
-            # Find destructured values being used directly without checks
-            if grep -qE "\{ userId \}|\{ orgId \}" "$f" 2>/dev/null; then
-              # Check if there's a null check before usage
-              if grep -qE "userId\!|orgId\!" "$f" 2>/dev/null; then
-                if ! grep -qE "if.*!.*userId|if.*!.*orgId|userId\s*\?\?" "$f" 2>/dev/null; then
-                  grep -Hn "userId\!|orgId\!" "$f"
-                fi
-              fi
-            fi
-          fi
-        done
     note: |
       Always check for null before using auth values:
 
@@ -488,7 +416,7 @@ rules:
   M1:
     title: ClerkProvider at Root
     severity: MUST
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -500,19 +428,6 @@ rules:
     description: >
       ClerkProvider must wrap the application at the root layout.
       Without it, Clerk hooks and components won't work.
-    check:
-      type: script
-      code: |
-        # Check if any layout file has ClerkProvider
-        for f in "$@"; do
-          if [[ "$f" == *"layout"* ]]; then
-            if grep -q "ClerkProvider" "$f" 2>/dev/null; then
-              exit 0  # Found it, pass
-            fi
-          fi
-        done
-        # If we get here, no layout has ClerkProvider
-        echo "No ClerkProvider found in layout files"
     note: |
       ClerkProvider must be in your root layout.tsx:
 
@@ -553,18 +468,14 @@ rules:
     description: >
       Clerk middleware must have a matcher config to avoid running on
       static files and internal Next.js routes.
+    only_paths:
+      - '**/middleware.ts'
+      - '**/middleware.js'
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if [[ "$f" == *"middleware"* ]]; then
-            if grep -q "clerkMiddleware" "$f" 2>/dev/null; then
-              if ! grep -q "matcher" "$f" 2>/dev/null; then
-                echo "$f: clerkMiddleware without matcher config"
-              fi
-            fi
-          fi
-        done
+      type: requires
+      trigger: 'clerkMiddleware'
+      requirement: 'matcher'
+      message: "clerkMiddleware without matcher config"
     note: |
       Always export a matcher config with your middleware:
 
@@ -604,21 +515,14 @@ rules:
     description: >
       Use createRouteMatcher() with clerkMiddleware for route protection.
       This is the recommended pattern over manual path checks.
+    only_paths:
+      - '**/middleware.ts'
+      - '**/middleware.js'
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if [[ "$f" == *"middleware"* ]]; then
-            if grep -q "clerkMiddleware" "$f" 2>/dev/null; then
-              # Check if using auth.protect() without createRouteMatcher
-              if grep -q "auth\.protect\|auth()\.protect" "$f" 2>/dev/null; then
-                if ! grep -q "createRouteMatcher" "$f" 2>/dev/null; then
-                  echo "$f: using auth.protect without createRouteMatcher"
-                fi
-              fi
-            fi
-          fi
-        done
+      type: requires
+      trigger: 'auth\.protect|auth\(\)\.protect'
+      requirement: 'createRouteMatcher'
+      message: "using auth.protect without createRouteMatcher"
     note: |
       createRouteMatcher provides clean, declarative route matching:
 
@@ -654,18 +558,13 @@ rules:
     description: >
       When using org slug in URL ([orgSlug]), validate it matches
       the user's current organization to prevent URL manipulation.
+    only_paths:
+      - '**/*[orgSlug]*/**'
+      - '**/*[slug]*/**'
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Check route files with orgSlug parameter
-          if [[ "$f" == *"[orgSlug]"* ]] || [[ "$f" == *"[slug]"* ]]; then
-            # Should have validation against auth orgSlug
-            if ! grep -qE "orgSlug.*===|slug.*===|validateSlug|params\.orgSlug" "$f" 2>/dev/null; then
-              echo "$f: org slug route without slug validation"
-            fi
-          fi
-        done
+      type: requires
+      must_exist: 'orgSlug.*===|slug.*===|validateSlug|params\.orgSlug'
+      message: "org slug route without slug validation"
     note: |
       Users can manipulate URLs. Always validate the slug:
 
@@ -694,7 +593,7 @@ rules:
   M5:
     title: Include orgId in Database Queries
     severity: MUST
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -706,22 +605,6 @@ rules:
     description: >
       All data queries must include orgId to enforce tenant isolation.
       This is the fundamental multi-tenant security boundary.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Check data access files
-          if [[ "$f" == *"/api/"* ]] || [[ "$f" == *"/actions/"* ]] || [[ "$f" == *".server."* ]]; then
-            # If file has database queries (Prisma or Drizzle)
-            if grep -qE "findMany|findFirst|findUnique|select.*from|query\.|\.insert\(|\.update\(|\.delete\(" "$f" 2>/dev/null; then
-              # Should have orgId in where clause (supports various naming conventions)
-              # orgId = Clerk auth object, organizationId = Clerk SDK, organization_id = REST API, org_id = PostgreSQL/Supabase
-              if ! grep -qE "orgId|organization_id|organizationId|org_id" "$f" 2>/dev/null; then
-                echo "$f: database query without orgId filter"
-              fi
-            fi
-          fi
-        done
     note: |
       Every database query for tenant data must filter by orgId:
 
@@ -762,19 +645,10 @@ rules:
       context change. Use afterSelectOrganizationUrl for navigation
       or build a custom flow with clerk.setActive() for programmatic control.
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Check client files using OrganizationSwitcher
-          if grep -q "'use client'" "$f" 2>/dev/null; then
-            if grep -qE "OrganizationSwitcher" "$f" 2>/dev/null; then
-              # Should have URL prop or custom navigation handling
-              if ! grep -qE "afterSelectOrganizationUrl|setActive|router\.(push|replace|refresh)" "$f" 2>/dev/null; then
-                echo "$f: OrganizationSwitcher without navigation handling"
-              fi
-            fi
-          fi
-        done
+      type: requires
+      trigger: 'OrganizationSwitcher'
+      requirement: 'afterSelectOrganizationUrl|setActive|router\.(push|replace|refresh)'
+      message: "OrganizationSwitcher without navigation handling"
     note: |
       OrganizationSwitcher uses URL-based navigation props, NOT callbacks:
       - afterSelectOrganizationUrl: Navigate after org switch

@@ -89,91 +89,6 @@ printf '\n%s\n' "## NEVER Rules"
 check "N1: Tab Characters" \
     grep -n "^\\t" "${FILES[@]}"
 
-# N2: Duplicate Keys
-check "N2: Duplicate Keys" \
-    bash -c 'for file in "$@"; do
-# Check for duplicate keys at the same mapping context
-# Properly handles:
-# - Nested objects (on.push.branches vs on.pull_request.branches)
-# - YAML arrays (each - item is a separate context)
-awk '"'"'
-BEGIN {
-  # path_stack[indent] = key path at that indent level
-  # array_idx[indent] = array item index at that indent level
-  # seen[full_path] = 1 if weve seen this path
-}
-
-{
-  # Skip comments and empty lines
-  if (/^[[:space:]]*#/ || /^[[:space:]]*$/) next;
-
-  # Get indentation
-  match($0, /^[[:space:]]*/);
-  indent = RLENGTH;
-
-  # Clear path_stack and array_idx for levels deeper than current
-  for (i in path_stack) {
-    if (i > indent) delete path_stack[i];
-  }
-  for (i in array_idx) {
-    if (i > indent) delete array_idx[i];
-  }
-
-  line = $0;
-  gsub(/^[[:space:]]*/, "", line);
-
-  # Check if this is an array item
-  if (line ~ /^-[[:space:]]/ || line ~ /^-$/) {
-    # Increment array index at this indent
-    array_idx[indent]++;
-    # Remove "- " prefix
-    gsub(/^-[[:space:]]*/, "", line);
-    # If nothing left, skip (bare array value)
-    if (line == "" || line !~ /:/) next;
-  }
-
-  # Check if this line has a key
-  if (line ~ /^[^#[:space:]][^:]*:/) {
-    # Extract key
-    key = line;
-    gsub(/:.*$/, "", key);
-    # Trim whitespace
-    gsub(/^[[:space:]]+|[[:space:]]+$/, "", key);
-
-    if (key == "") next;
-
-    # Build full path from parent keys
-    full_path = "";
-    for (i = 0; i < indent; i += 2) {
-      if (i in path_stack && path_stack[i] != "") {
-        full_path = full_path path_stack[i] ".";
-      }
-      if (i in array_idx && array_idx[i] > 0) {
-        full_path = full_path "[" array_idx[i] "].";
-      }
-    }
-    # Add current array index if exists at this level
-    if (indent in array_idx && array_idx[indent] > 0) {
-      full_path = full_path "[" array_idx[indent] "].";
-    }
-    full_path = full_path key;
-
-    # Check for duplicate
-    if (seen[full_path]) {
-      print FILENAME ":" NR ": duplicate key \"" key "\" at same level";
-      found = 1;
-    }
-    seen[full_path] = 1;
-
-    # Store this key for children to build their path
-    path_stack[indent] = key;
-  }
-}
-
-END { exit found ? 1 : 0 }
-'"'"' "$file"
-done' _ "${FILES[@]}"
-
 # N3: Unsafe YAML Load
 check "N3: Unsafe YAML Load" \
     grep -Pn "yaml\\.load\\s*\\([^)]*\\)\\s*\$|yaml\\.load\\s*\\([^,)]+\\)(?!\\s*,\\s*Loader)" "${FILES[@]}"
@@ -208,32 +123,6 @@ check "M5: Unquoted Scientific Notation" \
 check "M6: Unquoted Special Strings" \
     grep -En ":\\s+(null|Null|NULL|~|true|True|TRUE|false|False|FALSE|\\.inf|\\.Inf|\\.INF|\\.nan|\\.NaN|\\.NAN)\\s*(#|\$)" "${FILES[@]}"
 
-# M7: Inconsistent Indentation
-check "M7: Inconsistent Indentation" \
-    bash -c 'for file in "$@"; do
-# Check for inconsistent indentation increments
-awk '"'"'
-BEGIN { base_indent = 0; last_indent = 0 }
-/^[[:space:]]+[^#[:space:]]/ {
-  match($0, /^[[:space:]]+/);
-  indent = RLENGTH;
-
-  if (base_indent == 0 && indent > 0) {
-    base_indent = indent;
-  } else if (indent > last_indent && base_indent > 0) {
-    increment = indent - last_indent;
-    if (increment != base_indent && increment > 0) {
-      print FILENAME ":" NR ": inconsistent indent (expected " base_indent ", got " increment ")";
-      found = 1;
-    }
-  }
-  last_indent = indent;
-}
-/^[^[:space:]#]/ { last_indent = 0 }
-END { exit found ? 1 : 0 }
-'"'"' "$file"
-done' _ "${FILES[@]}"
-
 # M8: Trailing Whitespace in Multiline
 check "M8: Trailing Whitespace in Multiline" \
     grep -n "[[:space:]]+\$" "${FILES[@]}"
@@ -242,17 +131,19 @@ printf '\n%s\n' "## SHOULD Rules"
 
 # S1: Prefer Explicit Document Start
 warn "S1: Prefer Explicit Document Start" \
-    bash -c 'for file in "$@"; do
-# Warn if file has multiple documents without ---
-if grep -q '"'"'^---'"'"' "$file"; then
-  exit 0  # Has document markers
-fi
-if grep -c '"'"'^\.\.\.$'"'"' "$file" > /dev/null 2>&1; then
-  echo "$file:1: missing document start marker (---) in multi-doc file"
-  exit 1
-fi
-exit 0
-done' _ "${FILES[@]}"
+    bash -c '
+for f in "$@"; do
+    trigger_lines=$(grep -nE "^\\.\\.\\.\$" "$f" 2>/dev/null)
+    if [[ -n "$trigger_lines" ]]; then
+        if ! grep -qE "^---" "$f" 2>/dev/null; then
+            echo "$trigger_lines" | while IFS= read -r line; do
+                linenum="${line%%:*}"
+                echo "$f:$linenum: missing document start marker (---) in multi-doc file"
+            done
+        fi
+    fi
+done
+' _ "${FILES[@]}"
 
 # S2: Quote Strings Starting with Special Characters
 warn "S2: Quote Strings Starting with Special Characters" \

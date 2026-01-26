@@ -132,6 +132,10 @@ Rust development patterns covering error handling, ownership, memory safety, con
 
 8. **Mutex Held Across Await Point** - Holding a std::sync::Mutex guard across an .await causes deadlocks. Use tokio::sync::Mutex for async code or restructure to drop before await.
 
+
+   > std::sync::Mutex is not async-aware. If a task yields while holding the lock,
+it blocks the executor thread, preventing other tasks from releasing the lock.
+
    ```
    // BAD
    let guard = mutex.lock().unwrap();
@@ -239,6 +243,10 @@ Rust development patterns covering error handling, ownership, memory safety, con
 
 7. **Blocking Operations in Async Context** - Do not perform blocking I/O or CPU-intensive work in async functions. Use spawn_blocking or async alternatives.
 
+
+   > Blocking operations in async code block the entire executor thread,
+preventing other tasks from making progress.
+
    ```
    // BAD
    async fn read_file(path: &str) -> String {
@@ -280,6 +288,10 @@ Essential for Result-returning functions and pure functions.
    ```
 
 9. **Derive Common Traits** - Public types should derive common traits: Debug, Clone, PartialEq where appropriate. At minimum, all public types should implement Debug.
+
+
+   > From Rust API Guidelines (C-COMMON-TRAITS): Types should eagerly implement
+common traits like Debug, Clone, Eq, PartialEq, Hash, Default.
 
    ```
    // BAD
@@ -331,6 +343,10 @@ Essential for Result-returning functions and pure functions.
    ```
 
 3. **Implement Default for Types with Obvious Defaults** - Types with sensible default values should implement the Default trait. This enables ..Default::default() syntax and integration with serde.
+
+
+   > From Rust API Guidelines: Types should implement Default when there's
+an obvious default value. Use #[derive(Default)] when possible.
 
    ```
    // BAD

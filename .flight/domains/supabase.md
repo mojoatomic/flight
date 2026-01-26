@@ -13,6 +13,14 @@ Supabase patterns for TypeScript/Next.js applications. Covers client instantiati
 
 1. **service_role Key in Client Code** - The service_role key bypasses RLS. NEVER use it in browser-accessible code. Only use in server-side code that is never bundled to client.
 
+
+   > The service_role key has admin privileges and bypasses Row Level Security.
+If exposed to the browser, attackers can read/write any data.
+Only use service_role in:
+- API routes (pages/api/ or app/api/)
+- Server actions
+- Server-only files (.server.ts)
+
    ```
    // BAD
    const supabase = createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY)
@@ -41,6 +49,12 @@ Supabase patterns for TypeScript/Next.js applications. Covers client instantiati
 
 3. **Raw @supabase/supabase-js in Next.js App Router** - In Next.js App Router, use @supabase/ssr for proper cookie handling. Raw @supabase/supabase-js doesn't handle SSR cookies correctly.
 
+
+   > @supabase/supabase-js doesn't handle cookies for SSR. In Next.js:
+- Use createBrowserClient from @supabase/ssr in client components
+- Use createServerClient from @supabase/ssr in server components
+The raw supabase-js client is fine for non-Next.js apps or edge functions.
+
    ```
    // BAD
    'use client'
@@ -68,6 +82,13 @@ Supabase patterns for TypeScript/Next.js applications. Covers client instantiati
    ```
 
 5. **.single() Without Error Handling** - .single() throws PGRST116 error if zero rows OR if multiple rows. Always handle the error or use .maybeSingle() for optional data.
+
+
+   > .single() expects exactly one row. It returns error code PGRST116 if:
+- No rows found (common case!)
+- Multiple rows found
+Use .maybeSingle() when the row might not exist.
+Always destructure { data, error } and check error.
 
    ```
    // BAD
@@ -98,6 +119,12 @@ Supabase patterns for TypeScript/Next.js applications. Covers client instantiati
 
 6. **Realtime Subscription Without Cleanup** - Realtime subscriptions must be cleaned up on component unmount. Leaked subscriptions cause memory leaks and stale callbacks.
 
+
+   > Realtime subscriptions persist until explicitly removed. In React:
+- Create channel and subscribe in useEffect
+- Return cleanup function that calls supabase.removeChannel(channel)
+Without cleanup, you get memory leaks and callbacks firing on unmounted components.
+
    ```
    // BAD
    useEffect(() => {
@@ -121,6 +148,12 @@ Supabase patterns for TypeScript/Next.js applications. Covers client instantiati
 
 7. **getSession() in Server Code for Auth Checks** - Never trust getSession() in server code for authentication. It reads from cookies which can be spoofed. Use getClaims() or getUser() instead.
 
+
+   > getSession() reads directly from cookies without validation. In server code:
+- Use getClaims() - validates JWT signature, fast, recommended
+- Use getUser() - makes network request to Supabase, slower but gets fresh data
+getSession() is only safe in client code where the session is already validated.
+
    ```
    // BAD
    // In middleware.ts or API route
@@ -139,6 +172,11 @@ Supabase patterns for TypeScript/Next.js applications. Covers client instantiati
 
 1. **Type Database Schema** - Use generated types for type-safe Supabase queries. Without types, query results are `any`.
 
+
+   > Generate types with: supabase gen types typescript --project-id xxx > types/supabase.ts
+Then use: createBrowserClient<Database>(url, key)
+This gives you autocomplete and type checking on all queries.
+
    ```
    // BAD
    const supabase = createBrowserClient(url, key)
@@ -150,6 +188,10 @@ Supabase patterns for TypeScript/Next.js applications. Covers client instantiati
    ```
 
 2. **Handle Auth State Changes** - Client components using auth should listen for auth state changes. Without this, the UI won't update when user signs in/out.
+
+
+   > Auth state can change from other tabs, token refresh, or session expiry.
+Listen with onAuthStateChange and clean up on unmount.
 
    ```
    useEffect(() => {

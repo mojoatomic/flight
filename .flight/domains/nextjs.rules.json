@@ -21,6 +21,20 @@
   },
   "rules": [
     {
+      "id": "N1",
+      "title": "'use client' in page.tsx Files",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "^['\"]use client['\"]",
+      "query": null,
+      "message": "Page components should be server components by default. Adding 'use client' at the page level kills SSR benefits for the entire page tree.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
       "id": "N3",
       "title": "useEffect Fetch for Initial Page Data",
       "severity": "NEVER",
@@ -29,6 +43,20 @@
       "pattern": null,
       "query": "(call_expression\n  function: (identifier) @fn\n  arguments: (arguments\n    (arrow_function\n      body: (statement_block) @body))\n  (#eq? @fn \"useEffect\")\n  (#match? @body \"\\\\bfetch\\\\s*\\\\(|\\\\baxios\\\\.\")) @violation",
       "message": "Don't use useEffect to fetch initial page data. Server components can fetch data directly, avoiding the extra round trip.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N5",
+      "title": "'any' Type in Route Handlers",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": ": any",
+      "query": null,
+      "message": "Route handlers should validate input, not use 'any'. External data from requests is unknown until validated.",
       "provenance": {
         "last_verified": "2026-01-16",
         "confidence": "high",

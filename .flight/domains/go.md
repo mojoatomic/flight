@@ -210,6 +210,10 @@ Go (Golang) development patterns. Covers error handling, naming, concurrency, an
    ```
 
 3. **Exported Names Must Have Doc Comments** - All exported names should have doc comments
+
+   > From Go Code Review Comments: "All top-level, exported names should have
+doc comments."
+
    ```
    // BAD
    func ProcessData(d []byte) error {
@@ -335,6 +339,10 @@ that uses values of the interface type, not the package that implements those va
    ```
 
 2. **Table-Driven Tests** - Use table-driven tests for multiple test cases
+
+   > Table-driven tests reduce code duplication and make it easy to add new
+test cases. They're the standard Go testing pattern.
+
    ```
    func TestAdd(t *testing.T) {
        tests := []struct {
@@ -391,6 +399,10 @@ that uses values of the interface type, not the package that implements those va
    ```
 
 5. **Project Structure** - Follow standard Go project layout conventions
+
+   > Standard layout: cmd/ for binaries, internal/ for private packages,
+pkg/ is controversial - internal/ is usually preferred.
+
    ```
    myproject/
      cmd/
@@ -405,6 +417,10 @@ that uses values of the interface type, not the package that implements those va
    ```
 
 6. **Use t.Helper in Test Helpers** - Test helper functions should call t.Helper()
+
+   > t.Helper() marks a function as a test helper. When the test fails,
+the stack trace points to the test, not the helper.
+
    ```
    // BAD
    func assertEqual(t *testing.T, got, want int) {

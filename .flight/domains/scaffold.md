@@ -34,7 +34,15 @@ Safe project scaffolding operations that preserve existing infrastructure. Gover
 1. **Protected Directories Exist** - Protected directories (.flight/, tasks/, .git/, docs/, scripts/) should exist after any scaffold operation.
 
 
+   > These directories contain project infrastructure that must survive
+scaffold operations. If missing, check git or backups.
+
+
 2. **Git Clean Before Scaffold** - Git working directory should be clean (committed or stashed) before running scaffold commands.
+
+
+   > Clean git state allows recovery via `git checkout` if scaffold
+causes damage. Always commit or stash before scaffolding.
 
    ```
    # Ensure clean state

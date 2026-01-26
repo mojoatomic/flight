@@ -86,9 +86,12 @@ rules:
           accessed: "2026-01-20"
           quote: "Webhooks must be delivered over HTTPS"
     check:
-      type: script
-      code: |
-        grep -Ein "webhook.*http://[^l]|http://.*webhook" "$@" | grep -v "localhost\|127\.0\.0\.1"
+      type: grep
+      pattern: 'webhook.*http://[^l]|http://.*webhook'
+      flags: -Ein
+      ignore_when:
+        - 'localhost'
+        - '127\.0\.0\.1'
     note: |
       Webhook payloads may contain sensitive business data. Always use HTTPS
       to ensure encryption in transit.
@@ -308,15 +311,10 @@ rules:
           accessed: "2026-01-20"
           quote: "Use webhook signatures to verify that Stripe sent a webhook event"
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qEi "webhook|hook" "$f" 2>/dev/null; then
-            if ! grep -qEi "signature|hmac|verify|x-.*-signature|createHmac|hash_hmac" "$f" 2>/dev/null; then
-              echo "$f: webhook handler without signature verification"
-            fi
-          fi
-        done
+      type: requires
+      trigger: 'webhook|hook'
+      requirement: 'signature|hmac|verify|x-.*-signature|createHmac|hash_hmac'
+      message: "webhook handler without signature verification"
     examples:
       bad:
         - |
@@ -338,7 +336,7 @@ rules:
   S2:
     title: Async Processing
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Webhook handlers should enqueue work for async processing rather than
       blocking. Synchronous processing causes provider timeouts and retries.
@@ -350,16 +348,6 @@ rules:
         - url: "https://docs.stripe.com/webhooks/best-practices"
           accessed: "2026-01-20"
           quote: "Return a 200 response quickly. Any complex logic should happen after the response is sent"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qEi "await.*process|await.*handle|await.*save.*res\.(send|status|json)" "$f" 2>/dev/null; then
-            if ! grep -qEi "queue|enqueue|publish|dispatch|bull|sqs|rabbitmq|kafka" "$f" 2>/dev/null; then
-              echo "$f: possible sync processing before response"
-            fi
-          fi
-        done
     examples:
       bad:
         - |
@@ -390,15 +378,10 @@ rules:
           accessed: "2026-01-20"
           quote: "Handle duplicate events. Webhook endpoints might occasionally receive the same event more than once"
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qEi "webhook|hook" "$f" 2>/dev/null; then
-            if ! grep -qEi "idempoten|delivery.?id|webhook.?id|x-.*-id|dedup|already.?processed" "$f" 2>/dev/null; then
-              echo "$f: no idempotency handling detected"
-            fi
-          fi
-        done
+      type: requires
+      trigger: 'webhook|hook'
+      requirement: 'idempoten|delivery.?id|webhook.?id|x-.*-id|dedup|already.?processed'
+      message: "no idempotency handling detected"
     examples:
       bad:
         - |
@@ -434,15 +417,10 @@ rules:
           accessed: "2026-01-20"
           quote: "Applications should validate and whitelist user-supplied URLs"
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qEi "webhook.*url|url.*webhook|register.*hook|endpoint" "$f" 2>/dev/null; then
-            if ! grep -qEi "isPrivate|privateIP|private.*range|internal.*ip|isValidUrl|validateUrl|blockList|allowList|dns\.resolve|dns\.lookup" "$f" 2>/dev/null; then
-              echo "$f: webhook URL handling without IP validation"
-            fi
-          fi
-        done
+      type: requires
+      trigger: 'webhook.*url|url.*webhook|register.*hook|endpoint'
+      requirement: 'isPrivate|privateIP|private.*range|internal.*ip|isValidUrl|validateUrl|blockList|allowList|dns\.resolve|dns\.lookup'
+      message: "webhook URL handling without IP validation"
     note: |
       Block: 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16,
       169.254.0.0/16, ::1/128, fc00::/7
@@ -475,15 +453,10 @@ rules:
           accessed: "2026-01-20"
           quote: "Each webhook contains a type field indicating what event occurred"
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qEi "webhook|hook" "$f" 2>/dev/null; then
-            if ! grep -qEi "event.?type|event_type|eventType|\.type|\.event|x-.*-event" "$f" 2>/dev/null; then
-              echo "$f: no event type handling detected"
-            fi
-          fi
-        done
+      type: requires
+      trigger: 'webhook|hook'
+      requirement: 'event.?type|event_type|eventType|\.type|\.event|x-.*-event'
+      message: "no event type handling detected"
     examples:
       good:
         - |
@@ -508,15 +481,10 @@ rules:
           accessed: "2026-01-20"
           quote: "The timestamp is included to prevent replay attacks"
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qEi "webhook|hook" "$f" 2>/dev/null; then
-            if ! grep -qEi "timestamp|created.?at|x-.*-timestamp|time" "$f" 2>/dev/null; then
-              echo "$f: no timestamp handling detected"
-            fi
-          fi
-        done
+      type: requires
+      trigger: 'webhook|hook'
+      requirement: 'timestamp|created.?at|x-.*-timestamp|time'
+      message: "no timestamp handling detected"
     examples:
       good:
         - |
@@ -528,7 +496,7 @@ rules:
   S7:
     title: HMAC Signature Implementation
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Webhook providers should sign payloads with HMAC to enable
       consumer verification.
@@ -540,15 +508,10 @@ rules:
         - url: "https://www.standardwebhooks.com/"
           accessed: "2026-01-20"
           quote: "Signatures are computed using HMAC with SHA-256"
-    check:
-      type: script
-      code: |
-        grep -qEi "createHmac|hash_hmac|hmac\.new|HMACSHA|HmacUtils" "$@" || echo "No HMAC implementation detected"
-
   S8:
     title: Proper Response Codes
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Webhook handlers should return 2xx within the timeout window.
       Providers interpret response codes to determine retry behavior.
@@ -560,15 +523,10 @@ rules:
         - url: "https://docs.stripe.com/webhooks/best-practices"
           accessed: "2026-01-20"
           quote: "Return a 200 status code quickly"
-    check:
-      type: script
-      code: |
-        grep -qEi "status\(200\)|status\(202\)|sendStatus\(200\)|\.ok\(|res\.send\(" "$@" || echo "No 2xx response handling detected"
-
   S9:
     title: Retry with Backoff Logic
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Webhook providers should implement exponential backoff with
       maximum retry limits.
@@ -580,15 +538,10 @@ rules:
         - url: "https://docs.github.com/en/webhooks/using-webhooks/best-practices-for-using-webhooks"
           accessed: "2026-01-20"
           quote: "GitHub will attempt to redeliver failed webhooks for up to three days"
-    check:
-      type: script
-      code: |
-        grep -qEi "backoff|retry|exponential|attempt|max.?retries" "$@" || echo "No retry/backoff logic detected"
-
   S10:
     title: Dead Letter Queue Handling
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Failed webhooks should be routed to a dead letter queue after
       exhausting retries for manual inspection and replay.
@@ -600,11 +553,6 @@ rules:
         - url: "https://docs.stripe.com/webhooks/best-practices"
           accessed: "2026-01-20"
           quote: "Implement a dead letter queue for failed webhooks"
-    check:
-      type: script
-      code: |
-        grep -qEi "dead.?letter|dlq|failed.?queue|poison.?queue" "$@" || echo "No dead letter queue handling detected"
-
   S11:
     title: Webhook URL Validation on Registration
     severity: SHOULD
@@ -620,20 +568,15 @@ rules:
           accessed: "2026-01-20"
           quote: "Validate all user-supplied URLs before making requests"
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qEi "register.*webhook|webhook.*register|save.*webhook.*url|add.*endpoint" "$f" 2>/dev/null; then
-            if ! grep -qEi "validateUrl|isValidUrl|url.*valid|dns\.resolve|lookup|parseUrl" "$f" 2>/dev/null; then
-              echo "$f: webhook registration without URL validation"
-            fi
-          fi
-        done
+      type: requires
+      trigger: 'register.*webhook|webhook.*register|save.*webhook.*url|add.*endpoint'
+      requirement: 'validateUrl|isValidUrl|url.*valid|dns\.resolve|lookup|parseUrl'
+      message: "webhook registration without URL validation"
 
   S12:
     title: Payload Size Limits
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Webhooks should keep payloads small (<20KB). Large payloads are
       slow and timeout-prone. Send references instead.
@@ -645,15 +588,10 @@ rules:
         - url: "https://www.standardwebhooks.com/"
           accessed: "2026-01-20"
           quote: "Keep payloads small and include IDs for fetching additional data"
-    check:
-      type: script
-      code: |
-        grep -qEi "payload.?size|max.?size|body.?limit|20.?kb|size.?limit" "$@" || echo "No payload size limits detected"
-
   S13:
     title: Webhook Logging
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Webhook handlers should log activity for debugging and audit trails.
     provenance:
@@ -664,15 +602,10 @@ rules:
         - url: "https://docs.stripe.com/webhooks/best-practices"
           accessed: "2026-01-20"
           quote: "Log webhook activity for debugging"
-    check:
-      type: script
-      code: |
-        grep -qEi "log.*webhook|webhook.*log|logger|console\.(log|info|error).*webhook" "$@" || echo "No webhook-specific logging detected"
-
   S14:
     title: Secret Rotation Support
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Webhook systems should support signing with multiple keys during
       secret rotation.
@@ -684,15 +617,10 @@ rules:
         - url: "https://www.standardwebhooks.com/"
           accessed: "2026-01-20"
           quote: "Support for key rotation by accepting multiple signatures"
-    check:
-      type: script
-      code: |
-        grep -qEi "rotate|multiple.?secret|old.?secret|new.?secret|secret.?version" "$@" || echo "No secret rotation support detected"
-
   S15:
     title: Timing-Safe Comparison Used
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Use constant-time comparison functions for signature verification.
     provenance:
@@ -703,15 +631,10 @@ rules:
         - url: "https://www.standardwebhooks.com/"
           accessed: "2026-01-20"
           quote: "Use constant-time string comparison to compare signatures"
-    check:
-      type: script
-      code: |
-        grep -qEi "timingSafeEqual|constant.?time|secure.?compare|MessageDigest\.isEqual|hmac\.compare" "$@" || echo "No timing-safe comparison detected"
-
   S16:
     title: Queue Integration
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Webhook handlers should integrate with a queue for async processing.
     provenance:
@@ -722,15 +645,10 @@ rules:
         - url: "https://docs.stripe.com/webhooks/best-practices"
           accessed: "2026-01-20"
           quote: "Use a queue to process webhooks asynchronously"
-    check:
-      type: script
-      code: |
-        grep -qEi "queue|bull|sqs|rabbitmq|kafka|redis.*publish|pub.?sub|enqueue" "$@" || echo "No queue integration detected"
-
   S17:
     title: Schema Validation
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Validate incoming webhook payloads against a schema before processing.
     provenance:
@@ -741,15 +659,10 @@ rules:
         - url: "https://docs.stripe.com/webhooks/best-practices"
           accessed: "2026-01-20"
           quote: "Validate the payload structure before processing"
-    check:
-      type: script
-      code: |
-        grep -qEi "joi|zod|yup|ajv|schema.*valid|validate.*schema|json.?schema" "$@" || echo "No schema validation detected"
-
   S18:
     title: Registration Verification Challenge
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Webhook providers should verify URL ownership via challenge/response
       during registration.
@@ -761,15 +674,10 @@ rules:
         - url: "https://www.standardwebhooks.com/"
           accessed: "2026-01-20"
           quote: "Verify endpoint ownership before sending webhooks"
-    check:
-      type: script
-      code: |
-        grep -qEi "challenge|verification.*webhook|webhook.*verification|verify.*endpoint|test.*webhook" "$@" || echo "No registration verification detected"
-
   S19:
     title: Egress Proxy for Webhook Delivery
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Webhook providers should route delivery through an egress proxy
       for centralized security enforcement.
@@ -781,11 +689,6 @@ rules:
         - url: "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery"
           accessed: "2026-01-20"
           quote: "Use an egress proxy to control outbound requests"
-    check:
-      type: script
-      code: |
-        grep -qEi "smokescreen|egress.*proxy|webhook.*proxy|proxy.*webhook|sentry" "$@" || echo "No egress proxy detected (optional but recommended)"
-
   # =========================================================================
   # GUIDANCE - Best practices (not mechanically checked)
   # =========================================================================

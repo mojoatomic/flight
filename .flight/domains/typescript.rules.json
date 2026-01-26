@@ -24,6 +24,34 @@
   },
   "rules": [
     {
+      "id": "M3",
+      "title": "Interface for Object Shapes",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "type [A-Z][a-zA-Z]* = \\{",
+      "query": null,
+      "message": "Prefer `interface` for object shapes. Use `type` for unions, intersections, and computed types.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "M4",
+      "title": "Readonly for Array Parameters",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "function.*\\([^)]*:\\s*[A-Za-z]+\\[\\]",
+      "query": null,
+      "message": "Function parameters that receive arrays but don't mutate them should use `readonly` to prevent accidental mutation.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
       "id": "N1",
       "title": "Unjustified any",
       "severity": "NEVER",
@@ -103,6 +131,34 @@
       "pattern": "(status|type|kind|state|mode):\\s*string\\s*[;,)]",
       "query": null,
       "message": "Don't use `string` for fields named status, type, kind, state, or mode. Use union types to catch typos at compile time.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N7",
+      "title": "Exported Functions Must Have Return Type",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "^export (async )?function \\w+\\([^)]*\\)\\s*\\{",
+      "query": null,
+      "message": "Exported functions must have explicit return types. Inferred types can change unexpectedly and break consumers.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N8",
+      "title": "Implicit Any in Callbacks (JSON.parse, as any)",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "JSON\\.parse\\([^)]*\\)\\.(map|filter|reduce|forEach|find|some|every)\\(|as any\\)\\.(map|filter|reduce|forEach|find|some|every)\\(",
+      "query": null,
+      "message": "Don't iterate over JSON.parse() or `as any` results without typing. The callback parameters will be implicit any.",
       "provenance": {
         "last_verified": "2026-01-20",
         "confidence": "high",

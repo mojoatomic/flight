@@ -80,7 +80,7 @@ rules:
   N0:
     title: Inconsistent Source Directory Structure
     severity: NEVER
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-23"
       confidence: high
@@ -93,30 +93,6 @@ rules:
       If src/ directory exists, all application code must live under src/.
       No parallel directories at root level (lib/ alongside src/lib/).
       This prevents AI assistants from creating duplicate file structures.
-    check:
-      type: script
-      code: |
-        # Only check if src/ exists (indicates src/ convention chosen)
-        if [ -d "src" ]; then
-            found=0
-            # Check for parallel directories that should be under src/
-            for dir in lib components types utils hooks services helpers; do
-                if [ -d "$dir" ] && [ -d "src/$dir" ]; then
-                    if [ $found -eq 0 ]; then
-                        echo "Split directory structure detected:"
-                        found=1
-                    fi
-                    echo "  $dir/ exists alongside src/$dir/"
-                elif [ -d "$dir" ] && [ -d "src" ]; then
-                    # Even if src/$dir doesn't exist, root $dir is wrong when src/ exists
-                    if [ $found -eq 0 ]; then
-                        echo "Split directory structure detected:"
-                        found=1
-                    fi
-                    echo "  $dir/ should be src/$dir/"
-                fi
-            done
-        fi
     note: |
       When src/ directory exists, Next.js expects application code under src/.
       Path aliases like @/* typically map to ./src/*.
@@ -164,16 +140,13 @@ rules:
     description: >
       Page components should be server components by default. Adding 'use client'
       at the page level kills SSR benefits for the entire page tree.
+    only_paths:
+      - '**/page.tsx'
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-            if [[ "$f" == *page.tsx ]]; then
-                if head -5 "$f" | grep -q "'use client'\|\"use client\""; then
-                    echo "$f: page.tsx should be server component"
-                fi
-            fi
-        done
+      type: grep
+      pattern: "^['\"]use client['\"]"
+      flags: -En
+      message: "page.tsx should be server component"
     note: |
       Push client boundaries down to the smallest interactive components.
       Keep page.tsx as server component to benefit from SSR and server-side data fetching.
@@ -211,15 +184,10 @@ rules:
       useState, useEffect, and other React hooks cannot be used in server components.
       Files without 'use client' directive are server components.
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-            if ! grep -q "'use client'\|\"use client\"" "$f"; then
-                if grep -qE 'useState|useEffect|useRef|useCallback|useMemo|useReducer' "$f"; then
-                    echo "$f: has hooks but no 'use client'"
-                fi
-            fi
-        done
+      type: requires
+      trigger: 'useState|useEffect|useRef|useCallback|useMemo|useReducer'
+      requirement: "'use client'|\"use client\""
+      message: "has hooks but no 'use client'"
     note: |
       Server components run on the server where React hooks don't work.
       Either add 'use client' or refactor to use server-side data fetching.
@@ -288,7 +256,7 @@ rules:
   N4:
     title: process.env in Client Components
     severity: NEVER
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -300,16 +268,6 @@ rules:
     description: >
       Non-NEXT_PUBLIC_ environment variables are not available in client components
       and would expose secrets if they were. Only NEXT_PUBLIC_ vars are safe client-side.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-            if grep -q "'use client'\|\"use client\"" "$f"; then
-                if grep -E 'process\.env\.' "$f" | grep -v 'NEXT_PUBLIC_'; then
-                    echo "$f: uses non-public env in client"
-                fi
-            fi
-        done
     note: |
       NEXT_PUBLIC_ vars are inlined at build time and safe for client.
       All other env vars are server-only and undefined in client bundles.
@@ -341,16 +299,12 @@ rules:
     description: >
       Route handlers should validate input, not use 'any'. External data
       from requests is unknown until validated.
+    only_paths:
+      - '**/route.ts'
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-            if [[ "$f" == *route.ts ]]; then
-                if grep -n ': any' "$f"; then
-                    echo "$f"
-                fi
-            fi
-        done
+      type: grep
+      pattern: ': any'
+      flags: -En
     note: |
       'any' disables type checking. Route handlers receive untrusted input.
       Use 'unknown' and validate with Zod or similar.
@@ -455,7 +409,7 @@ rules:
   N8:
     title: Fat Route Handlers (>100 lines)
     severity: NEVER
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-23"
       confidence: medium
@@ -468,17 +422,6 @@ rules:
       Route handlers should be thin orchestrators. Extract business logic
       to separate functions for testability and reuse. 100 lines allows for
       proper validation, auth, and error handling while flagging genuinely fat handlers.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-            if [[ "$f" == *route.ts ]]; then
-                lines=$(wc -l < "$f")
-                if [ "$lines" -gt 100 ]; then
-                    echo "$f: $lines lines (max 100)"
-                fi
-            fi
-        done
     note: |
       Fat handlers are hard to test and reason about.
       Extract validation, business logic, and responses to separate functions.
@@ -499,7 +442,7 @@ rules:
   N9:
     title: Deprecated middleware.ts File (Next.js 16+)
     severity: NEVER
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-23"
       confidence: high
@@ -512,18 +455,6 @@ rules:
       Next.js 16 deprecated middleware.ts in favor of proxy.ts. The middleware
       file convention has been renamed to clarify its network boundary purpose
       and avoid confusion with Express middleware.
-    check:
-      type: script
-      code: |
-        # Check for middleware files at root or src level
-        for loc in "." "src"; do
-          for ext in ts js; do
-            if [ -f "$loc/middleware.$ext" ]; then
-              echo "$loc/middleware.$ext: deprecated in Next.js 16+, rename to proxy.$ext"
-              echo "  Migration: npx @next/codemod@canary middleware-to-proxy ."
-            fi
-          done
-        done
     note: |
       Migration steps:
       1. Run: npx @next/codemod@canary middleware-to-proxy .
@@ -559,16 +490,13 @@ rules:
     description: >
       Dynamic route pages ([id], [slug]) should call notFound() when the
       resource doesn't exist, rendering the not-found.tsx boundary.
+    only_paths:
+      - '**/*]*/page.tsx'
+      - '**/*]/page.tsx'
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-            if [[ "$f" == *\[*\]*page.tsx ]]; then
-                if ! grep -q 'notFound' "$f"; then
-                    echo "$f: dynamic route without notFound()"
-                fi
-            fi
-        done
+      type: requires
+      must_exist: 'notFound'
+      message: "dynamic route without notFound()"
     note: |
       Without notFound(), missing resources may render broken pages or
       show confusing errors. notFound() renders a proper 404.
@@ -586,7 +514,7 @@ rules:
   S2:
     title: Consider Promise.all for Independent Fetches
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -598,17 +526,6 @@ rules:
     description: >
       Multiple sequential awaits that don't depend on each other should use
       Promise.all to fetch in parallel and reduce load time.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-            count=$(grep -c 'await ' "$f" 2>/dev/null || echo 0)
-            if [ "$count" -gt 3 ]; then
-                if ! grep -q 'Promise.all' "$f"; then
-                    echo "$f: $count awaits without Promise.all"
-                fi
-            fi
-        done
     note: |
       Sequential awaits are waterfall requests. If fetches are independent,
       Promise.all runs them in parallel, cutting total time.
@@ -629,7 +546,7 @@ rules:
   S3:
     title: Pages Should Have loading.tsx
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -641,15 +558,6 @@ rules:
     description: >
       Directories with page.tsx should have loading.tsx to show instant
       loading state while the page suspends.
-    check:
-      type: script
-      code: |
-        find app -name 'page.tsx' 2>/dev/null | while read page; do
-            dir=$(dirname "$page")
-            if [ ! -f "$dir/loading.tsx" ]; then
-                echo "$dir: missing loading.tsx"
-            fi
-        done | head -5
     note: |
       Without loading.tsx, users see nothing while page data loads.
       loading.tsx shows immediately, improving perceived performance.
@@ -664,7 +572,7 @@ rules:
   S4:
     title: Pages Should Have error.tsx
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -676,15 +584,6 @@ rules:
     description: >
       Directories with page.tsx should have error.tsx to handle errors
       gracefully instead of crashing the entire app.
-    check:
-      type: script
-      code: |
-        find app -name 'page.tsx' 2>/dev/null | while read page; do
-            dir=$(dirname "$page")
-            if [ ! -f "$dir/error.tsx" ]; then
-                echo "$dir: missing error.tsx"
-            fi
-        done | head -5
     note: |
       Without error boundaries, errors bubble up and crash larger sections.
       error.tsx contains errors and allows retry.
@@ -699,7 +598,7 @@ rules:
   S5:
     title: Server-Only Import for Sensitive Files
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -711,16 +610,6 @@ rules:
     description: >
       Database and auth files should import 'server-only' to prevent
       accidental import in client components.
-    check:
-      type: script
-      code: |
-        for f in lib/db.ts lib/auth.ts lib/database.ts; do
-            if [ -f "$f" ]; then
-                if ! grep -q "import 'server-only'" "$f"; then
-                    echo "$f: should import 'server-only'"
-                fi
-            fi
-        done
     note: |
       'server-only' package causes build error if imported in client component.
       This prevents accidental exposure of server secrets.

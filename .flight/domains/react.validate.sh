@@ -99,17 +99,11 @@ check "N3: Index as Key" \
 
 # N4: Direct State Mutation
 check "N4: Direct State Mutation" \
-    bash -c 'for file in "$@"; do
-# Exclude navigation methods: router.push, history.push, navigate
-grep -En '"'"'\.push\(|\.splice\(|\.pop\(|\.shift\(|\.unshift\('"'"' "$@" 2>/dev/null | \
-grep -v '"'"'router\.push\|history\.push\|navigate\.'"'"' || true
-done' _ "${FILES[@]}"
+    bash -c '(grep -En "\\.push\\(|\\.splice\\(|\\.pop\\(|\\.shift\\(|\\.unshift\\(" "$@" | grep -v "router\\.push" | grep -v "history\\.push" | grep -v "navigate\\.") || true' _ "${FILES[@]}"
 
 # N5: Missing Dependency Arrays
 check "N5: Missing Dependency Arrays" \
-    bash -c 'for file in "$@"; do
-grep -Pzo '"'"'useEffect\(\s*\(\)\s*=>\s*\{[^}]*[a-zA-Z]+[^}]*\},\s*\[\]\)'"'"' "$@" 2>/dev/null | head -5 || true
-done' _ "${FILES[@]}"
+    grep -En "useEffect\\(\\s*\\(\\)\\s*=>\\s*\\{[^}]*[a-zA-Z]+[^}]*\\},\\s*\\[\\]\\)" "${FILES[@]}"
 
 # N6: Conditional Hooks
 check "N6: Conditional Hooks" \
@@ -120,23 +114,23 @@ check "N7: Generic Component Names" \
     grep -En "function\\s+\\w+\\(\\s*\\{\\s*(data|info|item|value)\\s*\\}" "${FILES[@]}"
 
 # N8: Export Default (except Next.js special files)
-check "N8: Export Default (except Next.js special files)" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-    basename=$(basename "$f")
-    # Skip Next.js special files that require export default
-    if [[ "$basename" =~ ^(page|layout|loading|error|global-error|not-found|template|default|main)\.(tsx|jsx|ts|js)$ ]]; then
-        continue
-    fi
-    grep -En '"'"'^export default'"'"' "$f" 2>/dev/null || true
+# Path filtering for this rule
+FILTERED_FILES=()
+for __f in "${FILES[@]}"; do
+    if [[ "$__f" == *page.{tsx,jsx,ts,js} ]] || [[ "$__f" == *layout.{tsx,jsx,ts,js} ]] || [[ "$__f" == *loading.{tsx,jsx,ts,js} ]] || [[ "$__f" == *error.{tsx,jsx,ts,js} ]] || [[ "$__f" == *global-error.{tsx,jsx,ts,js} ]] || [[ "$__f" == *not-found.{tsx,jsx,ts,js} ]] || [[ "$__f" == *template.{tsx,jsx,ts,js} ]] || [[ "$__f" == *default.{tsx,jsx,ts,js} ]] || [[ "$__f" == *main.{tsx,jsx,ts,js} ]]; then continue; fi
+    FILTERED_FILES+=("$__f")
 done
-done' _ "${FILES[@]}"
+if [[ ${#FILTERED_FILES[@]} -gt 0 ]]; then
+    check "N8: Export Default (except Next.js special files)" \
+        grep -En "^export default" "${FILTERED_FILES[@]}"
+else
+    green "✅ N8: Export Default (except Next.js special files) (skipped - no matching files after path filter)"
+    ((PASS++)) || true
+fi
 
 # N9: Props Named data/info/item/value
 check "N9: Props Named data/info/item/value" \
-    bash -c 'for file in "$@"; do
-grep -En '"'"'\{\s*(data|info|item|value)\s*\}'"'"' "$@" | grep -v '"'"'const\|let\|var'"'"' || true
-done' _ "${FILES[@]}"
+    bash -c '(grep -En "\\{\\s*(data|info|item|value)\\s*\\}" "$@" | grep -v "const" | grep -v "let" | grep -v "var") || true' _ "${FILES[@]}"
 
 # N10: Console.log in Components
 check "N10: Console.log in Components" \
@@ -154,27 +148,35 @@ printf '\n%s\n' "## SHOULD Rules"
 
 # S1: Handle Loading State
 warn "S1: Handle Loading State" \
-    bash -c 'for file in "$@"; do
+    bash -c '
 for f in "$@"; do
-  if grep -q '"'"'fetch\|useQuery\|useSWR\|useEffect.*async'"'"' "$f"; then
-    if ! grep -q '"'"'isLoading\|loading'"'"' "$f"; then
-      echo "$f: has async but no loading state"
+    trigger_lines=$(grep -nE "fetch\\(|useQuery|useSWR|useEffect.*async" "$f" 2>/dev/null)
+    if [[ -n "$trigger_lines" ]]; then
+        if ! grep -qE "isLoading|loading" "$f" 2>/dev/null; then
+            echo "$trigger_lines" | while IFS= read -r line; do
+                linenum="${line%%:*}"
+                echo "$f:$linenum: has async operations but no loading state"
+            done
+        fi
     fi
-  fi
 done
-done' _ "${FILES[@]}"
+' _ "${FILES[@]}"
 
 # S2: Handle Error State
 warn "S2: Handle Error State" \
-    bash -c 'for file in "$@"; do
+    bash -c '
 for f in "$@"; do
-  if grep -q '"'"'fetch\|useQuery\|useSWR\|useEffect.*async'"'"' "$f"; then
-    if ! grep -q '"'"'error\|Error'"'"' "$f"; then
-      echo "$f: has async but no error handling"
+    trigger_lines=$(grep -nE "fetch\\(|useQuery|useSWR|useEffect.*async" "$f" 2>/dev/null)
+    if [[ -n "$trigger_lines" ]]; then
+        if ! grep -qE "error|Error" "$f" 2>/dev/null; then
+            echo "$trigger_lines" | while IFS= read -r line; do
+                linenum="${line%%:*}"
+                echo "$f:$linenum: has async operations but no error handling"
+            done
+        fi
     fi
-  fi
 done
-done' _ "${FILES[@]}"
+' _ "${FILES[@]}"
 
 # S3: Boolean Props Use Prefix
 warn "S3: Boolean Props Use Prefix" \
@@ -182,18 +184,19 @@ warn "S3: Boolean Props Use Prefix" \
 
 # S4: useCallback for Handlers
 warn "S4: useCallback for Handlers" \
-    bash -c 'for file in "$@"; do
+    bash -c '
 for f in "$@"; do
-  if grep -q '"'"'const handle'"'"' "$f"; then
-    if ! grep -q '"'"'useCallback'"'"' "$f"; then
-      handlers=$(grep -c '"'"'const handle'"'"' "$f")
-      if [ "$handlers" -gt 0 ]; then
-        echo "$f: $handlers handlers without useCallback"
-      fi
+    trigger_lines=$(grep -nE "const handle[A-Z]" "$f" 2>/dev/null)
+    if [[ -n "$trigger_lines" ]]; then
+        if ! grep -qE "useCallback" "$f" 2>/dev/null; then
+            echo "$trigger_lines" | while IFS= read -r line; do
+                linenum="${line%%:*}"
+                echo "$f:$linenum: handlers defined without useCallback"
+            done
+        fi
     fi
-  fi
 done
-done' _ "${FILES[@]}"
+' _ "${FILES[@]}"
 
 printf '\n%s\n' "## Info"
 

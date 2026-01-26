@@ -292,9 +292,11 @@ rules:
           accessed: "2026-01-20"
           quote: "Return type annotations appear after the parameter list"
     check:
-      type: script
-      code: |
-        grep -En '^export (async )?function \w+\([^)]*\)\s*\{' "$@" | grep -v '):'
+      type: grep
+      pattern: '^export (async )?function \w+\([^)]*\)\s*\{'
+      flags: -En
+      ignore_when:
+        - '\):'
     note: |
       Inferred return types are a leaky abstraction. If the implementation
       changes, the type changes. Explicit types catch accidental changes.
@@ -326,10 +328,9 @@ rules:
           accessed: "2026-01-20"
           quote: "In some cases where no type annotations are present, TypeScript will fall back to a type of any"
     check:
-      type: script
-      code: |
-        grep -En 'JSON\.parse\([^)]*\)\.(map|filter|reduce|forEach|find|some|every)\(' "$@"
-        grep -En 'as any\)\.(map|filter|reduce|forEach|find|some|every)\(' "$@"
+      type: grep
+      pattern: 'JSON\.parse\([^)]*\)\.(map|filter|reduce|forEach|find|some|every)\(|as any\)\.(map|filter|reduce|forEach|find|some|every)\('
+      flags: -En
     note: |
       JSON.parse returns `any`. Calling .map() on it gives implicit any in the callback.
       Validate or type the parsed result first.
@@ -460,7 +461,7 @@ rules:
   M1:
     title: tsconfig strict Mode
     severity: MUST
-    mechanical: true
+    mechanical: false
     description: >
       Enable `strict: true` in tsconfig.json or tsconfig.app.json.
       This enables all strict type-checking options.
@@ -472,25 +473,6 @@ rules:
         - url: "https://www.typescriptlang.org/tsconfig/#strict"
           accessed: "2026-01-20"
           quote: "The strict flag enables a wide range of type checking behavior that results in stronger guarantees of program correctness"
-    check:
-      type: script
-      code: |
-        STRICT_FOUND=false
-        if [ -f tsconfig.json ]; then
-          if grep -qE '"strict"[[:space:]]*:[[:space:]]*true' tsconfig.json 2>/dev/null; then
-            STRICT_FOUND=true
-          fi
-        fi
-        if [ -f tsconfig.app.json ]; then
-          if grep -qE '"strict"[[:space:]]*:[[:space:]]*true' tsconfig.app.json 2>/dev/null; then
-            STRICT_FOUND=true
-          fi
-        fi
-        if [ "$STRICT_FOUND" = false ]; then
-          if [ -f tsconfig.json ] || [ -f tsconfig.app.json ]; then
-            echo 'No tsconfig file has strict: true enabled'
-          fi
-        fi
     note: |
       strict: true enables noImplicitAny, strictNullChecks, and other
       important checks. It's the baseline for type safety.
@@ -519,15 +501,10 @@ rules:
           accessed: "2026-01-20"
           quote: "To define a user-defined type guard, we simply need to define a function whose return type is a type predicate"
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -q ': unknown' "$f"; then
-            if ! grep -q 'is [A-Z]' "$f"; then
-              echo "$f: uses 'unknown' but no type guard found"
-            fi
-          fi
-        done
+      type: requires
+      trigger: ': unknown'
+      requirement: 'is [A-Z]'
+      message: "uses 'unknown' but no type guard found"
     note: |
       unknown is the type-safe any. But you can't use it until you narrow it.
       Type guards (function isX(val): val is X) are the safe way to narrow.
@@ -559,11 +536,9 @@ rules:
           accessed: "2026-01-20"
           quote: "If you would like a heuristic, use interface until you need to use features from type"
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          grep -Hn 'type [A-Z][a-zA-Z]* = {' "$f" 2>/dev/null | head -3
-        done
+      type: grep
+      pattern: 'type [A-Z][a-zA-Z]* = \{'
+      flags: -En
     note: |
       Interfaces are extendable and produce better error messages.
       Use type for unions (A | B), intersections (A & B), and mapped types.
@@ -601,11 +576,11 @@ rules:
           accessed: "2026-01-20"
           quote: "readonly properties can also change via aliasing... TypeScript doesn't factor in whether properties on two types are readonly"
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          grep -En 'function.*\([^)]*:\s*[A-Za-z]+\[\]' "$f" 2>/dev/null | grep -v 'readonly' | head -3
-        done
+      type: grep
+      pattern: 'function.*\([^)]*:\s*[A-Za-z]+\[\]'
+      flags: -En
+      ignore_when:
+        - 'readonly'
     note: |
       Arrays passed to functions can be accidentally mutated. readonly
       prevents push, pop, splice, and assignment. Use it for input arrays.

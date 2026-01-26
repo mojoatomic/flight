@@ -29,6 +29,76 @@
   },
   "rules": [
     {
+      "id": "M1",
+      "title": "Boolean Variables Use Proper Prefixes",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "(const|let|var)\\s+[a-z]+\\s*=\\s*(true|false)\\s*;",
+      "query": null,
+      "message": "Boolean variables and functions should use is/has/can/should/will/was/did/does prefixes to clearly indicate they return a boolean.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "M2",
+      "title": "Collections Use Plural Names",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "(const|let|var)\\s+(user|item|order|product|result|file|row|record|entry)\\s*=\\s*\\[",
+      "query": null,
+      "message": "Arrays, lists, sets, and other collections should use plural names. Singular names should be used for single items.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "M3",
+      "title": "Constants Use UPPER_SNAKE_CASE",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "const\\s+[a-z][a-zA-Z]*\\s*=\\s*[0-9]+\\s*;",
+      "query": null,
+      "message": "Constants (values that never change) should use UPPER_SNAKE_CASE to distinguish them from mutable variables.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "M4",
+      "title": "Error Messages Include Context",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "throw\\s+new\\s+Error\\(['\"][^'\"]{0,15}['\"]|raise\\s+.*Exception\\(['\"][^'\"]{0,15}['\"]",
+      "query": null,
+      "message": "Error messages should include enough context to understand what failed and why. Generic messages like \"Invalid\" or \"Failed\" are useless.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "M5",
+      "title": "Function Names Are Verb Phrases",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "^(export\\s+)?(async\\s+)?function\\s+[a-z]+\\s*\\(",
+      "query": null,
+      "message": "Function names should start with a verb that describes the action. Noun-only names don't describe what the function does.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
       "id": "N10_js",
       "title": "snake_case Declaration in JavaScript/TypeScript",
       "severity": "NEVER",
@@ -115,6 +185,20 @@
       }
     },
     {
+      "id": "N5",
+      "title": "Magic Number Calculations",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "60\\s*\\*\\s*60|24\\s*\\*\\s*60|1000\\s*\\*\\s*60|7\\s*\\*\\s*24|1024\\s*\\*\\s*1024",
+      "query": null,
+      "message": "Do not use raw arithmetic for time/size calculations. Define named constants.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
       "id": "N6",
       "title": "Generic Function Names",
       "severity": "NEVER",
@@ -122,6 +206,34 @@
       "pattern": "function\\s+(handleData|processItem|processItems|doSomething|getData|setData|updateValue|handleEvent|processResult|transformData|handleInput|processInput)\\s*\\(|def\\s+(handle_data|process_item|do_something|get_data|set_data|update_value|handle_event|process_result|transform_data)\\s*\\(",
       "query": null,
       "message": "Function names should include the domain noun they operate on. Avoid handleData, processItem, doSomething, etc.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N7",
+      "title": "Single-Letter Variables Outside Loops",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "^\\s*(const|let|var|)\\s+[a-hk-wyz]\\s*=",
+      "query": null,
+      "message": "Single-letter variables are only acceptable as loop counters (i, j, k) or in very short lambdas. Otherwise use descriptive names.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N8",
+      "title": "Console/Print Debugging in Production Code",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "console\\.(log|warn|error)\\s*\\(|print\\s*\\(|System\\.out\\.print|println!\\s*\\(|fmt\\.Print",
+      "query": null,
+      "message": "Do not leave console.log, print, or similar debugging statements in production code. Use a proper logging framework.",
       "provenance": {
         "last_verified": "2026-01-16",
         "confidence": "high",

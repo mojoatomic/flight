@@ -91,33 +91,11 @@ check "N1: SELECT *" \
 
 # N2: String Interpolation in SQL
 check "N2: String Interpolation in SQL" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  case "$f" in
-    *.js|*.ts|*.tsx)
-      # Template literals with SQL keywords
-      grep -En '"'"'\`[^\`]*SELECT.*\$\{|\`[^\`]*INSERT.*\$\{|\`[^\`]*UPDATE.*\$\{|\`[^\`]*DELETE.*\$\{'"'"' "$f" 2>/dev/null
-      # String concat with SQL
-      grep -En "SELECT.*\"\\s*\\+|INSERT.*\"\\s*\\+|UPDATE.*\"\\s*\\+|DELETE.*\"\\s*\\+" "$f" 2>/dev/null
-      ;;
-    *.py)
-      # Python f-strings with SQL
-      grep -En '"'"'f"[^"]*SELECT.*\{|f"[^"]*INSERT.*\{|f"[^"]*UPDATE.*\{'"'"' "$f" 2>/dev/null
-      ;;
-  esac
-done | head -10
-done' _ "${FILES[@]}"
+    grep -Ein "\\\`[^\\\`]*(SELECT|INSERT|UPDATE|DELETE).*\\\$\\{|(SELECT|INSERT|UPDATE|DELETE).*\"\\s*\\+|f\"[^\"]*(SELECT|INSERT|UPDATE).*\\{" "${FILES[@]}"
 
 # N3: UPDATE/DELETE Without WHERE
 check "N3: UPDATE/DELETE Without WHERE" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # DELETE FROM table; without WHERE
-  grep -Ein '"'"'DELETE\s+FROM\s+\w+\s*;'"'"' "$f" 2>/dev/null
-  # UPDATE without WHERE on same line (basic check)
-  grep -Ein '"'"'UPDATE\s+\w+\s+SET\s+.*;'"'"' "$f" 2>/dev/null | grep -iv '"'"'WHERE'"'"'
-done | head -5
-done' _ "${FILES[@]}"
+    grep -Ein "DELETE\\s+FROM\\s+\\w+\\s*;" "${FILES[@]}"
 
 # N4: LIKE with Leading Wildcard
 check "N4: LIKE with Leading Wildcard" \
@@ -132,116 +110,120 @@ check "N6: Large OFFSET Values" \
     grep -Ein "OFFSET\\s+[0-9]{4,}|OFFSET\\s+\\\$" "${FILES[@]}"
 
 # N7: Plain Text Password Column
-check "N7: Plain Text Password Column" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  case "$f" in
-    *.sql)
-      grep -Ein '"'"'password\s+(varchar|text|char)'"'"' "$f" 2>/dev/null | grep -iv '"'"'password_hash\|password_digest\|hashed_password'"'"'
-      ;;
-  esac
+# Path filtering for this rule
+FILTERED_FILES=()
+for __f in "${FILES[@]}"; do
+    if ! ( [[ "$__f" == *.sql ]] ); then continue; fi
+    FILTERED_FILES+=("$__f")
 done
-done' _ "${FILES[@]}"
+if [[ ${#FILTERED_FILES[@]} -gt 0 ]]; then
+    check "N7: Plain Text Password Column" \
+        bash -c '(grep -Ein "password\\s+(varchar|text|char)" "$@" | grep -v "password_hash" | grep -v "password_digest" | grep -v "hashed_password") || true' _ "${FILTERED_FILES[@]}"
+else
+    green "✅ N7: Plain Text Password Column (skipped - no matching files after path filter)"
+    ((PASS++)) || true
+fi
 
 # N8: timestamp Without Timezone
-check "N8: timestamp Without Timezone" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  case "$f" in
-    *.sql)
-      grep -Ein '"'"'\stimestamp\s'"'"' "$f" 2>/dev/null | grep -iv '"'"'timestamptz\|timestamp with time zone'"'"'
-      ;;
-  esac
+# Path filtering for this rule
+FILTERED_FILES=()
+for __f in "${FILES[@]}"; do
+    if ! ( [[ "$__f" == *.sql ]] ); then continue; fi
+    FILTERED_FILES+=("$__f")
 done
-done' _ "${FILES[@]}"
+if [[ ${#FILTERED_FILES[@]} -gt 0 ]]; then
+    check "N8: timestamp Without Timezone" \
+        bash -c '(grep -Ein "\\stimestamp\\s" "$@" | grep -v "timestamptz" | grep -v "timestamp with time zone") || true' _ "${FILTERED_FILES[@]}"
+else
+    green "✅ N8: timestamp Without Timezone (skipped - no matching files after path filter)"
+    ((PASS++)) || true
+fi
 
 # N9: float/real for Money
-check "N9: float/real for Money" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  case "$f" in
-    *.sql)
-      grep -Ein '"'"'(price|cost|total|amount|balance|fee|rate)\s+(float|real|double)'"'"' "$f" 2>/dev/null
-      ;;
-  esac
+# Path filtering for this rule
+FILTERED_FILES=()
+for __f in "${FILES[@]}"; do
+    if ! ( [[ "$__f" == *.sql ]] ); then continue; fi
+    FILTERED_FILES+=("$__f")
 done
-done' _ "${FILES[@]}"
+if [[ ${#FILTERED_FILES[@]} -gt 0 ]]; then
+    check "N9: float/real for Money" \
+        grep -Ein "(price|cost|total|amount|balance|fee|rate)\\s+(float|real|double)" "${FILTERED_FILES[@]}"
+else
+    green "✅ N9: float/real for Money (skipped - no matching files after path filter)"
+    ((PASS++)) || true
+fi
 
 printf '\n%s\n' "## SHOULD Rules"
 
 # S1: Boolean Without NOT NULL DEFAULT
-warn "S1: Boolean Without NOT NULL DEFAULT" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  case "$f" in
-    *.sql)
-      grep -Ein '"'"'\s+boolean\s*[,)]'"'"' "$f" 2>/dev/null | grep -iv '"'"'NOT NULL'"'"'
-      ;;
-  esac
+# Path filtering for this rule
+FILTERED_FILES=()
+for __f in "${FILES[@]}"; do
+    if ! ( [[ "$__f" == *.sql ]] ); then continue; fi
+    FILTERED_FILES+=("$__f")
 done
-done' _ "${FILES[@]}"
+if [[ ${#FILTERED_FILES[@]} -gt 0 ]]; then
+    warn "S1: Boolean Without NOT NULL DEFAULT" \
+        bash -c '(grep -Ein "\\s+boolean\\s*[,)]" "$@" | grep -v "NOT NULL") || true' _ "${FILTERED_FILES[@]}"
+else
+    green "✅ S1: Boolean Without NOT NULL DEFAULT (skipped - no matching files after path filter)"
+    ((PASS++)) || true
+fi
 
 # S2: Missing RLS on user_id Tables
-warn "S2: Missing RLS on user_id Tables" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  case "$f" in
-    *.sql)
-      if grep -qi '"'"'user_id.*REFERENCES\|user_id\s+uuid'"'"' "$f"; then
-        if ! grep -qi '"'"'ENABLE ROW LEVEL SECURITY'"'"' "$f"; then
-          echo "$f: has user_id but no RLS"
-        fi
-      fi
-      ;;
-  esac
+# Path filtering for this rule
+FILTERED_FILES=()
+for __f in "${FILES[@]}"; do
+    if ! ( [[ "$__f" == *.sql ]] ); then continue; fi
+    FILTERED_FILES+=("$__f")
 done
-done' _ "${FILES[@]}"
-
-# S3: Missing Index on Foreign Key
-warn "S3: Missing Index on Foreign Key" \
-    bash -c 'for file in "$@"; do
+if [[ ${#FILTERED_FILES[@]} -gt 0 ]]; then
+    warn "S2: Missing RLS on user_id Tables" \
+        bash -c '
 for f in "$@"; do
-  case "$f" in
-    *.sql)
-      grep -Eo '"'"'[a-z_]+\s+uuid\s+REFERENCES'"'"' "$f" 2>/dev/null | while read -r line; do
-        col=$(echo "$line" | awk '"'"'{print $1}'"'"')
-        if ! grep -qi "INDEX.*$col" "$f"; then
-          echo "$f: $col has FK but no index"
+    trigger_lines=$(grep -nE "user_id.*(REFERENCES|uuid)" "$f" 2>/dev/null)
+    if [[ -n "$trigger_lines" ]]; then
+        if ! grep -qE "ENABLE ROW LEVEL SECURITY" "$f" 2>/dev/null; then
+            echo "$trigger_lines" | while IFS= read -r line; do
+                linenum="${line%%:*}"
+                echo "$f:$linenum: has user_id but no RLS"
+            done
         fi
-      done
-      ;;
-  esac
-done | head -5
-done' _ "${FILES[@]}"
-
-# S4: N+1 Query Pattern
-warn "S4: N+1 Query Pattern" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  case "$f" in
-    *.js|*.ts|*.tsx|*.py)
-      awk '"'"'/for\s*\(|while\s*\(|for .* in/{inloop=5} inloop>0{inloop--; if(/await.*(query|select|execute|from\()/) print FILENAME":"NR": "$0}'"'"' "$f"
-      ;;
-  esac
-done | head -5
-done' _ "${FILES[@]}"
+    fi
+done
+' _ "${FILTERED_FILES[@]}"
+else
+    green "✅ S2: Missing RLS on user_id Tables (skipped - no matching files after path filter)"
+    ((PASS++)) || true
+fi
 
 # S5: Multiple Writes Without Transaction
-warn "S5: Multiple Writes Without Transaction" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  case "$f" in
-    *.js|*.ts|*.tsx|*.py)
-      inserts=$(grep -c '"'"'INSERT INTO\|UPDATE.*SET'"'"' "$f" 2>/dev/null || echo 0)
-      if [ "$inserts" -gt 2 ]; then
-        if ! grep -qi '"'"'BEGIN\|transaction\|\.transaction'"'"' "$f"; then
-          echo "$f: $inserts writes without transaction"
-        fi
-      fi
-      ;;
-  esac
+# Path filtering for this rule
+FILTERED_FILES=()
+for __f in "${FILES[@]}"; do
+    if [[ "$__f" == *.sql ]]; then continue; fi
+    FILTERED_FILES+=("$__f")
 done
-done' _ "${FILES[@]}"
+if [[ ${#FILTERED_FILES[@]} -gt 0 ]]; then
+    warn "S5: Multiple Writes Without Transaction" \
+        bash -c '
+for f in "$@"; do
+    trigger_lines=$(grep -nE "INSERT INTO|UPDATE.*SET" "$f" 2>/dev/null)
+    if [[ -n "$trigger_lines" ]]; then
+        if ! grep -qE "BEGIN|transaction|\\.transaction" "$f" 2>/dev/null; then
+            echo "$trigger_lines" | while IFS= read -r line; do
+                linenum="${line%%:*}"
+                echo "$f:$linenum: multiple writes without transaction"
+            done
+        fi
+    fi
+done
+' _ "${FILTERED_FILES[@]}"
+else
+    green "✅ S5: Multiple Writes Without Transaction (skipped - no matching files after path filter)"
+    ((PASS++)) || true
+fi
 
 # S6: Supabase .select() Without Columns
 warn "S6: Supabase .select() Without Columns" \

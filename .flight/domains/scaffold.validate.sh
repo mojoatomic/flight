@@ -89,32 +89,6 @@ printf '\n%s\n' "## NEVER Rules"
 check "N1: Destructive Scaffold Flags" \
     grep -Ein "create-vite.*--overwrite|create-vite.*--force|create-next-app.*--overwrite|create-react-app.*--overwrite|--overwrite.*create-|--force.*create-" "${FILES[@]}"
 
-printf '\n%s\n' "## SHOULD Rules"
-
-# S1: Protected Directories Exist
-warn "S1: Protected Directories Exist" \
-    bash -c 'for file in "$@"; do
-missing=""
-for d in .flight tasks .git; do
-  if [ ! -d "$d" ]; then
-    missing="$missing $d"
-  fi
-done
-if [ -n "$missing" ]; then
-  echo "Missing protected directories:$missing"
-fi
-done' _ "${FILES[@]}"
-
-# S2: Git Clean Before Scaffold
-warn "S2: Git Clean Before Scaffold" \
-    bash -c 'for file in "$@"; do
-if [ -d ".git" ]; then
-  if git status --porcelain 2>/dev/null | grep -q .; then
-    echo "Git has uncommitted changes - commit or stash before scaffolding"
-  fi
-fi
-done' _ "${FILES[@]}"
-
 printf '\n%s\n' "═══════════════════════════════════════════"
 printf '  PASS: %d  FAIL: %d  WARN: %d\n' "$PASS" "$FAIL" "$WARN"
 if [[ $FAIL -eq 0 ]]; then

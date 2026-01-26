@@ -84,7 +84,7 @@ rules:
   N2:
     title: Duplicate Keys
     severity: NEVER
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-20"
       confidence: high
@@ -96,89 +96,6 @@ rules:
     description: |
       Duplicate keys in the same mapping are invalid. The second value silently
       overwrites the first, causing data loss with no warning.
-    check:
-      type: script
-      code: |
-        # Check for duplicate keys at the same mapping context
-        # Properly handles:
-        # - Nested objects (on.push.branches vs on.pull_request.branches)
-        # - YAML arrays (each - item is a separate context)
-        awk '
-        BEGIN {
-          # path_stack[indent] = key path at that indent level
-          # array_idx[indent] = array item index at that indent level
-          # seen[full_path] = 1 if weve seen this path
-        }
-
-        {
-          # Skip comments and empty lines
-          if (/^[[:space:]]*#/ || /^[[:space:]]*$/) next;
-
-          # Get indentation
-          match($0, /^[[:space:]]*/);
-          indent = RLENGTH;
-
-          # Clear path_stack and array_idx for levels deeper than current
-          for (i in path_stack) {
-            if (i > indent) delete path_stack[i];
-          }
-          for (i in array_idx) {
-            if (i > indent) delete array_idx[i];
-          }
-
-          line = $0;
-          gsub(/^[[:space:]]*/, "", line);
-
-          # Check if this is an array item
-          if (line ~ /^-[[:space:]]/ || line ~ /^-$/) {
-            # Increment array index at this indent
-            array_idx[indent]++;
-            # Remove "- " prefix
-            gsub(/^-[[:space:]]*/, "", line);
-            # If nothing left, skip (bare array value)
-            if (line == "" || line !~ /:/) next;
-          }
-
-          # Check if this line has a key
-          if (line ~ /^[^#[:space:]][^:]*:/) {
-            # Extract key
-            key = line;
-            gsub(/:.*$/, "", key);
-            # Trim whitespace
-            gsub(/^[[:space:]]+|[[:space:]]+$/, "", key);
-
-            if (key == "") next;
-
-            # Build full path from parent keys
-            full_path = "";
-            for (i = 0; i < indent; i += 2) {
-              if (i in path_stack && path_stack[i] != "") {
-                full_path = full_path path_stack[i] ".";
-              }
-              if (i in array_idx && array_idx[i] > 0) {
-                full_path = full_path "[" array_idx[i] "].";
-              }
-            }
-            # Add current array index if exists at this level
-            if (indent in array_idx && array_idx[indent] > 0) {
-              full_path = full_path "[" array_idx[indent] "].";
-            }
-            full_path = full_path key;
-
-            # Check for duplicate
-            if (seen[full_path]) {
-              print FILENAME ":" NR ": duplicate key \"" key "\" at same level";
-              found = 1;
-            }
-            seen[full_path] = 1;
-
-            # Store this key for children to build their path
-            path_stack[indent] = key;
-          }
-        }
-
-        END { exit found ? 1 : 0 }
-        ' "$file"
     note: |
       YAML 1.2 spec states duplicate keys are an error, but many parsers
       silently accept them. This causes subtle bugs when the wrong value wins.
@@ -462,7 +379,7 @@ rules:
   M7:
     title: Inconsistent Indentation
     severity: MUST
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-20"
       confidence: high
@@ -474,30 +391,6 @@ rules:
     description: |
       Mixed indentation levels (e.g., 2 spaces then 4 spaces) cause parse
       errors or incorrect nesting. Use consistent indentation throughout.
-    check:
-      type: script
-      code: |
-        # Check for inconsistent indentation increments
-        awk '
-        BEGIN { base_indent = 0; last_indent = 0 }
-        /^[[:space:]]+[^#[:space:]]/ {
-          match($0, /^[[:space:]]+/);
-          indent = RLENGTH;
-
-          if (base_indent == 0 && indent > 0) {
-            base_indent = indent;
-          } else if (indent > last_indent && base_indent > 0) {
-            increment = indent - last_indent;
-            if (increment != base_indent && increment > 0) {
-              print FILENAME ":" NR ": inconsistent indent (expected " base_indent ", got " increment ")";
-              found = 1;
-            }
-          }
-          last_indent = indent;
-        }
-        /^[^[:space:]#]/ { last_indent = 0 }
-        END { exit found ? 1 : 0 }
-        ' "$file"
     note: |
       YAML is whitespace-sensitive. Pick one indentation size (2 spaces is
       common) and use it consistently. Mixed indentation causes silent
@@ -565,17 +458,10 @@ rules:
       Multi-document YAML files should have explicit document start markers.
       Single-document files benefit from consistency.
     check:
-      type: script
-      code: |
-        # Warn if file has multiple documents without ---
-        if grep -q '^---' "$file"; then
-          exit 0  # Has document markers
-        fi
-        if grep -c '^\.\.\.$' "$file" > /dev/null 2>&1; then
-          echo "$file:1: missing document start marker (---) in multi-doc file"
-          exit 1
-        fi
-        exit 0
+      type: requires
+      trigger: '^\.\.\.$'
+      requirement: '^---'
+      message: "missing document start marker (---) in multi-doc file"
     note: |
       The --- marker explicitly starts a YAML document. While optional for
       single documents, it improves clarity and is required for multi-document

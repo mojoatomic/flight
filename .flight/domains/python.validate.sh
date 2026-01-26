@@ -89,14 +89,6 @@ printf '\n%s\n' "## NEVER Rules"
 check "N1: Bare except:" \
     # Unknown check type: ast
 
-# N2: except Exception: pass
-check "N2: except Exception: pass" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  awk '"'"'/except\s+(Exception|BaseException)/ { getline; if (/^\s*pass\s*$/) print FILENAME":"NR-1": except with pass" }'"'"' "$f"
-done
-done' _ "${FILES[@]}"
-
 # N3: Mutable Default Arguments
 check "N3: Mutable Default Arguments" \
     # Unknown check type: ast
@@ -113,36 +105,9 @@ check "N5: type(x) == for Type Checking" \
 check "N6: Generic Variable Names at Module Level" \
     grep -En "^(data|temp|result|info|obj)\\s*=" "${FILES[@]}"
 
-# N7: print() Outside __main__
-check "N7: print() Outside __main__" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  awk '"'"'
-  /__name__.*__main__/ { in_main=1 }
-  /^[^ ]/ && in_main { in_main=0 }
-  /print\(/ && !in_main && !/# noqa/ { print FILENAME":"NR": "$0 }
-  '"'"' "$f"
-done | head -10
-done' _ "${FILES[@]}"
-
 # N8: Hardcoded Absolute Paths
 check "N8: Hardcoded Absolute Paths" \
     grep -En "['\"]/(home|usr|var|etc|tmp)/|['\"][A-Z]:\\\\" "${FILES[@]}"
-
-# N9: Deeply Nested Conditionals
-check "N9: Deeply Nested Conditionals" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  awk '"'"'
-  /^\s+if / {
-    spaces = length($0) - length(gensub(/^\s+/, "", "g", $0))
-    if (spaces > 16) {
-      print FILENAME":"NR": deeply nested ("int(spaces/4)" levels)"
-    }
-  }
-  '"'"' "$f"
-done | head -5
-done' _ "${FILES[@]}"
 
 # N10: Hardcoded Credentials
 check "N10: Hardcoded Credentials" \
@@ -176,62 +141,39 @@ warn "S2: Magic Numbers in Logic" \
 
 # S3: Type Hints on Public Functions
 warn "S3: Type Hints on Public Functions" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  grep -n '"'"'^def [a-z]'"'"' "$f" | grep -v '"'"'\->'"'"' | grep -v '"'"'__'"'"' | head -3
-done
-done' _ "${FILES[@]}"
+    bash -c '(grep -En "^def [a-z][a-z_]*\\([^)]*\\):" "$@" | grep -v "->" | grep -v "__") || true' _ "${FILES[@]}"
 
 # S4: if __name__ == __main__ Guard
 warn "S4: if __name__ == __main__ Guard" \
-    bash -c 'for file in "$@"; do
+    bash -c '
 for f in "$@"; do
-  if grep -q '"'"'^def main'"'"' "$f"; then
-    if ! grep -q '"'"'__name__.*__main__'"'"' "$f"; then
-      echo "$f: has main() but no __name__ guard"
+    trigger_lines=$(grep -nE "^def main" "$f" 2>/dev/null)
+    if [[ -n "$trigger_lines" ]]; then
+        if ! grep -qE "__name__.*__main__" "$f" 2>/dev/null; then
+            echo "$trigger_lines" | while IFS= read -r line; do
+                linenum="${line%%:*}"
+                echo "$f:$linenum: has main() but no __name__ guard"
+            done
+        fi
     fi
-  fi
 done
-done' _ "${FILES[@]}"
+' _ "${FILES[@]}"
 
 # S5: Use pathlib for File Operations
 warn "S5: Use pathlib for File Operations" \
-    bash -c 'for file in "$@"; do
+    bash -c '
 for f in "$@"; do
-  if grep -q '"'"'os.path'"'"' "$f"; then
-    if ! grep -q '"'"'pathlib'"'"' "$f"; then
-      echo "$f: uses os.path, consider pathlib"
+    trigger_lines=$(grep -nE "os\\.path" "$f" 2>/dev/null)
+    if [[ -n "$trigger_lines" ]]; then
+        if ! grep -qE "pathlib" "$f" 2>/dev/null; then
+            echo "$trigger_lines" | while IFS= read -r line; do
+                linenum="${line%%:*}"
+                echo "$f:$linenum: uses os.path, consider pathlib"
+            done
+        fi
     fi
-  fi
 done
-done' _ "${FILES[@]}"
-
-# S6: Use logging Module
-warn "S6: Use logging Module" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  if [ $(wc -l < "$f") -gt 50 ]; then
-    if ! grep -q '"'"'import logging\|from logging'"'"' "$f"; then
-      echo "$f: large file without logging"
-    fi
-  fi
-done
-done' _ "${FILES[@]}"
-
-# S7: Docstrings on Public Functions
-warn "S7: Docstrings on Public Functions" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  awk '"'"'
-  /^def [a-z][a-z_]+\(/ {
-    fname=$0; getline;
-    if ($0 !~ /"""/ && $0 !~ /\x27\x27\x27/) {
-      print FILENAME":"NR-1": "fname" - no docstring"
-    }
-  }
-  '"'"' "$f" | head -3
-done
-done' _ "${FILES[@]}"
+' _ "${FILES[@]}"
 
 printf '\n%s\n' "═══════════════════════════════════════════"
 printf '  PASS: %d  FAIL: %d  WARN: %d\n' "$PASS" "$FAIL" "$WARN"

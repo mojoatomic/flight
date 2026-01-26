@@ -218,16 +218,10 @@ rules:
           quote: "When you spawn goroutines, make it clear when - or whether - they exit."
     description: Goroutines must have clear termination conditions to prevent leaks
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Look for goroutines without context, done channel, or WaitGroup
-          if grep -qE 'go\s+func\s*\(' "$f" 2>/dev/null; then
-            if ! grep -qE 'context\.|<-done|<-ctx\.Done|sync\.WaitGroup|errgroup\.' "$f" 2>/dev/null; then
-              echo "$f: goroutine found but no lifetime management (context, done channel, or WaitGroup)"
-            fi
-          fi
-        done
+      type: requires
+      trigger: 'go\s+func\s*\('
+      requirement: 'context\.|<-done|<-ctx\.Done|sync\.WaitGroup|errgroup\.'
+      message: "goroutine found but no lifetime management (context, done channel, or WaitGroup)"
     note: |
       From Go Code Review Comments: "When you spawn goroutines, make it clear
       when - or whether - they exit."
@@ -429,7 +423,7 @@ rules:
   M3:
     title: Exported Names Must Have Doc Comments
     severity: MUST
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -439,19 +433,6 @@ rules:
           accessed: "2026-01-16"
           quote: "All top-level, exported names should have doc comments, as should non-trivial unexported type or function declarations."
     description: All exported names should have doc comments
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Find exported functions/types without preceding comment
-          awk '
-            /^func [A-Z]/ && prev !~ /^\/\// { print FILENAME ":" NR ": " $0 }
-            /^type [A-Z]/ && prev !~ /^\/\// { print FILENAME ":" NR ": " $0 }
-            /^var [A-Z]/ && prev !~ /^\/\// { print FILENAME ":" NR ": " $0 }
-            /^const [A-Z]/ && prev !~ /^\/\// { print FILENAME ":" NR ": " $0 }
-            { prev = $0 }
-          ' "$f" 2>/dev/null
-        done
     note: |
       From Go Code Review Comments: "All top-level, exported names should have
       doc comments."
@@ -650,16 +631,10 @@ rules:
           quote: "The %w verb is used to wrap an error, and the unwrap interface allows examining wrapped errors."
     description: Errors should be wrapped with context using fmt.Errorf and %w
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Look for bare error returns without wrapping
-          if grep -qE 'return\s+(nil,\s*)?err\s*$' "$f" 2>/dev/null; then
-            if ! grep -qE 'fmt\.Errorf.*%w|errors\.Wrap|errors\.WithMessage' "$f" 2>/dev/null; then
-              echo "$f: bare error returns found but no error wrapping"
-            fi
-          fi
-        done
+      type: requires
+      trigger: 'return\s+(nil,\s*)?err\s*$'
+      requirement: 'fmt\.Errorf.*%w|errors\.Wrap|errors\.WithMessage'
+      message: "bare error returns found but no error wrapping"
     note: |
       Wrapping errors with context makes debugging much easier by providing
       a stack trace of what operations led to the failure.
@@ -678,7 +653,7 @@ rules:
   S2:
     title: Table-Driven Tests
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -688,20 +663,6 @@ rules:
           accessed: "2026-01-16"
           quote: "Writing good tests is not trivial, but in many situations a lot of ground can be covered with table-driven tests."
     description: Use table-driven tests for multiple test cases
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if [[ "$f" == *"_test.go" ]]; then
-            # Multiple similar test functions suggest table-driven would be better
-            count=$(grep -cE '^func Test\w+\(' "$f" 2>/dev/null || echo 0)
-            if [[ "$count" -gt 5 ]]; then
-              if ! grep -qE 'tests?\s*:?=\s*\[\]struct|for\s+.*,\s*tt\s*:=\s*range' "$f" 2>/dev/null; then
-                echo "$f: $count test functions - consider table-driven tests"
-              fi
-            fi
-          fi
-        done
     note: |
       Table-driven tests reduce code duplication and make it easy to add new
       test cases. They're the standard Go testing pattern.
@@ -796,7 +757,7 @@ rules:
   S5:
     title: Project Structure
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: medium
@@ -806,27 +767,6 @@ rules:
           accessed: "2026-01-16"
           quote: "This is a basic layout for Go application projects. It's not an official standard."
     description: Follow standard Go project layout conventions
-    check:
-      type: script
-      code: |
-        # Only check if this looks like a project root (has go.mod)
-        if [[ -f "go.mod" ]]; then
-          issues=""
-          # Check for proper cmd/ structure for multiple binaries
-          if ls cmd/*/main.go 2>/dev/null | wc -l | grep -q '^0$'; then
-            if ls *.go 2>/dev/null | grep -v _test.go | wc -l | grep -qv '^[01]$'; then
-              : # OK - single binary project
-            fi
-          fi
-          # Check for internal/ misuse
-          if [[ -d "internal" ]] && ls internal/*.go 2>/dev/null | grep -q .; then
-            : # OK
-          fi
-          # Warn about pkg/ antipattern
-          if [[ -d "pkg" ]]; then
-            echo "pkg/ directory found - consider using internal/ instead"
-          fi
-        fi
     note: |
       Standard layout: cmd/ for binaries, internal/ for private packages,
       pkg/ is controversial - internal/ is usually preferred.
@@ -847,7 +787,7 @@ rules:
   S6:
     title: Use t.Helper in Test Helpers
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -857,27 +797,6 @@ rules:
           accessed: "2026-01-16"
           quote: "Helper functions that are called from tests should call t.Helper() to ensure that stack traces point to the test, not the helper."
     description: Test helper functions should call t.Helper()
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if [[ "$f" == *"_test.go" ]]; then
-            # Find functions that take *testing.T but don't call t.Helper()
-            awk '
-              /func [a-z]\w*\([^)]*\*testing\.(T|B)/ && !/t\.Helper\(\)/ {
-                # Read until end of function
-                start = NR
-                while ((getline line) > 0) {
-                  if (line ~ /t\.Helper\(\)/) { next }
-                  if (line ~ /^}$/) {
-                    print FILENAME ":" start ": test helper missing t.Helper()"
-                    break
-                  }
-                }
-              }
-            ' "$f" 2>/dev/null
-          fi
-        done
     note: |
       t.Helper() marks a function as a test helper. When the test fails,
       the stack trace points to the test, not the helper.
