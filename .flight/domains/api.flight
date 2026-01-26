@@ -622,7 +622,7 @@ rules:
     check:
       type: presence
       pattern: 'toISOString|ISO.*8601|datetime|DateTimeFormatter'
-      flags: -l
+      flags: -El
       invert: true
       message: "No ISO 8601 date handling detected"
     examples:
@@ -834,10 +834,11 @@ rules:
           accessed: "2026-01-16"
           quote: "Store config in the environment... strict separation of config from code"
     check:
-      type: grep
-      pattern: 'https?://[a-zA-Z0-9][a-zA-Z0-9.-]+\.(com|io|net|org|dev|app)'
-      flags: -EHn
-      exclude: 'localhost|127\.0\.0\.1|example\.com|^\s*(//|#|/\*|\*)'
+      type: script
+      code: |
+        # Find hardcoded URLs, excluding documentation references
+        grep -EHn "https?://[a-zA-Z0-9][a-zA-Z0-9.-]+\.(com|io|net|org|dev|app)" "$@" 2>/dev/null | \
+          grep -vE "localhost|127\.0\.0\.1|example\.(com|org)|rfc-editor\.org|w3\.org|json-schema\.org|@(see|link)" || true
     examples:
       bad:
         - 'const apiUrl = "https://api.stripe.com/v1/charges"'
