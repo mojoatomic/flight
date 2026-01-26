@@ -23,6 +23,7 @@ readonly HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly FLIGHT_DIR="$(dirname "$HOOKS_DIR")"
 readonly PROJECT_ROOT="$(dirname "$FLIGHT_DIR")"
 readonly FLIGHT_LINT_BIN="$PROJECT_ROOT/flight-lint/bin/flight-lint"
+readonly CODE_HYGIENE_RULES="$FLIGHT_DIR/domains/code-hygiene.rules.json"
 
 # -----------------------------------------------------------------------------
 # check_jq_available - Check if jq is installed
@@ -123,6 +124,147 @@ run_flight_lint() {
 # -----------------------------------------------------------------------------
 check_flight_lint_available() {
     [[ -x "$FLIGHT_LINT_BIN" ]]
+}
+
+# -----------------------------------------------------------------------------
+# run_code_hygiene_grep - Run code-hygiene grep rules and output JSON
+# -----------------------------------------------------------------------------
+# Output:
+#   NDJSON with violations from grep-based code-hygiene rules
+# Returns:
+#   0 if no violations, 1 if violations found
+# -----------------------------------------------------------------------------
+run_code_hygiene_grep() {
+    if [[ ! -f "$CODE_HYGIENE_RULES" ]]; then
+        printf '{"domain":"code-hygiene","fileCount":0,"results":[]}\n'
+        return 0
+    fi
+
+    if ! check_jq_available; then
+        # jq required for parsing rules
+        printf '{"domain":"code-hygiene","fileCount":0,"results":[]}\n'
+        return 0
+    fi
+
+    local results=""
+    local file_count=0
+    local has_violations=0
+
+    # Find source files (simple approach - exclude common non-source dirs)
+    local files
+    files=$(find . \( \
+        -path './node_modules' -o \
+        -path './.git' -o \
+        -path './dist' -o \
+        -path './build' -o \
+        -path './vendor' -o \
+        -path './target' -o \
+        -path './.flight' -o \
+        -path './flight-lint' -o \
+        -path './.venv' -o \
+        -path './venv' -o \
+        -path './__pycache__' -o \
+        -path './tests' -o \
+        -path './fixtures' \
+        \) -prune -o \
+        -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' -o -name '*.py' -o -name '*.go' \) \
+        -print 2>/dev/null | head -500) || true
+
+    file_count=$(printf '%s\n' "$files" | grep -c . || echo 0)
+
+    # If no files, return empty
+    if [[ -z "$files" ]] || [[ "$file_count" -eq 0 ]]; then
+        printf '{"domain":"code-hygiene","fileCount":0,"results":[]}\n'
+        return 0
+    fi
+
+    # Get grep rules
+    local rules
+    rules=$(jq -c '.rules[] | select(.type == "grep")' "$CODE_HYGIENE_RULES" 2>/dev/null)
+
+    # Run each grep rule
+    while IFS= read -r rule; do
+        [[ -z "$rule" ]] && continue
+
+        local rule_id pattern severity message ignore_when
+        rule_id=$(printf '%s' "$rule" | jq -r '.id')
+        pattern=$(printf '%s' "$rule" | jq -r '.pattern')
+        severity=$(printf '%s' "$rule" | jq -r '.severity')
+        message=$(printf '%s' "$rule" | jq -r '.message')
+        ignore_when=$(printf '%s' "$rule" | jq -r '.ignore_when // [] | .[]' | paste -sd '|' -)
+
+        # Run grep across all files at once (use -E for extended regex)
+        local matches
+        if [[ -n "$ignore_when" ]]; then
+            matches=$(printf '%s\n' "$files" | xargs grep -EHn "$pattern" 2>/dev/null | grep -Ev "$ignore_when" || true)
+        else
+            matches=$(printf '%s\n' "$files" | xargs grep -EHn "$pattern" 2>/dev/null || true)
+        fi
+
+        # Parse matches and build JSON results
+        while IFS= read -r match; do
+            [[ -z "$match" ]] && continue
+            has_violations=1
+
+            # Format: ./file.ts:10:content
+            local file_path line_num
+            file_path="${match%%:*}"
+            local rest="${match#*:}"
+            line_num="${rest%%:*}"
+
+            local escaped_message
+            escaped_message=$(escape_json_string "$message")
+
+            if [[ -n "$results" ]]; then
+                results="$results,"
+            fi
+            results="$results{\"filePath\":\"$file_path\",\"line\":$line_num,\"column\":1,\"ruleId\":\"$rule_id\",\"severity\":\"$severity\",\"message\":\"$escaped_message\"}"
+        done <<< "$matches"
+    done <<< "$rules"
+
+    # Output JSON
+    printf '{"domain":"code-hygiene","fileCount":%d,"results":[%s]}\n' "$file_count" "$results"
+
+    if [[ "$has_violations" -eq 1 ]]; then
+        return 1
+    fi
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# run_all_validation - Run both flight-lint (AST) and code-hygiene grep rules
+# -----------------------------------------------------------------------------
+# Output:
+#   Combined NDJSON from both sources
+# Returns:
+#   0 if no violations, non-zero if violations found
+# -----------------------------------------------------------------------------
+run_all_validation() {
+    local combined_output=""
+    local exit_code=0
+
+    # Run flight-lint for AST rules (if available)
+    if check_flight_lint_available; then
+        local lint_output
+        lint_output="$(run_flight_lint 2>&1)" || true
+        if [[ "$lint_output" != "__FLIGHT_LINT_NOT_FOUND__" ]]; then
+            combined_output="$lint_output"
+        fi
+    fi
+
+    # Run code-hygiene grep rules
+    local grep_output
+    grep_output="$(run_code_hygiene_grep 2>&1)" || exit_code=1
+
+    # Combine outputs
+    if [[ -n "$combined_output" ]]; then
+        combined_output="$combined_output"$'\n'"$grep_output"
+    else
+        combined_output="$grep_output"
+    fi
+
+    printf '%s\n' "$combined_output"
+    return "$exit_code"
 }
 
 # -----------------------------------------------------------------------------
