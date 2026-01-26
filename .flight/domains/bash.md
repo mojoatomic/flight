@@ -13,6 +13,11 @@ Production shell script patterns. Safe, portable, maintainable. Enforces quoting
 
 1. **Unquoted Variables in Commands** - Unquoted variables undergo word splitting and glob expansion. This breaks on filenames with spaces and can match unintended files.
 
+
+   > Word splitting: $var with spaces becomes multiple arguments.
+Glob expansion: $var with * matches files.
+Always quote: "$var"
+
    ```
    // BAD
    rm $files
@@ -27,6 +32,10 @@ Production shell script patterns. Safe, portable, maintainable. Enforces quoting
 
 2. **Unquoted $(cmd) Substitution** - Unquoted command substitution has the same word splitting and glob expansion issues as unquoted variables.
 
+
+   > The output of $(cmd) can contain spaces or glob characters.
+Always quote: "$(cmd)"
+
    ```
    // BAD
    result=$(get_path)
@@ -40,6 +49,10 @@ Production shell script patterns. Safe, portable, maintainable. Enforces quoting
    ```
 
 3. **Parsing ls Output** - Parsing ls output breaks on filenames with spaces, newlines, or special characters. Use globs or find instead.
+
+
+   > ls output is for humans, not scripts. Filenames can contain
+any character except / and NUL. Use glob patterns or find -print0.
 
    ```
    // BAD
@@ -58,6 +71,10 @@ Production shell script patterns. Safe, portable, maintainable. Enforces quoting
 
 4. **Backticks for Command Substitution** - Backticks are the old style command substitution. They can't nest easily and are harder to read than $().
 
+
+   > $() can nest: $(cmd1 $(cmd2))
+Backticks require escaping: `cmd1 \`cmd2\``
+
    ```
    // BAD
    result=`command`
@@ -67,6 +84,10 @@ Production shell script patterns. Safe, portable, maintainable. Enforces quoting
    ```
 
 5. **Single Brackets [ ] in Bash** - In bash scripts, use [[ ]] instead of [ ]. Single brackets require quoting and don't support pattern matching or regex.
+
+
+   > [[ ]] is safer: no word splitting on variables.
+[[ ]] supports: regex (=~), pattern matching (*), logical operators (&&, ||).
 
    ```
    // BAD
@@ -84,6 +105,10 @@ Production shell script patterns. Safe, portable, maintainable. Enforces quoting
 
 6. **'function' Keyword** - The 'function' keyword is bash-specific and not POSIX compliant. Use the portable name() { } syntax.
 
+
+   > 'function foo {' is bash-only.
+'foo() {' works in bash, sh, dash, and other shells.
+
    ```
    // BAD
    function do_something {
@@ -100,6 +125,10 @@ Production shell script patterns. Safe, portable, maintainable. Enforces quoting
 
 7. **Bare 'cd' Without Error Handling** - cd can fail (permissions, path doesn't exist). Without error handling, the script continues in the wrong directory.
 
+
+   > If cd fails and script continues, subsequent commands run in
+the wrong directory. rm -rf * could delete the wrong files.
+
    ```
    // BAD
    cd "$some_dir"
@@ -113,6 +142,10 @@ Production shell script patterns. Safe, portable, maintainable. Enforces quoting
    ```
 
 8. **Useless Cat** - cat file | cmd creates an extra process. Most commands can read files directly or via stdin redirection.
+
+
+   > cat file | grep is 2 processes. grep pattern file is 1 process.
+For stdin: cmd < file
 
    ```
    // BAD
@@ -128,6 +161,10 @@ Production shell script patterns. Safe, portable, maintainable. Enforces quoting
 
 9. **eval Usage** - eval executes arbitrary code. With user input, this is command injection. Use arrays for dynamic commands.
 
+
+   > eval "$cmd" with user input = remote code execution.
+Use arrays: cmd_args=("$prog" "$arg"); "${cmd_args[@]}"
+
    ```
    // BAD
    eval "$user_command"
@@ -140,6 +177,10 @@ Production shell script patterns. Safe, portable, maintainable. Enforces quoting
 
 10. **Hardcoded /tmp Files** - Hardcoded temp paths are predictable and create race conditions. Use mktemp for unique, secure temporary files.
 
+
+   > /tmp/myscript.tmp is predictable. Attacker can create symlink
+before your script runs. mktemp creates unique names safely.
+
    ```
    // BAD
    tmp_file="/tmp/myscript.tmp"
@@ -149,6 +190,11 @@ Production shell script patterns. Safe, portable, maintainable. Enforces quoting
    ```
 
 11. **curl|bash Remote Code Execution** - Piping remote scripts directly to bash executes untrusted code. Download, inspect, then execute.
+
+
+   > curl | bash executes whatever the server sends.
+Partial downloads can execute incomplete scripts.
+Download to file, inspect, then run.
 
    ```
    // BAD
@@ -163,6 +209,10 @@ Production shell script patterns. Safe, portable, maintainable. Enforces quoting
 
 12. **Unquoted Array Expansion** - ${arr[*]} joins array elements into a single string. Use "${arr[@]}" to preserve separate elements.
 
+
+   > ${arr[*]} = "a b c" (one string)
+"${arr[@]}" = "a" "b" "c" (three strings)
+
    ```
    // BAD
    echo ${arr[*]}
@@ -175,6 +225,10 @@ Production shell script patterns. Safe, portable, maintainable. Enforces quoting
 
 1. **Shebang Required** - Every script must have a shebang declaring the interpreter. This ensures the script runs with the intended shell.
 
+
+   > Without shebang, the system default shell runs the script.
+#!/bin/bash for bash features, #!/bin/sh for POSIX compatibility.
+
    ```
    #!/bin/bash
    #!/bin/sh
@@ -182,6 +236,11 @@ Production shell script patterns. Safe, portable, maintainable. Enforces quoting
    ```
 
 2. **Strict Mode Required** - Scripts must enable strict mode with set -euo pipefail. This catches errors early instead of silently continuing.
+
+
+   > -e: Exit on any command failure
+-u: Error on undefined variables
+-o pipefail: Pipeline fails if any command fails
 
    ```
    #!/bin/bash
@@ -191,6 +250,12 @@ Production shell script patterns. Safe, portable, maintainable. Enforces quoting
 ### SHOULD (validator warns)
 
 1. **Safe Path Pattern Before cd** - When using cd, either use pushd/popd or capture the original directory to ensure relative paths still work after directory change.
+
+
+   > Relative paths break after cd. Either:
+1. Use pushd/popd to restore directory
+2. Capture pwd before cd
+3. Convert relative paths to absolute with realpath
 
    ```
    pushd "$target_dir" > /dev/null
@@ -202,6 +267,10 @@ Production shell script patterns. Safe, portable, maintainable. Enforces quoting
    ```
 
 2. **Functions Should Use 'local'** - Variables assigned in functions should use 'local' to avoid polluting the global namespace.
+
+
+   > Without local, function variables are global. This causes
+subtle bugs when function names collide with outer scope.
 
    ```
    // BAD
@@ -219,12 +288,20 @@ Production shell script patterns. Safe, portable, maintainable. Enforces quoting
 
 3. **mktemp Needs Cleanup Trap** - Scripts using mktemp should set up a trap to clean up temp files on exit, even if the script fails.
 
+
+   > Without trap, temp files accumulate on failures.
+trap 'rm -f "$tmp"' EXIT runs on normal exit and signals.
+
    ```
    tmp_file=$(mktemp)
    trap 'rm -f "$tmp_file"' EXIT
    ```
 
 4. **Constants Should Use readonly** - Script constants (UPPER_CASE variables) should use readonly to prevent accidental modification.
+
+
+   > readonly prevents accidental reassignment.
+Makes script intent clearer.
 
    ```
    // BAD
@@ -236,6 +313,10 @@ Production shell script patterns. Safe, portable, maintainable. Enforces quoting
 
 5. **Read Loops Need 'IFS= read -r'** - Read loops should use 'IFS= read -r' to preserve whitespace and backslashes in input.
 
+
+   > Without IFS=, leading/trailing whitespace is stripped.
+Without -r, backslashes are interpreted as escapes.
+
    ```
    // BAD
    while read line; do
@@ -246,6 +327,10 @@ Production shell script patterns. Safe, portable, maintainable. Enforces quoting
 
 6. **Lines Under 100 Characters** - Keep lines under 100 characters for readability. Use backslash continuation for long commands.
 
+
+   > Long lines are hard to read and review.
+Break at logical points with backslash.
+
    ```
    long_command \
        --option1 \
@@ -253,6 +338,10 @@ Production shell script patterns. Safe, portable, maintainable. Enforces quoting
    ```
 
 7. **Prefer printf Over echo** - printf behavior is consistent across systems. echo behavior varies (escapes, options) between shells and platforms.
+
+
+   > echo "$var" may interpret escapes or options.
+printf '%s\n' "$var" is always literal.
 
    ```
    // BAD

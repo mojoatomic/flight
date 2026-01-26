@@ -149,6 +149,8 @@ Universal unit test patterns. Language-agnostic, framework-agnostic. Prevents we
 
 1. **Shared Mutable State Between Tests** - Avoid shared mutable state between tests. Tests that modify shared state can cause order-dependent failures. Each test should own its state.
 
+
+   > Detects beforeAll with top-level let variables - a common pattern for shared mutable state.
    ```
    // BAD
    let sharedUser;

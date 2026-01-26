@@ -85,83 +85,55 @@ printf 'Files: %d\n\n' "${#FILES[@]}"
 
 printf '\n%s\n' "## NEVER Rules"
 
-# N0: Inconsistent Source Directory Structure
-check "N0: Inconsistent Source Directory Structure" \
-    bash -c 'for file in "$@"; do
-# Only check if src/ exists (indicates src/ convention chosen)
-if [ -d "src" ]; then
-    found=0
-    # Check for parallel directories that should be under src/
-    for dir in lib components types utils hooks services helpers; do
-        if [ -d "$dir" ] && [ -d "src/$dir" ]; then
-            if [ $found -eq 0 ]; then
-                echo "Split directory structure detected:"
-                found=1
-            fi
-            echo "  $dir/ exists alongside src/$dir/"
-        elif [ -d "$dir" ] && [ -d "src" ]; then
-            # Even if src/$dir doesn'"'"'t exist, root $dir is wrong when src/ exists
-            if [ $found -eq 0 ]; then
-                echo "Split directory structure detected:"
-                found=1
-            fi
-            echo "  $dir/ should be src/$dir/"
-        fi
-    done
-fi
-done' _ "${FILES[@]}"
-
 # N1: 'use client' in page.tsx Files
-check "N1: 'use client' in page.tsx Files" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-    if [[ "$f" == *page.tsx ]]; then
-        if head -5 "$f" | grep -q "'"'"'use client'"'"'\|\"use client\""; then
-            echo "$f: page.tsx should be server component"
-        fi
-    fi
+# Path filtering for this rule
+FILTERED_FILES=()
+for __f in "${FILES[@]}"; do
+    if ! ( [[ "$__f" == *page.tsx ]] ); then continue; fi
+    FILTERED_FILES+=("$__f")
 done
-done' _ "${FILES[@]}"
+if [[ ${#FILTERED_FILES[@]} -gt 0 ]]; then
+    check "N1: 'use client' in page.tsx Files" \
+        grep -En "^['\"]use client['\"]" "${FILTERED_FILES[@]}"
+else
+    green "✅ N1: 'use client' in page.tsx Files (skipped - no matching files after path filter)"
+    ((PASS++)) || true
+fi
 
 # N2: React Hooks in Server Components
 check "N2: React Hooks in Server Components" \
-    bash -c 'for file in "$@"; do
+    bash -c '
 for f in "$@"; do
-    if ! grep -q "'"'"'use client'"'"'\|\"use client\"" "$f"; then
-        if grep -qE '"'"'useState|useEffect|useRef|useCallback|useMemo|useReducer'"'"' "$f"; then
-            echo "$f: has hooks but no '"'"'use client'"'"'"
+    trigger_lines=$(grep -nE "useState|useEffect|useRef|useCallback|useMemo|useReducer" "$f" 2>/dev/null)
+    if [[ -n "$trigger_lines" ]]; then
+        if ! grep -qE "'"'"'use client'"'"'|\"use client\"" "$f" 2>/dev/null; then
+            echo "$trigger_lines" | while IFS= read -r line; do
+                linenum="${line%%:*}"
+                echo "$f:$linenum: has hooks but no '"'"'use client'"'"'"
+            done
         fi
     fi
 done
-done' _ "${FILES[@]}"
+' _ "${FILES[@]}"
 
 # N3: useEffect Fetch for Initial Page Data
 check "N3: useEffect Fetch for Initial Page Data" \
     # Unknown check type: ast
 
-# N4: process.env in Client Components
-check "N4: process.env in Client Components" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-    if grep -q "'"'"'use client'"'"'\|\"use client\"" "$f"; then
-        if grep -E '"'"'process\.env\.'"'"' "$f" | grep -v '"'"'NEXT_PUBLIC_'"'"'; then
-            echo "$f: uses non-public env in client"
-        fi
-    fi
-done
-done' _ "${FILES[@]}"
-
 # N5: 'any' Type in Route Handlers
-check "N5: 'any' Type in Route Handlers" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-    if [[ "$f" == *route.ts ]]; then
-        if grep -n '"'"': any'"'"' "$f"; then
-            echo "$f"
-        fi
-    fi
+# Path filtering for this rule
+FILTERED_FILES=()
+for __f in "${FILES[@]}"; do
+    if ! ( [[ "$__f" == *route.ts ]] ); then continue; fi
+    FILTERED_FILES+=("$__f")
 done
-done' _ "${FILES[@]}"
+if [[ ${#FILTERED_FILES[@]} -gt 0 ]]; then
+    check "N5: 'any' Type in Route Handlers" \
+        grep -En ": any" "${FILTERED_FILES[@]}"
+else
+    green "✅ N5: 'any' Type in Route Handlers (skipped - no matching files after path filter)"
+    ((PASS++)) || true
+fi
 
 # N6: Hardcoded Multi-segment Routes
 check "N6: Hardcoded Multi-segment Routes" \
@@ -171,93 +143,28 @@ check "N6: Hardcoded Multi-segment Routes" \
 check "N7: console.log in App Directory" \
     # Unknown check type: ast
 
-# N8: Fat Route Handlers (>100 lines)
-check "N8: Fat Route Handlers (>100 lines)" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-    if [[ "$f" == *route.ts ]]; then
-        lines=$(wc -l < "$f")
-        if [ "$lines" -gt 100 ]; then
-            echo "$f: $lines lines (max 100)"
-        fi
-    fi
-done
-done' _ "${FILES[@]}"
-
-# N9: Deprecated middleware.ts File (Next.js 16+)
-check "N9: Deprecated middleware.ts File (Next.js 16+)" \
-    bash -c 'for file in "$@"; do
-# Check for middleware files at root or src level
-for loc in "." "src"; do
-  for ext in ts js; do
-    if [ -f "$loc/middleware.$ext" ]; then
-      echo "$loc/middleware.$ext: deprecated in Next.js 16+, rename to proxy.$ext"
-      echo "  Migration: npx @next/codemod@canary middleware-to-proxy ."
-    fi
-  done
-done
-done' _ "${FILES[@]}"
-
 printf '\n%s\n' "## SHOULD Rules"
 
 # S1: Dynamic Routes Should Use notFound()
-warn "S1: Dynamic Routes Should Use notFound()" \
-    bash -c 'for file in "$@"; do
+# Path filtering for this rule
+FILTERED_FILES=()
+for __f in "${FILES[@]}"; do
+    if ! ( [[ "$__f" == *]*/page.tsx ]] || [[ "$__f" == *]/page.tsx ]] ); then continue; fi
+    FILTERED_FILES+=("$__f")
+done
+if [[ ${#FILTERED_FILES[@]} -gt 0 ]]; then
+    warn "S1: Dynamic Routes Should Use notFound()" \
+        bash -c '
 for f in "$@"; do
-    if [[ "$f" == *\[*\]*page.tsx ]]; then
-        if ! grep -q '"'"'notFound'"'"' "$f"; then
-            echo "$f: dynamic route without notFound()"
-        fi
+    if ! grep -qE "notFound" "$f" 2>/dev/null; then
+        echo "$f: dynamic route without notFound()"
     fi
 done
-done' _ "${FILES[@]}"
-
-# S2: Consider Promise.all for Independent Fetches
-warn "S2: Consider Promise.all for Independent Fetches" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-    count=$(grep -c '"'"'await '"'"' "$f" 2>/dev/null || echo 0)
-    if [ "$count" -gt 3 ]; then
-        if ! grep -q '"'"'Promise.all'"'"' "$f"; then
-            echo "$f: $count awaits without Promise.all"
-        fi
-    fi
-done
-done' _ "${FILES[@]}"
-
-# S3: Pages Should Have loading.tsx
-warn "S3: Pages Should Have loading.tsx" \
-    bash -c 'for file in "$@"; do
-find app -name '"'"'page.tsx'"'"' 2>/dev/null | while read page; do
-    dir=$(dirname "$page")
-    if [ ! -f "$dir/loading.tsx" ]; then
-        echo "$dir: missing loading.tsx"
-    fi
-done | head -5
-done' _ "${FILES[@]}"
-
-# S4: Pages Should Have error.tsx
-warn "S4: Pages Should Have error.tsx" \
-    bash -c 'for file in "$@"; do
-find app -name '"'"'page.tsx'"'"' 2>/dev/null | while read page; do
-    dir=$(dirname "$page")
-    if [ ! -f "$dir/error.tsx" ]; then
-        echo "$dir: missing error.tsx"
-    fi
-done | head -5
-done' _ "${FILES[@]}"
-
-# S5: Server-Only Import for Sensitive Files
-warn "S5: Server-Only Import for Sensitive Files" \
-    bash -c 'for file in "$@"; do
-for f in lib/db.ts lib/auth.ts lib/database.ts; do
-    if [ -f "$f" ]; then
-        if ! grep -q "import '"'"'server-only'"'"'" "$f"; then
-            echo "$f: should import '"'"'server-only'"'"'"
-        fi
-    fi
-done
-done' _ "${FILES[@]}"
+' _ "${FILTERED_FILES[@]}"
+else
+    green "✅ S1: Dynamic Routes Should Use notFound() (skipped - no matching files after path filter)"
+    ((PASS++)) || true
+fi
 
 printf '\n%s\n' "## Info"
 

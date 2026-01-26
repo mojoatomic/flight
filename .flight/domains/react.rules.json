@@ -61,6 +61,34 @@
       }
     },
     {
+      "id": "N4",
+      "title": "Direct State Mutation",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "\\.push\\(|\\.splice\\(|\\.pop\\(|\\.shift\\(|\\.unshift\\(",
+      "query": null,
+      "message": "Never mutate state directly with push/pop/splice. React won't detect the change and won't re-render.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N5",
+      "title": "Missing Dependency Arrays",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "useEffect\\(\\s*\\(\\)\\s*=>\\s*\\{[^}]*[a-zA-Z]+[^}]*\\},\\s*\\[\\]\\)",
+      "query": null,
+      "message": "useEffect/useMemo/useCallback with empty deps but referencing outer variables causes stale closures.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
       "id": "N6",
       "title": "Conditional Hooks",
       "severity": "NEVER",
@@ -82,6 +110,34 @@
       "pattern": "function\\s+\\w+\\(\\s*\\{\\s*(data|info|item|value)\\s*\\}",
       "query": null,
       "message": "Component functions named Item, Card, Component, etc. are too generic. Use domain-specific names that describe what the component represents.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N8",
+      "title": "Export Default (except Next.js special files)",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "^export default",
+      "query": null,
+      "message": "Use named exports for better refactoring support and explicit imports. Exception: Next.js App Router special files require export default.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "medium",
+        "re_verify_after": "2026-07-20"
+      }
+    },
+    {
+      "id": "N9",
+      "title": "Props Named data/info/item/value",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "\\{\\s*(data|info|item|value)\\s*\\}",
+      "query": null,
+      "message": "Generic prop names like data, info, item hide intent. Use domain-specific names that describe the prop's purpose.",
       "provenance": {
         "last_verified": "2026-01-20",
         "confidence": "high",

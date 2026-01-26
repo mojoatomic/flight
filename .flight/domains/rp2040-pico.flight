@@ -101,7 +101,7 @@ rules:
   N2:
     title: No printf in Interrupt Handlers
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       Never use printf, puts, or print functions inside interrupt handlers
       (_callback, _isr, _handler, _irq functions). These are not interrupt-safe
@@ -114,12 +114,6 @@ rules:
         - url: "https://datasheets.raspberrypi.com/pico/raspberry-pi-pico-c-sdk.pdf"
           accessed: "2026-01-20"
           quote: "Interrupt handlers should be kept short and should not call functions that block or use stdio"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          awk '/void.*(_callback|_isr|_handler|_irq)\s*\(/,/^\}/ { if (/printf|puts|print/) print FILENAME":"NR": "$0 }' "$f"
-        done
     examples:
       bad:
         - |
@@ -135,7 +129,7 @@ rules:
   N3:
     title: No Recursive Functions
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       Never use recursive functions. Recursion makes stack usage unpredictable
       and can cause stack overflow on embedded systems with limited RAM.
@@ -147,18 +141,6 @@ rules:
         - url: "https://spinroot.com/p10/"
           accessed: "2026-01-20"
           quote: "Rule 1: Restrict all code to very simple control flow constructs – do not use...recursion"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          awk '/^[a-zA-Z_][a-zA-Z0-9_]*\s+[a-zA-Z_][a-zA-Z0-9_]*\s*\(/ {
-            match($0, /([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/, arr)
-            if (arr[1] != "") fname = arr[1]
-          }
-          fname && $0 ~ fname"\\s*\\(" && !/^[a-zA-Z_]/ {
-            print FILENAME":"NR": possible recursion in "fname
-          }' "$f" 2>/dev/null
-        done | head -5
     examples:
       bad:
         - |
@@ -177,7 +159,7 @@ rules:
   N4:
     title: No Direct Register Access
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       Never access hardware registers directly via volatile pointers or
       raw addresses. Use Pico SDK hardware_* APIs for portability and safety.
@@ -189,10 +171,6 @@ rules:
         - url: "https://datasheets.raspberrypi.com/pico/raspberry-pi-pico-c-sdk.pdf"
           accessed: "2026-01-20"
           quote: "The SDK provides a comprehensive set of hardware abstraction libraries...avoiding direct register access"
-    check:
-      type: script
-      code: |
-        grep -En '\*\s*\(volatile\s+uint32_t\s*\*\)|0x[0-9a-fA-F]+\s*=' "$@" | grep -v '#define'
     examples:
       bad:
         - "*(volatile uint32_t *)0x40014000 = 0x01;"
@@ -204,7 +182,7 @@ rules:
   N5:
     title: I2C/SPI Must Use Timeout Versions
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       Always use timeout versions of I2C/SPI functions. Non-timeout blocking
       calls can hang forever if hardware fails or bus is stuck.
@@ -216,13 +194,6 @@ rules:
         - url: "https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_i2c/include/hardware/i2c.h"
           accessed: "2026-01-20"
           quote: "i2c_write_timeout_us/i2c_read_timeout_us provide timeout capability for robust I2C communication"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          grep -En 'i2c_write_blocking\(|i2c_read_blocking\(|spi_write_blocking\(|spi_read_blocking\(' "$f" 2>/dev/null | \
-          grep -v 'timeout' | head -5
-        done
     examples:
       bad:
         - "i2c_write_blocking(i2c0, addr, data, len, false);"
@@ -265,7 +236,7 @@ rules:
   N7:
     title: Core 0 Must Use Watchdog
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       Core 0 (main.c) must enable and update the hardware watchdog.
       The watchdog provides system recovery if Core 0 hangs.
@@ -277,16 +248,6 @@ rules:
         - url: "https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf"
           accessed: "2026-01-20"
           quote: "The watchdog provides an automatic reset mechanism if software becomes unresponsive"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if echo "$f" | grep -q 'main\.c'; then
-            if ! grep -q 'watchdog_enable\|watchdog_update' "$f"; then
-              echo "$f: missing watchdog"
-            fi
-          fi
-        done
     examples:
       bad:
         - |
@@ -308,7 +269,7 @@ rules:
   S1:
     title: Review Blocking Calls in Safety/Core0 Files
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Blocking calls in safety-critical code (main.c, safety/, core0) should
       be reviewed. Core 0 owns safety and should not block indefinitely.
@@ -320,14 +281,6 @@ rules:
         - url: "https://datasheets.raspberrypi.com/pico/raspberry-pi-pico-c-sdk.pdf"
           accessed: "2026-01-20"
           quote: "Core 0 is responsible for critical system functions and should maintain responsiveness"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if echo "$f" | grep -qiE 'main\.c|safety|core0'; then
-            grep -En 'sleep_ms|_blocking\(|while\s*\(\s*true|for\s*\(\s*;\s*;\s*\)' "$f" 2>/dev/null | head -5
-          fi
-        done
     examples:
       bad:
         - "// In safety_monitor.c"
@@ -338,7 +291,7 @@ rules:
   S2:
     title: Review Float/Double in Safety Files
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Floating point operations in safety-critical paths should be reviewed.
       Consider using fixed-point math for deterministic timing.
@@ -350,14 +303,6 @@ rules:
         - url: "https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf"
           accessed: "2026-01-20"
           quote: "RP2040 does not include hardware floating point support, soft float adds non-deterministic timing"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if echo "$f" | grep -qiE 'safety|emergency|watchdog|core0'; then
-            grep -En '\bfloat\b|\bdouble\b' "$f" 2>/dev/null
-          fi
-        done
     examples:
       bad:
         - "// In emergency.c"
@@ -399,7 +344,7 @@ rules:
   S4:
     title: Multicore Launch Should Have Handshake
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       When using multicore_launch_core1, implement a FIFO handshake to
       ensure Core 1 has initialized before Core 0 continues.
@@ -411,16 +356,6 @@ rules:
         - url: "https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/pico_multicore/multicore.c"
           accessed: "2026-01-20"
           quote: "multicore_fifo_push_blocking/pop_blocking provide inter-core synchronization via hardware FIFOs"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -q 'multicore_launch_core1' "$f"; then
-            if ! grep -q 'multicore_fifo_pop\|multicore_fifo_push' "$f"; then
-              echo "$f: multicore launch without FIFO handshake"
-            fi
-          fi
-        done
     examples:
       bad:
         - |
@@ -435,7 +370,7 @@ rules:
   S5:
     title: Shared Volatile State Should Use Spinlocks
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Files with volatile globals (g_*) or static volatile should use
       spinlocks for thread-safe access between cores.
@@ -447,16 +382,6 @@ rules:
         - url: "https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf"
           accessed: "2026-01-20"
           quote: "Hardware spinlocks provide mutual exclusion between cores with minimal overhead"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -q 'volatile.*g_\|static.*volatile' "$f"; then
-            if ! grep -q 'spin_lock\|spinlock' "$f"; then
-              echo "$f: has volatile globals but no spinlock"
-            fi
-          fi
-        done
     examples:
       bad:
         - |
@@ -470,7 +395,7 @@ rules:
   S6:
     title: Functions With Pointer Params Should ASSERT Non-null
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Functions that take pointer parameters should ASSERT they are not NULL
       at the start of the function.
@@ -482,23 +407,6 @@ rules:
         - url: "https://spinroot.com/p10/"
           accessed: "2026-01-20"
           quote: "Rule 5: Use assertions to check...return value of non-void functions"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          awk '
-          /^[a-zA-Z_].*\*[a-zA-Z_]+\)/ {
-            func_line = NR; has_ptr = 1
-          }
-          has_ptr && NR <= func_line + 5 && /ASSERT.*!=.*NULL|assert.*!=.*NULL/ {
-            has_ptr = 0
-          }
-          has_ptr && NR > func_line + 5 && /^\{/ {
-            print FILENAME":"func_line": function with pointer param missing ASSERT"
-            has_ptr = 0
-          }
-          ' "$f" 2>/dev/null
-        done | head -5
     examples:
       bad:
         - |
@@ -515,7 +423,7 @@ rules:
   S7:
     title: Status Return Values Should Be Checked
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Function calls that return status_t should have their return value
       checked or explicitly cast to (void).
@@ -527,13 +435,6 @@ rules:
         - url: "https://spinroot.com/p10/"
           accessed: "2026-01-20"
           quote: "Rule 5: Check the return value of all non-void functions"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          grep -En '^\s+[a-z_]+\s*\([^;]*\)\s*;' "$f" 2>/dev/null | \
-          grep -v 'if\s*(\|=\s*\|void\|return' | head -5
-        done
     examples:
       bad:
         - "read_sensor(sensor);  // Return value ignored"
@@ -544,7 +445,7 @@ rules:
   S8:
     title: Should Have Dual-Core Structure
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       RP2040 projects should have main.c for Core 0 entry and
       core1.c (or core_1.c) for Core 1 entry.
@@ -556,21 +457,6 @@ rules:
         - url: "https://datasheets.raspberrypi.com/pico/raspberry-pi-pico-c-sdk.pdf"
           accessed: "2026-01-20"
           quote: "The RP2040 has two Cortex-M0+ processors...separation of concerns between cores is recommended"
-    check:
-      type: script
-      code: |
-        missing=""
-        if ! ls "$@" 2>/dev/null | grep -q 'main\.c'; then
-          missing="Missing main.c (Core 0 entry)"
-        fi
-        if ! ls "$@" 2>/dev/null | grep -qE 'core1\.c|core_1\.c'; then
-          if [ -n "$missing" ]; then
-            echo "$missing"
-          fi
-          echo "Missing core1.c (Core 1 entry)"
-        elif [ -n "$missing" ]; then
-          echo "$missing"
-        fi
     examples:
       bad:
         - "// Only single main.c, no Core 1 separation"
@@ -581,7 +467,7 @@ rules:
   S9:
     title: Should Have Emergency/Error Handling
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Safety-critical RP2040 projects should have emergency or error handling
       code for failure scenarios. This includes dedicated emergency modules,
@@ -594,13 +480,6 @@ rules:
         - url: "https://spinroot.com/p10/"
           accessed: "2026-01-20"
           quote: "Safety-critical code must handle all failure modes with defined recovery procedures"
-    check:
-      type: script
-      code: |
-        # Check for emergency, error, or fault handling patterns
-        if ! grep -rlE 'emergency|EMERGENCY|STATE_ERROR|error_code|fault|FAULT' "$@" 2>/dev/null | head -1 | grep -q '.'; then
-          echo "No emergency/error handling found"
-        fi
     examples:
       bad:
         - "// No emergency or error handling"
@@ -613,7 +492,7 @@ rules:
   S10:
     title: Should Have Inter-Core Heartbeat
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Dual-core projects should implement a heartbeat mechanism
       between cores to detect if one core has stalled.
@@ -625,12 +504,6 @@ rules:
         - url: "https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf"
           accessed: "2026-01-20"
           quote: "Inter-core communication can be used for heartbeat monitoring between processors"
-    check:
-      type: script
-      code: |
-        if ! grep -rl 'heartbeat\|HEARTBEAT' "$@" 2>/dev/null | head -1 | grep -q '.'; then
-          echo "No heartbeat mechanism found"
-        fi
     examples:
       bad:
         - "// No inter-core monitoring"

@@ -75,15 +75,9 @@ rules:
     source: "CIS 4.1, Hadolint DL3002"
     mechanical: true
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if ! grep -qE "^USER\s+" "$f" 2>/dev/null; then
-            echo "$f: no USER directive found (container runs as root)"
-          elif grep -qE "^USER\s+(root|0)\s*$" "$f" 2>/dev/null; then
-            grep -HnE "^USER\s+(root|0)\s*$" "$f"
-          fi
-        done
+      type: requires
+      must_exist: '^USER\s+(?!root|0\s*$)'
+      message: "no non-root USER directive found (container runs as root)"
     examples:
       bad:
         - "# No USER directive at all"
@@ -261,11 +255,9 @@ rules:
     source: "Hadolint DL3006, DL3007, CIS 4.2"
     mechanical: true
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          grep -HnE "^FROM\s+[^:@\s]+\s*$|^FROM\s+[^@\s]+:latest(\s|$)" "$f" 2>/dev/null
-        done
+      type: grep
+      pattern: '^FROM\s+[^:@\s]+\s*$|^FROM\s+[^@\s]+:latest(\s|$)'
+      flags: -En
     examples:
       bad:
         - "FROM node"
@@ -293,12 +285,11 @@ rules:
     source: "Hadolint DL3020, Docker best practices"
     mechanical: true
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          grep -HnE "^ADD\s+[^h][^\s]+\s+" "$f" 2>/dev/null | \
-            grep -vE "\.(tar|tar\.gz|tgz|tar\.bz2|tar\.xz)\s"
-        done
+      type: grep
+      pattern: '^ADD\s+[^h][^\s]+\s+'
+      flags: -En
+      ignore_when:
+        - '\.(tar|tar\.gz|tgz|tar\.bz2|tar\.xz)\s'
     examples:
       bad:
         - "ADD package.json /app/"
@@ -354,11 +345,9 @@ rules:
     source: "Hadolint DL3025, Docker best practices"
     mechanical: true
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          grep -HnE "^(CMD|ENTRYPOINT)\s+[^\[]" "$f" 2>/dev/null
-        done
+      type: grep
+      pattern: '^(CMD|ENTRYPOINT)\s+[^\[]'
+      flags: -En
     examples:
       bad:
         - "CMD node server.js"
@@ -386,15 +375,10 @@ rules:
     source: "Hadolint DL4006"
     mechanical: true
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qE "^RUN\s+.*\|" "$f" 2>/dev/null; then
-            if ! grep -qE "^SHELL\s+.*pipefail" "$f" 2>/dev/null; then
-              echo "$f: RUN commands use pipes but SHELL pipefail not set"
-            fi
-          fi
-        done
+      type: requires
+      trigger: '^RUN\s+.*\|'
+      requirement: '^SHELL\s+.*pipefail'
+      message: "RUN commands use pipes but SHELL pipefail not set"
     examples:
       bad:
         - |
@@ -420,21 +404,7 @@ rules:
       EXPOSE must specify valid port numbers (1-65535). Invalid ports
       indicate configuration errors.
     source: "Hadolint DL3011"
-    mechanical: true
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          grep -HnE "^EXPOSE\s+" "$f" 2>/dev/null | while read -r line; do
-            linenum=$(echo "$line" | cut -d: -f2)
-            ports=$(echo "$line" | sed 's/.*EXPOSE\s*//' | grep -oE '[0-9]+')
-            for port in $ports; do
-              if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
-                echo "$line"
-              fi
-            done
-          done
-        done
+    mechanical: false
     examples:
       bad:
         - "EXPOSE 0"
@@ -466,12 +436,11 @@ rules:
     source: "Hadolint DL3008"
     mechanical: true
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          grep -HnE "apt-get\s+install.*\s[a-z][a-z0-9+-]+(\s|$)" "$f" 2>/dev/null | \
-            grep -vE "=[0-9]"
-        done
+      type: grep
+      pattern: 'apt-get\s+install.*\s[a-z][a-z0-9+-]+(\s|$)'
+      flags: -En
+      ignore_when:
+        - '=[0-9]'
     examples:
       bad:
         - "RUN apt-get install -y curl wget"
@@ -497,12 +466,11 @@ rules:
     source: "Docker best practices"
     mechanical: true
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          grep -HnE "^RUN\s+.*apt-get\s+install" "$f" 2>/dev/null | \
-            grep -vE "rm\s+-rf\s+/var/lib/apt"
-        done
+      type: grep
+      pattern: '^RUN\s+.*apt-get\s+install'
+      flags: -En
+      ignore_when:
+        - 'rm\s+-rf\s+/var/lib/apt'
     examples:
       bad:
         - |
@@ -528,18 +496,7 @@ rules:
       Use multi-stage builds to reduce final image size. Build dependencies
       should not be included in production images.
     source: "Docker best practices"
-    mechanical: true
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qE "gcc|make|npm\s+install|pip\s+install|go\s+build|cargo\s+build" "$f" 2>/dev/null; then
-            from_count=$(grep -cE "^FROM\s+" "$f" 2>/dev/null || echo 0)
-            if [ "$from_count" -lt 2 ]; then
-              echo "$f: build tools detected but no multi-stage build (single FROM)"
-            fi
-          fi
-        done
+    mechanical: false
     examples:
       bad:
         - |
@@ -571,19 +528,7 @@ rules:
       Order Dockerfile instructions from least to most frequently changing.
       COPY package*.json before COPY . to maximize cache reuse.
     source: "Docker best practices"
-    mechanical: true
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          copy_all_line=$(grep -nE "^COPY\s+\.\s+" "$f" 2>/dev/null | head -1 | cut -d: -f1)
-          copy_pkg_line=$(grep -nE "^COPY\s+package" "$f" 2>/dev/null | head -1 | cut -d: -f1)
-          if [ -n "$copy_all_line" ] && [ -n "$copy_pkg_line" ]; then
-            if [ "$copy_all_line" -lt "$copy_pkg_line" ]; then
-              echo "$f:$copy_all_line: COPY . before COPY package* (poor cache efficiency)"
-            fi
-          fi
-        done
+    mechanical: false
     examples:
       bad:
         - |
@@ -610,16 +555,7 @@ rules:
       Create a .dockerignore file to exclude unnecessary files from build context.
       Reduces build time and prevents accidental inclusion of secrets.
     source: "Docker best practices"
-    mechanical: true
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          dir=$(dirname "$f")
-          if [ ! -f "$dir/.dockerignore" ]; then
-            echo "$f: no .dockerignore found in $dir"
-          fi
-        done
+    mechanical: false
     examples:
       bad:
         - "# No .dockerignore file"
@@ -651,15 +587,10 @@ rules:
     source: "CIS 4.6, Docker best practices"
     mechanical: true
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if ! grep -qE "^HEALTHCHECK\s+" "$f" 2>/dev/null; then
-            if grep -qE "^(CMD|ENTRYPOINT)\s+" "$f" 2>/dev/null; then
-              echo "$f: no HEALTHCHECK defined for service image"
-            fi
-          fi
-        done
+      type: requires
+      trigger: '^(CMD|ENTRYPOINT)\s+'
+      requirement: '^HEALTHCHECK\s+'
+      message: "no HEALTHCHECK defined for service image"
     examples:
       bad:
         - |
@@ -687,16 +618,7 @@ rules:
       Combine related RUN commands to minimize layers. Each RUN creates a new
       layer, increasing image size and complexity.
     source: "Docker best practices"
-    mechanical: true
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          run_count=$(grep -cE "^RUN\s+" "$f" 2>/dev/null || echo 0)
-          if [ "$run_count" -gt 10 ]; then
-            echo "$f: $run_count RUN commands (consider combining)"
-          fi
-        done
+    mechanical: false
     examples:
       bad:
         - |
@@ -727,11 +649,9 @@ rules:
     source: "Docker best practices"
     mechanical: true
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          grep -HnE "^COPY\s+\.\s+" "$f" 2>/dev/null
-        done
+      type: grep
+      pattern: '^COPY\s+\.\s+'
+      flags: -En
     examples:
       bad:
         - "COPY . /app"

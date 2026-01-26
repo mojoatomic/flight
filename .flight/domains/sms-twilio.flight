@@ -87,7 +87,7 @@ rules:
   N1:
     title: Consent States Defined
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       SMS consent states (OPTED_IN, OPTED_OUT, PENDING, UNKNOWN) must be
       defined in code. These states drive the consent state machine.
@@ -99,20 +99,6 @@ rules:
         - url: "https://www.twilio.com/docs/messaging/guides/opt-out-keywords"
           accessed: "2026-01-20"
           quote: "Consent state must be tracked for each recipient"
-    check:
-      type: script
-      code: |
-        strip_comments() {
-          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
-        }
-        found=0
-        for f in "$@"; do
-          if strip_comments "$f" | grep -qEi "OPTED_IN|OPTED_OUT"; then
-            found=1
-            break
-          fi
-        done
-        [[ $found -eq 0 ]] && echo "No consent states found"
     examples:
       bad:
         - "// No consent states defined"
@@ -200,7 +186,7 @@ rules:
   N4:
     title: STOP Keyword Triggers State Change
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       STOP keyword must trigger a state change to OPTED_OUT. Ignoring STOP
       is a legal violation. Twilio handles this automatically but your
@@ -213,24 +199,6 @@ rules:
         - url: "https://www.twilio.com/docs/messaging/guides/opt-out-keywords"
           accessed: "2026-01-20"
           quote: "STOP keyword is required and cannot be disabled"
-    check:
-      type: script
-      code: |
-        strip_comments() {
-          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
-        }
-        for f in "$@"; do
-          # Only check for STOP handling if file has SMS/Twilio context
-          # This prevents false positives on firmware state machines, etc.
-          if ! strip_comments "$f" | grep -qEi "twilio|sendSMS|messages\.create|sms.*send|consent"; then
-            continue
-          fi
-          if strip_comments "$f" | grep -qEi "\bSTOP\b"; then
-            if ! strip_comments "$f" | grep -qEi "OPTED_OUT|updateConsent|setState|optOut"; then
-              printf "%s: STOP found but no state change\n" "$f"
-            fi
-          fi
-        done
     examples:
       bad:
         - |
@@ -247,7 +215,7 @@ rules:
   N5:
     title: Error 21610 Marks OPTED_OUT
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       INVARIANT: Twilio error 21610 (unsubscribed recipient) must mark the
       user as OPTED_OUT. This is a carrier-level block. Do NOT retry.
@@ -259,20 +227,6 @@ rules:
         - url: "https://www.twilio.com/docs/api/errors/21610"
           accessed: "2026-01-20"
           quote: "Attempt to send to unsubscribed recipient"
-    check:
-      type: script
-      code: |
-        strip_comments() {
-          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
-        }
-        for f in "$@"; do
-          if strip_comments "$f" | grep -qEi "twilio|sendSMS|messages.*create"; then
-            # Check for literal 21610 OR common constant patterns for opt-out errors
-            if ! strip_comments "$f" | grep -qEi "21610|OPT.?OUT.*ERROR|UNSUBSCRIBED.*ERROR|BLOCKED.*CODE"; then
-              printf "%s: no 21610 handling\n" "$f"
-            fi
-          fi
-        done
     examples:
       bad:
         - "// No handling for error 21610"
@@ -290,7 +244,7 @@ rules:
   N6:
     title: Error 30004 Marks OPTED_OUT
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       INVARIANT: Twilio error 30004 (message blocked by carrier) must mark
       the user as OPTED_OUT. This indicates carrier-level blocking.
@@ -303,20 +257,6 @@ rules:
         - url: "https://www.twilio.com/docs/api/errors/30004"
           accessed: "2026-01-20"
           quote: "Message blocked - carrier rejected the message"
-    check:
-      type: script
-      code: |
-        strip_comments() {
-          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
-        }
-        for f in "$@"; do
-          if strip_comments "$f" | grep -qEi "twilio|sendSMS|messages.*create"; then
-            # Check for literal 30004 OR common constant patterns for opt-out/blocked errors
-            if ! strip_comments "$f" | grep -qEi "30004|OPT.?OUT.*ERROR|BLOCKED.*ERROR|CARRIER.*BLOCK"; then
-              printf "%s: no 30004 handling\n" "$f"
-            fi
-          fi
-        done
     examples:
       bad:
         - "// No handling for error 30004"
@@ -334,7 +274,7 @@ rules:
   N7:
     title: No Retry on Opt-Out Errors
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       INVARIANT: Never retry on opt-out errors (21610, 30004). The user
       has opted out - retrying violates their consent and carrier policies.
@@ -346,18 +286,6 @@ rules:
         - url: "https://www.fcc.gov/tcpa"
           accessed: "2026-01-20"
           quote: "Consent withdrawal must be honored immediately"
-    check:
-      type: script
-      code: |
-        strip_comments() {
-          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
-        }
-        for f in "$@"; do
-          result=$(strip_comments "$f" | grep -Ein "21610.*retry|30004.*retry|retry.*21610|retry.*30004" 2>/dev/null) || true
-          if [[ -n "$result" ]]; then
-            printf "%s:%s\n" "$f" "$result"
-          fi
-        done
     examples:
       bad:
         - |
@@ -374,7 +302,7 @@ rules:
   N8:
     title: Error 30005/30006 Marks Number INVALID
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       INVARIANT: Twilio errors 30005 (unknown destination) and 30006
       (landline/unreachable) must mark the number as INVALID. Do NOT retry.
@@ -386,20 +314,6 @@ rules:
         - url: "https://www.twilio.com/docs/api/errors/30005"
           accessed: "2026-01-20"
           quote: "Unknown destination handset"
-    check:
-      type: script
-      code: |
-        strip_comments() {
-          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
-        }
-        for f in "$@"; do
-          if strip_comments "$f" | grep -qEi "twilio|sendSMS|messages.*create"; then
-            # Check for literal codes OR common constant patterns for invalid number errors
-            if ! strip_comments "$f" | grep -qEi "30005|30006|INVALID.*NUMBER|INVALID.*ERROR|LANDLINE|UNREACHABLE|UNKNOWN.*DEST"; then
-              printf "%s: no 30005/30006 handling\n" "$f"
-            fi
-          fi
-        done
     examples:
       bad:
         - "// No handling for invalid number errors"
@@ -417,7 +331,7 @@ rules:
   N9:
     title: First Message Includes Opt-Out Instructions
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       The first message to a newly opted-in user MUST include opt-out
       instructions (STOP keyword). This is required by CTIA guidelines.
@@ -429,25 +343,6 @@ rules:
         - url: "https://www.ctia.org/the-wireless-industry/industry-commitments/messaging-principles-and-best-practices"
           accessed: "2026-01-20"
           quote: "First message must include opt-out instructions"
-    check:
-      type: script
-      code: |
-        strip_comments() {
-          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
-        }
-        for f in "$@"; do
-          # Only check files with SMS/Twilio context
-          # This prevents false positives on email templates, React hooks, etc.
-          if ! strip_comments "$f" | grep -qEi "twilio|sendSMS|messages\.create|sms.*send|sms.*consent"; then
-            continue
-          fi
-          if strip_comments "$f" | grep -qEi "first.?message|welcome|initial|confirm.*message|WELCOME_MSG|FIRST_MSG|CONSENT_CONFIRMED"; then
-            # Check for common opt-out instruction patterns
-            if ! strip_comments "$f" | grep -qEi "STOP|opt.?out|unsubscribe|Reply.*to.*cancel|text.*stop|OPT_OUT_INSTRUCTIONS"; then
-              printf "%s: first message may lack opt-out\n" "$f"
-            fi
-          fi
-        done
     examples:
       bad:
         - "await sendSMS(phone, 'Sale! 50% off!'); // WRONG - missing opt-out"
@@ -521,7 +416,7 @@ rules:
   S1:
     title: START/UNSTOP Keywords Handled
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       START and UNSTOP keywords should be handled to allow users to
       re-subscribe after opting out. UNSTOP is required for Toll-Free.
@@ -533,20 +428,6 @@ rules:
         - url: "https://www.twilio.com/docs/messaging/guides/opt-out-keywords"
           accessed: "2026-01-20"
           quote: "START and UNSTOP allow users to re-subscribe"
-    check:
-      type: script
-      code: |
-        strip_comments() {
-          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
-        }
-        found=0
-        for f in "$@"; do
-          if strip_comments "$f" | grep -qEi "START|UNSTOP"; then
-            found=1
-            break
-          fi
-        done
-        [[ $found -eq 0 ]] && echo "No START/UNSTOP handling"
     examples:
       good:
         - |
@@ -557,7 +438,7 @@ rules:
   S2:
     title: HELP Keyword Response
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       HELP keyword should trigger a response with support contact
       information and opt-out reminder.
@@ -569,20 +450,6 @@ rules:
         - url: "https://www.ctia.org/the-wireless-industry/industry-commitments/messaging-principles-and-best-practices"
           accessed: "2026-01-20"
           quote: "HELP response must include support information"
-    check:
-      type: script
-      code: |
-        strip_comments() {
-          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
-        }
-        found=0
-        for f in "$@"; do
-          if strip_comments "$f" | grep -qEi "HELP.*response|help.?message|HELP.*reply"; then
-            found=1
-            break
-          fi
-        done
-        [[ $found -eq 0 ]] && echo "No HELP response"
     examples:
       good:
         - |
@@ -593,7 +460,7 @@ rules:
   S3:
     title: Temporary Errors Retry with Backoff
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Temporary errors (30003 unreachable, 30017 congestion) should
       trigger retry with exponential backoff.
@@ -605,20 +472,6 @@ rules:
         - url: "https://www.twilio.com/docs/api/errors/30003"
           accessed: "2026-01-20"
           quote: "Temporary delivery failure - retry with backoff"
-    check:
-      type: script
-      code: |
-        strip_comments() {
-          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
-        }
-        found=0
-        for f in "$@"; do
-          if strip_comments "$f" | grep -qEi "30003|30017|backoff|exponential|retry.*delay"; then
-            found=1
-            break
-          fi
-        done
-        [[ $found -eq 0 ]] && echo "No retry backoff"
     examples:
       good:
         - |
@@ -631,7 +484,7 @@ rules:
   S4:
     title: Rate Limit Errors Handled
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Rate limit errors (30022, 30023, 30027) should be handled by
       slowing down or waiting until the next day.
@@ -643,20 +496,6 @@ rules:
         - url: "https://www.twilio.com/docs/messaging/compliance/a2p-10dlc"
           accessed: "2026-01-20"
           quote: "Rate limits vary by trust score and carrier"
-    check:
-      type: script
-      code: |
-        strip_comments() {
-          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
-        }
-        found=0
-        for f in "$@"; do
-          if strip_comments "$f" | grep -qEi "30022|30023|30027|rate.?limit|daily.?cap"; then
-            found=1
-            break
-          fi
-        done
-        [[ $found -eq 0 ]] && echo "No rate limit handling"
     examples:
       good:
         - |
@@ -667,7 +506,7 @@ rules:
   S5:
     title: Business Name in Messages
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Messages should include business/brand name for identification
       as required by CTIA guidelines.
@@ -679,20 +518,6 @@ rules:
         - url: "https://www.ctia.org/the-wireless-industry/industry-commitments/messaging-principles-and-best-practices"
           accessed: "2026-01-20"
           quote: "Message must identify the sender"
-    check:
-      type: script
-      code: |
-        strip_comments() {
-          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
-        }
-        found=0
-        for f in "$@"; do
-          if strip_comments "$f" | grep -qEi "business.?name|brand|company.*:"; then
-            found=1
-            break
-          fi
-        done
-        [[ $found -eq 0 ]] && echo "No business name in messages"
     examples:
       good:
         - "'{businessName}: {message}. Reply STOP to unsubscribe.'"
@@ -700,7 +525,7 @@ rules:
   S6:
     title: Opt-Out Confirmation Message
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       When a user opts out, send one final confirmation message. This is
       the only message allowed after opt-out.
@@ -712,20 +537,6 @@ rules:
         - url: "https://www.twilio.com/docs/messaging/guides/opt-out-keywords"
           accessed: "2026-01-20"
           quote: "One confirmation message is allowed after opt-out"
-    check:
-      type: script
-      code: |
-        strip_comments() {
-          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
-        }
-        found=0
-        for f in "$@"; do
-          if strip_comments "$f" | grep -qEi "unsubscribed|opt.?out.*confirm|OPT_OUT_CONFIRMED"; then
-            found=1
-            break
-          fi
-        done
-        [[ $found -eq 0 ]] && echo "No opt-out confirmation"
     examples:
       good:
         - |
@@ -736,7 +547,7 @@ rules:
   S7:
     title: Double Opt-In Flow
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Implement double opt-in flow for marketing messages. User provides
       number, receives confirmation request, replies YES to confirm.
@@ -748,20 +559,6 @@ rules:
         - url: "https://www.twilio.com/docs/messaging/compliance/a2p-10dlc"
           accessed: "2026-01-20"
           quote: "Double opt-in recommended for marketing campaigns"
-    check:
-      type: script
-      code: |
-        strip_comments() {
-          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
-        }
-        found=0
-        for f in "$@"; do
-          if strip_comments "$f" | grep -qEi "double.?opt|PENDING.*OPTED_IN|confirm.*yes|reply.*yes"; then
-            found=1
-            break
-          fi
-        done
-        [[ $found -eq 0 ]] && echo "No double opt-in"
     examples:
       good:
         - |
@@ -772,7 +569,7 @@ rules:
   S8:
     title: Message Logging for Audit
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Log all messages for compliance audit. Store message SID, direction,
       status, and timestamp. Don't store message body (PII).
@@ -784,20 +581,6 @@ rules:
         - url: "https://www.fcc.gov/tcpa"
           accessed: "2026-01-20"
           quote: "Records must be maintained for compliance auditing"
-    check:
-      type: script
-      code: |
-        strip_comments() {
-          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
-        }
-        found=0
-        for f in "$@"; do
-          if strip_comments "$f" | grep -qEi "log.*message|audit|sms_log|message.*log"; then
-            found=1
-            break
-          fi
-        done
-        [[ $found -eq 0 ]] && echo "No message logging"
     examples:
       good:
         - |
@@ -813,7 +596,7 @@ rules:
   S9:
     title: Consent Timestamps Tracked
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Track timestamps for consent changes (opted_in_at, opted_out_at)
       for compliance audit and legal requirements.
@@ -825,20 +608,6 @@ rules:
         - url: "https://www.fcc.gov/tcpa"
           accessed: "2026-01-20"
           quote: "Consent records must include timestamps"
-    check:
-      type: script
-      code: |
-        strip_comments() {
-          grep -v "^\s*//" "$1" 2>/dev/null | grep -v "^\s*#" | grep -v "^\s*\*"
-        }
-        found=0
-        for f in "$@"; do
-          if strip_comments "$f" | grep -qEi "opted_in_at|opted_out_at|consent.*time|timestamp"; then
-            found=1
-            break
-          fi
-        done
-        [[ $found -eq 0 ]] && echo "No consent timestamps"
     examples:
       good:
         - |

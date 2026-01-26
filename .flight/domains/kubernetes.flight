@@ -213,14 +213,9 @@ rules:
       Explicitly disable privilege escalation. When allowPrivilegeEscalation is
       true or unset, processes can gain more privileges than their parent.
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Check for explicit true setting
-          if grep -qE 'allowPrivilegeEscalation:\s*true' "$f" 2>/dev/null; then
-            grep -HnE 'allowPrivilegeEscalation:\s*true' "$f"
-          fi
-        done
+      type: grep
+      pattern: 'allowPrivilegeEscalation:\s*true'
+      flags: -En
     note: |
       From Pod Security Standards (Restricted): "Privilege escalation should not
       be allowed." Always set allowPrivilegeEscalation: false.
@@ -299,7 +294,7 @@ rules:
   N8:
     title: Default ServiceAccount
     severity: NEVER
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -311,16 +306,6 @@ rules:
     description: |
       Do not use the default ServiceAccount for workloads. The default account
       may have excessive permissions. Create dedicated ServiceAccounts.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet|Job|CronJob|Pod)' "$f" 2>/dev/null; then
-            if grep -qE 'serviceAccountName:\s*default\s*$' "$f" 2>/dev/null; then
-              grep -HnE 'serviceAccountName:\s*default\s*$' "$f"
-            fi
-          fi
-        done
     note: |
       Create a dedicated ServiceAccount for each workload with minimal permissions.
       This limits blast radius if the workload is compromised.
@@ -351,14 +336,12 @@ rules:
       Always specify explicit image tags. Using :latest or no tag causes
       unpredictable deployments and makes rollbacks impossible.
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Match image: without tag or with :latest
-          grep -HnE 'image:\s*["\x27]?[a-zA-Z0-9._/-]+(:latest)?\s*["\x27]?\s*$' "$f" 2>/dev/null | \
-            grep -v ':[0-9]' | \
-            grep -v '@sha256:'
-        done
+      type: grep
+      pattern: 'image:\s*["\x27]?[a-zA-Z0-9._/-]+(:latest)?\s*["\x27]?\s*$'
+      flags: -En
+      ignore_when:
+        - ':[0-9]'
+        - '@sha256:'
     note: |
       From kube-score: "Makes sure that an explicit non-latest tag is used."
       Pin to specific versions or SHA digests for reproducibility.
@@ -373,7 +356,7 @@ rules:
   M2:
     title: Resource Requests Required
     severity: MUST
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -385,18 +368,6 @@ rules:
     description: |
       Always set resource requests for CPU and memory. Without requests,
       the scheduler cannot make informed decisions and autoscaling fails.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet|Job|Pod)' "$f" 2>/dev/null; then
-            if grep -qE 'containers:' "$f" 2>/dev/null; then
-              if ! grep -qE 'requests:' "$f" 2>/dev/null; then
-                echo "$f: containers found but no resource requests defined"
-              fi
-            fi
-          fi
-        done
     note: |
       From Polaris: "Setting appropriate resource requests will ensure that all
       your applications have sufficient compute resources."
@@ -419,7 +390,7 @@ rules:
   M3:
     title: Resource Limits Required
     severity: MUST
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -431,18 +402,6 @@ rules:
     description: |
       Always set resource limits for memory. Without limits, a single
       misbehaving container can consume all node resources.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet|Job|Pod)' "$f" 2>/dev/null; then
-            if grep -qE 'containers:' "$f" 2>/dev/null; then
-              if ! grep -qE 'limits:' "$f" 2>/dev/null; then
-                echo "$f: containers found but no memory limits defined"
-              fi
-            fi
-          fi
-        done
     note: |
       Memory limits are essential to prevent OOM situations affecting other pods.
       CPU limits are recommended but can cause throttling issues.
@@ -463,7 +422,7 @@ rules:
   M4:
     title: Liveness Probe Required
     severity: MUST
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -475,18 +434,6 @@ rules:
     description: |
       Define liveness probes for long-running containers. Without liveness
       probes, Kubernetes cannot detect and restart deadlocked applications.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet)' "$f" 2>/dev/null; then
-            if grep -qE 'containers:' "$f" 2>/dev/null; then
-              if ! grep -qE 'livenessProbe:' "$f" 2>/dev/null; then
-                echo "$f: long-running workload without livenessProbe"
-              fi
-            fi
-          fi
-        done
     note: |
       From kube-score: "Liveness probes are designed to ensure that an application
       stays in a healthy state. When a liveness probe fails, the pod will be restarted."
@@ -511,7 +458,7 @@ rules:
   M5:
     title: Readiness Probe Required
     severity: MUST
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -523,18 +470,6 @@ rules:
     description: |
       Define readiness probes for services. Without readiness probes, traffic
       is sent to pods before they're ready, causing errors.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet)' "$f" 2>/dev/null; then
-            if grep -qE 'containers:' "$f" 2>/dev/null; then
-              if ! grep -qE 'readinessProbe:' "$f" 2>/dev/null; then
-                echo "$f: workload without readinessProbe"
-              fi
-            fi
-          fi
-        done
     note: |
       From Polaris: "Readiness probes are designed to ensure that an application
       has reached a ready state before receiving traffic."
@@ -559,7 +494,7 @@ rules:
   M6:
     title: Deployment Replicas
     severity: MUST
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -571,16 +506,6 @@ rules:
     description: |
       Deployments should have at least 2 replicas for high availability.
       Single replica deployments have no redundancy during updates or failures.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qE 'kind:\s*Deployment' "$f" 2>/dev/null; then
-            if grep -qE 'replicas:\s*1\s*$' "$f" 2>/dev/null; then
-              grep -HnE 'replicas:\s*1\s*$' "$f"
-            fi
-          fi
-        done
     note: |
       From kube-score: "Makes sure that Deployment has multiple replicas."
       Single replicas mean zero availability during rolling updates.
@@ -594,7 +519,7 @@ rules:
   M7:
     title: Labels Required
     severity: MUST
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -606,16 +531,6 @@ rules:
     description: |
       Pods must have standard labels for identification and selection.
       Missing labels break service discovery and monitoring.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet|Pod)' "$f" 2>/dev/null; then
-            if ! grep -qE 'labels:' "$f" 2>/dev/null; then
-              echo "$f: workload without labels defined"
-            fi
-          fi
-        done
     note: |
       Use standard Kubernetes labels: app.kubernetes.io/name, app.kubernetes.io/instance,
       app.kubernetes.io/version, app.kubernetes.io/component.
@@ -635,7 +550,7 @@ rules:
   M8:
     title: Namespace Required
     severity: MUST
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -647,18 +562,6 @@ rules:
     description: |
       Specify namespace explicitly. Relying on kubectl context can deploy
       to wrong namespace. Never use 'default' namespace for applications.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet|Service|ConfigMap|Secret|Pod)' "$f" 2>/dev/null; then
-            if ! grep -qE 'namespace:' "$f" 2>/dev/null; then
-              echo "$f: resource without explicit namespace"
-            elif grep -qE 'namespace:\s*default\s*$' "$f" 2>/dev/null; then
-              grep -HnE 'namespace:\s*default\s*$' "$f"
-            fi
-          fi
-        done
     note: |
       The default namespace should be reserved for system resources.
       Always specify namespace to avoid accidental deployments.
@@ -681,7 +584,7 @@ rules:
   S1:
     title: Run as Non-Root
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -693,16 +596,6 @@ rules:
     description: |
       Set runAsNonRoot: true in securityContext. This provides defense in depth
       even if the container image runs as non-root by default.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet|Pod)' "$f" 2>/dev/null; then
-            if ! grep -qE 'runAsNonRoot:\s*true' "$f" 2>/dev/null; then
-              echo "$f: securityContext.runAsNonRoot not set to true"
-            fi
-          fi
-        done
     note: |
       From Pod Security Standards (Restricted): "Containers must be required to
       run as non-root users."
@@ -719,7 +612,7 @@ rules:
   S2:
     title: Read-Only Root Filesystem
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -731,18 +624,6 @@ rules:
     description: |
       Set readOnlyRootFilesystem: true. This prevents attackers from modifying
       container binaries or installing malware.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet|Pod)' "$f" 2>/dev/null; then
-            if grep -qE 'containers:' "$f" 2>/dev/null; then
-              if ! grep -qE 'readOnlyRootFilesystem:\s*true' "$f" 2>/dev/null; then
-                echo "$f: securityContext.readOnlyRootFilesystem not set to true"
-              fi
-            fi
-          fi
-        done
     note: |
       Use emptyDir volumes for directories that need write access (e.g., /tmp).
       This significantly reduces attack surface.
@@ -760,7 +641,7 @@ rules:
   S3:
     title: Drop All Capabilities
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -772,19 +653,6 @@ rules:
     description: |
       Drop all Linux capabilities and only add back what's needed.
       By default, containers get several capabilities that are rarely needed.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet|Pod)' "$f" 2>/dev/null; then
-            if grep -qE 'containers:' "$f" 2>/dev/null; then
-              # Check for drop: ["ALL"] or drop: - ALL patterns
-              if ! grep -qE 'drop:' "$f" 2>/dev/null || ! grep -qE '(- ALL|\["ALL"\]|"ALL")' "$f" 2>/dev/null; then
-                echo "$f: capabilities.drop does not include ALL"
-              fi
-            fi
-          fi
-        done
     note: |
       From Pod Security Standards (Restricted): "Containers must drop ALL
       capabilities, and are only permitted to add back NET_BIND_SERVICE."
@@ -803,7 +671,7 @@ rules:
   S4:
     title: PodDisruptionBudget Required
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -815,21 +683,6 @@ rules:
     description: |
       Create PodDisruptionBudgets for critical deployments. PDBs ensure minimum
       availability during voluntary disruptions like node drains.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qE 'kind:\s*(Deployment|StatefulSet)' "$f" 2>/dev/null; then
-            name=$(grep -A1 'metadata:' "$f" 2>/dev/null | grep 'name:' | head -1 | sed 's/.*name:\s*//' | tr -d '"\x27 ')
-            if [ -n "$name" ]; then
-              # Check if PDB exists in same file or directory
-              dir=$(dirname "$f")
-              if ! grep -rqE "kind:\s*PodDisruptionBudget" "$dir" 2>/dev/null; then
-                echo "$f: Deployment/StatefulSet '$name' has no PodDisruptionBudget"
-              fi
-            fi
-          fi
-        done
     note: |
       From kube-score: "Makes sure that all StatefulSets and Deployments are
       targeted by a PDB."
@@ -850,7 +703,7 @@ rules:
   S5:
     title: Pod Anti-Affinity
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -862,18 +715,6 @@ rules:
     description: |
       Configure pod anti-affinity to spread replicas across nodes.
       Without anti-affinity, all replicas may run on the same node.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qE 'kind:\s*(Deployment|StatefulSet)' "$f" 2>/dev/null; then
-            if grep -qE 'replicas:\s*[2-9]' "$f" 2>/dev/null; then
-              if ! grep -qE 'podAntiAffinity:' "$f" 2>/dev/null; then
-                echo "$f: multi-replica workload without podAntiAffinity"
-              fi
-            fi
-          fi
-        done
     note: |
       From kube-score: "Makes sure that a podAntiAffinity has been set that
       prevents multiple pods from being scheduled on the same node."
@@ -899,7 +740,7 @@ rules:
   S6:
     title: Image Pull Policy Always
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -911,16 +752,6 @@ rules:
     description: |
       Set imagePullPolicy to Always. This ensures fresh images are pulled
       and ImagePullSecrets are always validated.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet|Pod)' "$f" 2>/dev/null; then
-            if grep -qE 'imagePullPolicy:\s*(Never|IfNotPresent)' "$f" 2>/dev/null; then
-              grep -HnE 'imagePullPolicy:\s*(Never|IfNotPresent)' "$f"
-            fi
-          fi
-        done
     note: |
       From kube-score: "Makes sure that the pullPolicy is set to Always."
       This prevents using cached images that may be outdated or compromised.
@@ -934,7 +765,7 @@ rules:
   S7:
     title: Seccomp Profile
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -946,16 +777,6 @@ rules:
     description: |
       Configure a Seccomp profile to restrict system calls.
       Seccomp significantly reduces the kernel attack surface.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet|Pod)' "$f" 2>/dev/null; then
-            if ! grep -qE 'seccompProfile:' "$f" 2>/dev/null; then
-              echo "$f: no seccompProfile configured"
-            fi
-          fi
-        done
     note: |
       From Pod Security Standards (Restricted): "Seccomp profile must be
       explicitly set to RuntimeDefault or Localhost."
@@ -972,7 +793,7 @@ rules:
   S8:
     title: Service Account Token Automount
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -984,17 +805,6 @@ rules:
     description: |
       Disable automatic mounting of ServiceAccount tokens when not needed.
       Most applications don't need Kubernetes API access.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet|Pod)' "$f" 2>/dev/null; then
-            # Only warn if automountServiceAccountToken is not explicitly set
-            if ! grep -qE 'automountServiceAccountToken:' "$f" 2>/dev/null; then
-              echo "$f: automountServiceAccountToken not explicitly configured"
-            fi
-          fi
-        done
     note: |
       From Polaris: "Fails when automountServiceAccountToken is automounted."
       Set to false unless the workload needs to interact with the Kubernetes API.
@@ -1012,7 +822,7 @@ rules:
   S9:
     title: Network Policy
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -1024,17 +834,6 @@ rules:
     description: |
       Create NetworkPolicies to restrict pod-to-pod communication.
       By default, all pods can communicate with each other.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qE 'kind:\s*(Deployment|StatefulSet|DaemonSet)' "$f" 2>/dev/null; then
-            dir=$(dirname "$f")
-            if ! grep -rqE "kind:\s*NetworkPolicy" "$dir" 2>/dev/null; then
-              echo "$f: no NetworkPolicy found in directory"
-            fi
-          fi
-        done
     note: |
       From kube-score: "Makes sure that all Pods are targeted by a NetworkPolicy."
       NetworkPolicies implement zero-trust networking within the cluster.
@@ -1056,7 +855,7 @@ rules:
   S10:
     title: Probes Must Differ
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -1068,21 +867,6 @@ rules:
     description: |
       Liveness and readiness probes should not be identical.
       Identical probes can cause cascading failures during startup.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qE 'livenessProbe:' "$f" 2>/dev/null && grep -qE 'readinessProbe:' "$f" 2>/dev/null; then
-            liveness=$(grep -A5 'livenessProbe:' "$f" 2>/dev/null | head -6)
-            readiness=$(grep -A5 'readinessProbe:' "$f" 2>/dev/null | head -6)
-            # Simple check - if paths/ports are same
-            liveness_path=$(echo "$liveness" | grep -oE 'path:\s*\S+' | head -1)
-            readiness_path=$(echo "$readiness" | grep -oE 'path:\s*\S+' | head -1)
-            if [ -n "$liveness_path" ] && [ "$liveness_path" = "$readiness_path" ]; then
-              echo "$f: liveness and readiness probes appear identical"
-            fi
-          fi
-        done
     note: |
       From kube-score: "Makes sure that readiness and liveness probes are not
       identical." Use different endpoints or different timing settings.

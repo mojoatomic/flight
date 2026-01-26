@@ -27,6 +27,10 @@ indentation. Tabs will cause parse errors or unpredictable behavior.
 2. **Duplicate Keys** - Duplicate keys in the same mapping are invalid. The second value silently
 overwrites the first, causing data loss with no warning.
 
+
+   > YAML 1.2 spec states duplicate keys are an error, but many parsers
+silently accept them. This causes subtle bugs when the wrong value wins.
+
    ```
    // BAD
    config:
@@ -164,6 +168,11 @@ They must be quoted if you want the literal string.
 
 7. **Inconsistent Indentation** - Mixed indentation levels (e.g., 2 spaces then 4 spaces) cause parse
 errors or incorrect nesting. Use consistent indentation throughout.
+
+
+   > YAML is whitespace-sensitive. Pick one indentation size (2 spaces is
+common) and use it consistently. Mixed indentation causes silent
+misinterpretation of document structure.
 
    ```
    // BAD

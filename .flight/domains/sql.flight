@@ -108,22 +108,9 @@ rules:
           accessed: "2026-01-20"
           quote: "Always use parameterized queries or prepared statements"
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          case "$f" in
-            *.js|*.ts|*.tsx)
-              # Template literals with SQL keywords
-              grep -En '\`[^\`]*SELECT.*\$\{|\`[^\`]*INSERT.*\$\{|\`[^\`]*UPDATE.*\$\{|\`[^\`]*DELETE.*\$\{' "$f" 2>/dev/null
-              # String concat with SQL
-              grep -En "SELECT.*\"\\s*\\+|INSERT.*\"\\s*\\+|UPDATE.*\"\\s*\\+|DELETE.*\"\\s*\\+" "$f" 2>/dev/null
-              ;;
-            *.py)
-              # Python f-strings with SQL
-              grep -En 'f"[^"]*SELECT.*\{|f"[^"]*INSERT.*\{|f"[^"]*UPDATE.*\{' "$f" 2>/dev/null
-              ;;
-          esac
-        done | head -10
+      type: grep
+      pattern: '\`[^\`]*(SELECT|INSERT|UPDATE|DELETE).*\$\{|(SELECT|INSERT|UPDATE|DELETE).*"\s*\+|f"[^"]*(SELECT|INSERT|UPDATE).*\{'
+      flags: -Ein
     examples:
       bad:
         - 'const query = `SELECT * FROM users WHERE id = ${userId}`;'
@@ -149,14 +136,10 @@ rules:
           accessed: "2026-01-20"
           quote: "Without WHERE, all rows are deleted"
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # DELETE FROM table; without WHERE
-          grep -Ein 'DELETE\s+FROM\s+\w+\s*;' "$f" 2>/dev/null
-          # UPDATE without WHERE on same line (basic check)
-          grep -Ein 'UPDATE\s+\w+\s+SET\s+.*;' "$f" 2>/dev/null | grep -iv 'WHERE'
-        done | head -5
+      type: grep
+      pattern: 'DELETE\s+FROM\s+\w+\s*;'
+      flags: -Ein
+    note: Also check for UPDATE without WHERE manually - complex multi-line pattern
     examples:
       bad:
         - "UPDATE users SET status = 'inactive';"
@@ -262,16 +245,16 @@ rules:
         - url: "https://owasp.org/www-community/password-storage-cheat-sheet"
           accessed: "2026-01-20"
           quote: "Never store plaintext passwords"
+    only_paths:
+      - '**/*.sql'
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          case "$f" in
-            *.sql)
-              grep -Ein 'password\s+(varchar|text|char)' "$f" 2>/dev/null | grep -iv 'password_hash\|password_digest\|hashed_password'
-              ;;
-          esac
-        done
+      type: grep
+      pattern: 'password\s+(varchar|text|char)'
+      flags: -Ein
+      ignore_when:
+        - 'password_hash'
+        - 'password_digest'
+        - 'hashed_password'
     note: Only checks .sql files for password column definitions.
     examples:
       bad:
@@ -296,16 +279,15 @@ rules:
         - url: "https://www.postgresql.org/docs/current/datatype-datetime.html"
           accessed: "2026-01-20"
           quote: "timestamptz is recommended for storing timestamps"
+    only_paths:
+      - '**/*.sql'
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          case "$f" in
-            *.sql)
-              grep -Ein '\stimestamp\s' "$f" 2>/dev/null | grep -iv 'timestamptz\|timestamp with time zone'
-              ;;
-          esac
-        done
+      type: grep
+      pattern: '\stimestamp\s'
+      flags: -Ein
+      ignore_when:
+        - 'timestamptz'
+        - 'timestamp with time zone'
     examples:
       bad:
         - "created_at timestamp NOT NULL"
@@ -327,16 +309,12 @@ rules:
         - url: "https://www.postgresql.org/docs/current/datatype-numeric.html"
           accessed: "2026-01-20"
           quote: "Use numeric types for monetary amounts"
+    only_paths:
+      - '**/*.sql'
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          case "$f" in
-            *.sql)
-              grep -Ein '(price|cost|total|amount|balance|fee|rate)\s+(float|real|double)' "$f" 2>/dev/null
-              ;;
-          esac
-        done
+      type: grep
+      pattern: '(price|cost|total|amount|balance|fee|rate)\s+(float|real|double)'
+      flags: -Ein
     examples:
       bad:
         - "price float NOT NULL"
@@ -364,16 +342,14 @@ rules:
         - url: "https://www.postgresql.org/docs/current/datatype-boolean.html"
           accessed: "2026-01-20"
           quote: "NULL creates three-valued logic complexity"
+    only_paths:
+      - '**/*.sql'
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          case "$f" in
-            *.sql)
-              grep -Ein '\s+boolean\s*[,)]' "$f" 2>/dev/null | grep -iv 'NOT NULL'
-              ;;
-          esac
-        done
+      type: grep
+      pattern: '\s+boolean\s*[,)]'
+      flags: -Ein
+      ignore_when:
+        - 'NOT NULL'
     examples:
       bad:
         - "is_active boolean"
@@ -397,20 +373,13 @@ rules:
         - url: "https://supabase.com/docs/guides/database/postgres/row-level-security"
           accessed: "2026-01-20"
           quote: "Enable RLS on all user-scoped tables"
+    only_paths:
+      - '**/*.sql'
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          case "$f" in
-            *.sql)
-              if grep -qi 'user_id.*REFERENCES\|user_id\s+uuid' "$f"; then
-                if ! grep -qi 'ENABLE ROW LEVEL SECURITY' "$f"; then
-                  echo "$f: has user_id but no RLS"
-                fi
-              fi
-              ;;
-          esac
-        done
+      type: requires
+      trigger: 'user_id.*(REFERENCES|uuid)'
+      requirement: 'ENABLE ROW LEVEL SECURITY'
+      message: "has user_id but no RLS"
     examples:
       bad:
         - |
@@ -431,7 +400,7 @@ rules:
   S3:
     title: Missing Index on Foreign Key
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Foreign key columns should have indexes for efficient JOINs and
       CASCADE operations. Without indexes, these operations scan full tables.
@@ -443,21 +412,6 @@ rules:
         - url: "https://www.postgresql.org/docs/current/ddl-constraints.html"
           accessed: "2026-01-20"
           quote: "Index foreign key columns for performance"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          case "$f" in
-            *.sql)
-              grep -Eo '[a-z_]+\s+uuid\s+REFERENCES' "$f" 2>/dev/null | while read -r line; do
-                col=$(echo "$line" | awk '{print $1}')
-                if ! grep -qi "INDEX.*$col" "$f"; then
-                  echo "$f: $col has FK but no index"
-                fi
-              done
-              ;;
-          esac
-        done | head -5
     examples:
       bad:
         - |
@@ -476,7 +430,7 @@ rules:
   S4:
     title: N+1 Query Pattern
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Avoid executing queries inside loops (N+1 pattern). This causes
       excessive database round trips. Use JOINs or batch queries instead.
@@ -488,16 +442,6 @@ rules:
         - url: "https://use-the-index-luke.com/sql/join"
           accessed: "2026-01-20"
           quote: "Batch queries or JOINs eliminate N+1 problems"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          case "$f" in
-            *.js|*.ts|*.tsx|*.py)
-              awk '/for\s*\(|while\s*\(|for .* in/{inloop=5} inloop>0{inloop--; if(/await.*(query|select|execute|from\()/) print FILENAME":"NR": "$0}' "$f"
-              ;;
-          esac
-        done | head -5
     examples:
       bad:
         - |
@@ -528,21 +472,14 @@ rules:
         - url: "https://www.postgresql.org/docs/current/tutorial-transactions.html"
           accessed: "2026-01-20"
           quote: "Transactions ensure atomicity of related operations"
+    skip_paths:
+      - '**/*.sql'
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          case "$f" in
-            *.js|*.ts|*.tsx|*.py)
-              inserts=$(grep -c 'INSERT INTO\|UPDATE.*SET' "$f" 2>/dev/null || echo 0)
-              if [ "$inserts" -gt 2 ]; then
-                if ! grep -qi 'BEGIN\|transaction\|\.transaction' "$f"; then
-                  echo "$f: $inserts writes without transaction"
-                fi
-              fi
-              ;;
-          esac
-        done
+      type: requires
+      trigger: 'INSERT INTO|UPDATE.*SET'
+      trigger_count: 3
+      requirement: 'BEGIN|transaction|\.transaction'
+      message: "multiple writes without transaction"
     examples:
       bad:
         - |

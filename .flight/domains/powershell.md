@@ -63,6 +63,10 @@ embedded scripts. CVE-2025-54100 exploits this for RCE. Windows PowerShell 5.1
 requires -UseBasicParsing explicitly; PowerShell 7+ defaults to basic parsing
 but explicit is safer for cross-version scripts.
 
+
+   > December 2025 CVE-2025-54100 patches added security prompts for unsafe parsing.
+Always use -UseBasicParsing for automation scripts that run unattended.
+
    ```
    // BAD
    $response = Invoke-WebRequest $url
@@ -206,6 +210,14 @@ mistake that causes subtle bugs.
 1. **Set-StrictMode Required** - Scripts must enable strict mode to catch undefined variables and other
 common mistakes early. Use Set-StrictMode -Version Latest.
 
+
+   > Strict mode catches: uninitialized variables, non-existent properties,
+function calls with wrong syntax, and more. Essential for production scripts.
+
+CAVEAT: -Version Latest is non-deterministic. A script written for PS 5.1
+using -Version Latest may fail under PS 7+ due to stricter rules. For maximum
+portability, use -Version 3.0 (highest defined level as of Jan 2026).
+
    ```
    Required:
    Set-StrictMode -Version Latest
@@ -214,6 +226,10 @@ common mistakes early. Use Set-StrictMode -Version Latest.
 
 2. **ErrorActionPreference Stop for Critical Scripts** - Production scripts should set $ErrorActionPreference = 'Stop' or use
 -ErrorAction Stop on critical commands to catch failures.
+
+
+   > PowerShell's default is Continue, which silently proceeds after errors.
+For automation, this leads to cascading failures and corrupted state.
 
    ```
    $ErrorActionPreference = "Stop"
@@ -273,6 +289,10 @@ when the recovery action differs.
 
 5. **Approved Verbs for Functions** - Function names must use approved PowerShell verbs (Get, Set, New, Remove, etc.)
 to maintain consistency with the PowerShell ecosystem.
+
+
+   > Run Get-Verb to see the full list of approved verbs. Use the closest match
+or consider if your function is doing too much (single responsibility).
 
    ```
    // BAD

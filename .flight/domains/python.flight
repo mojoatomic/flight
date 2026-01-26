@@ -124,7 +124,7 @@ rules:
   N2:
     title: "except Exception: pass"
     severity: NEVER
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-20"
       confidence: high
@@ -136,12 +136,6 @@ rules:
     description: >
       Never silently swallow exceptions with 'except Exception: pass'.
       Silent failures hide bugs and make debugging impossible.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          awk '/except\s+(Exception|BaseException)/ { getline; if (/^\s*pass\s*$/) print FILENAME":"NR-1": except with pass" }' "$f"
-        done
     examples:
       bad:
         - |
@@ -292,7 +286,7 @@ rules:
   N7:
     title: print() Outside __main__
     severity: NEVER
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-20"
       confidence: high
@@ -304,16 +298,6 @@ rules:
     description: >
       Never use print() for logging outside of __main__ blocks.
       Use the logging module for proper log levels and context.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          awk '
-          /__name__.*__main__/ { in_main=1 }
-          /^[^ ]/ && in_main { in_main=0 }
-          /print\(/ && !in_main && !/# noqa/ { print FILENAME":"NR": "$0 }
-          ' "$f"
-        done | head -10
     examples:
       bad:
         - 'print(f"Processing user {user_id}")'
@@ -358,7 +342,7 @@ rules:
   N9:
     title: Deeply Nested Conditionals
     severity: NEVER
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-20"
       confidence: high
@@ -370,19 +354,6 @@ rules:
     description: >
       Never nest conditionals more than 3 levels deep.
       Use early returns to flatten the structure.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          awk '
-          /^\s+if / {
-            spaces = length($0) - length(gensub(/^\s+/, "", "g", $0))
-            if (spaces > 16) {
-              print FILENAME":"NR": deeply nested ("int(spaces/4)" levels)"
-            }
-          }
-          ' "$f"
-        done | head -5
     examples:
       bad:
         - |
@@ -660,11 +631,12 @@ rules:
       Public functions should have type hints for parameters and
       return values to enable static analysis and documentation.
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          grep -n '^def [a-z]' "$f" | grep -v '\->' | grep -v '__' | head -3
-        done
+      type: grep
+      pattern: '^def [a-z][a-z_]*\([^)]*\):'
+      flags: -En
+      ignore_when:
+        - '->'
+        - '__'
     examples:
       bad:
         - |
@@ -691,15 +663,10 @@ rules:
       Scripts with a main() function should have an
       'if __name__ == "__main__":' guard.
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -q '^def main' "$f"; then
-            if ! grep -q '__name__.*__main__' "$f"; then
-              echo "$f: has main() but no __name__ guard"
-            fi
-          fi
-        done
+      type: requires
+      trigger: '^def main'
+      requirement: '__name__.*__main__'
+      message: "has main() but no __name__ guard"
     examples:
       good:
         - |
@@ -726,15 +693,10 @@ rules:
       Prefer pathlib over os.path for file operations.
       pathlib provides a cleaner, more object-oriented API.
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -q 'os.path' "$f"; then
-            if ! grep -q 'pathlib' "$f"; then
-              echo "$f: uses os.path, consider pathlib"
-            fi
-          fi
-        done
+      type: requires
+      trigger: 'os\.path'
+      requirement: 'pathlib'
+      message: "uses os.path, consider pathlib"
     examples:
       bad:
         - |
@@ -748,7 +710,7 @@ rules:
   S6:
     title: Use logging Module
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-20"
       confidence: high
@@ -760,16 +722,6 @@ rules:
     description: >
       Large files (>50 lines) should use the logging module
       for proper log levels and configuration.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if [ $(wc -l < "$f") -gt 50 ]; then
-            if ! grep -q 'import logging\|from logging' "$f"; then
-              echo "$f: large file without logging"
-            fi
-          fi
-        done
     examples:
       good:
         - |
@@ -784,7 +736,7 @@ rules:
   S7:
     title: Docstrings on Public Functions
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-20"
       confidence: high
@@ -796,19 +748,6 @@ rules:
     description: >
       Public functions should have docstrings explaining their
       purpose, arguments, and return values.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          awk '
-          /^def [a-z][a-z_]+\(/ {
-            fname=$0; getline;
-            if ($0 !~ /"""/ && $0 !~ /\x27\x27\x27/) {
-              print FILENAME":"NR-1": "fname" - no docstring"
-            }
-          }
-          ' "$f" | head -3
-        done
     examples:
       good:
         - |

@@ -86,7 +86,7 @@ rules:
   N1:
     title: Queries Without orgId (Multi-tenant)
     severity: NEVER
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-20"
       confidence: high
@@ -98,25 +98,6 @@ rules:
     description: >
       All data queries must include orgId for tenant isolation. Queries without
       orgId can leak data between tenants in multi-tenant applications.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Skip test files and schema files
-          if [[ "$f" == *".test."* ]] || [[ "$f" == *".spec."* ]] || [[ "$f" == *"schema.prisma"* ]]; then
-            continue
-          fi
-          # Check server files that query data
-          if [[ "$f" == *"/api/"* ]] || [[ "$f" == *"/actions/"* ]] || [[ "$f" == *".server."* ]]; then
-            # If file has prisma queries (findMany, findFirst, findUnique, etc)
-            if grep -qE "prisma\.[a-z]+\.(findMany|findFirst|findUnique|create|update|delete|upsert)" "$f" 2>/dev/null; then
-              # Should have orgId in the file
-              if ! grep -qE "orgId|organization_id|organizationId" "$f" 2>/dev/null; then
-                echo "$f: Prisma query without orgId filter"
-              fi
-            fi
-          fi
-        done
     note: |
       In multi-tenant SaaS, the organization is the tenant boundary:
       - Data belongs to organizations, not individual users
@@ -175,7 +156,7 @@ rules:
   N3:
     title: N+1 Query Pattern
     severity: NEVER
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-20"
       confidence: high
@@ -187,31 +168,6 @@ rules:
     description: >
       Fetching related data in loops instead of using include creates N+1 queries.
       This causes severe performance issues as the number of records grows.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Skip test files
-          if [[ "$f" == *".test."* ]] || [[ "$f" == *".spec."* ]]; then
-            continue
-          fi
-          # Look for patterns like: for/forEach with prisma query inside
-          # This is a heuristic check - looks for loops followed by prisma calls
-          awk '
-          /for\s*\(|forEach\s*\(|\.map\s*\(/ {
-            in_loop = 1
-            loop_line = NR
-          }
-          in_loop && /prisma\.[a-z]+\.(findMany|findFirst|findUnique)/ {
-            if (NR - loop_line < 10) {
-              print FILENAME":"NR": Potential N+1 query - prisma call inside loop"
-            }
-          }
-          /^\s*\}/ && in_loop {
-            in_loop = 0
-          }
-          ' "$f" 2>/dev/null
-        done
     note: |
       The N+1 problem occurs when you query in a loop:
 
@@ -244,7 +200,7 @@ rules:
   N4:
     title: Unhandled Prisma Errors
     severity: NEVER
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-20"
       confidence: high
@@ -256,24 +212,6 @@ rules:
     description: >
       Prisma throws specific error codes (P2002, P2025, etc.) that need handling.
       Generic catch blocks hide the actual error and provide poor user experience.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Skip test files
-          if [[ "$f" == *".test."* ]] || [[ "$f" == *".spec."* ]]; then
-            continue
-          fi
-          # Check files with prisma create/update/delete
-          if grep -qE "prisma\.[a-z]+\.(create|update|delete|upsert)" "$f" 2>/dev/null; then
-            # Should have PrismaClientKnownRequestError or error code handling
-            if grep -qE "catch\s*\(" "$f" 2>/dev/null; then
-              if ! grep -qE "PrismaClientKnownRequestError|e\.code|error\.code|P2002|P2025|P2003|P2014" "$f" 2>/dev/null; then
-                echo "$f: Prisma mutation with generic error handling"
-              fi
-            fi
-          fi
-        done
     note: |
       Always handle specific Prisma error codes:
 
@@ -319,7 +257,7 @@ rules:
   N5:
     title: New PrismaClient Per Request
     severity: NEVER
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-20"
       confidence: high
@@ -331,21 +269,6 @@ rules:
     description: >
       Creating PrismaClient instances per request exhausts database connections.
       Use a singleton pattern to reuse the client across requests.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Skip the singleton file itself (usually lib/prisma.ts or db.ts)
-          if [[ "$f" == *"lib/prisma"* ]] || [[ "$f" == *"lib/db"* ]] || [[ "$f" == *"prisma/client"* ]]; then
-            continue
-          fi
-          # Check for new PrismaClient() in request handlers
-          if [[ "$f" == *"/api/"* ]] || [[ "$f" == *"/actions/"* ]] || [[ "$f" == *"route.ts"* ]]; then
-            if grep -qE "new PrismaClient\(\)" "$f" 2>/dev/null; then
-              grep -Hn "new PrismaClient()" "$f"
-            fi
-          fi
-        done
     note: |
       Creating PrismaClient per request exhausts connection pool.
       Use the singleton pattern:
@@ -403,7 +326,7 @@ rules:
   N7:
     title: Missing Unique Constraint Handling
     severity: NEVER
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-20"
       confidence: high
@@ -415,22 +338,6 @@ rules:
     description: >
       create() without handling unique violations crashes on duplicate data.
       Either use upsert or catch P2002 errors.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Skip test files
-          if [[ "$f" == *".test."* ]] || [[ "$f" == *".spec."* ]]; then
-            continue
-          fi
-          # Check files with prisma.*.create
-          if grep -qE "prisma\.[a-z]+\.create\s*\(" "$f" 2>/dev/null; then
-            # Should have upsert, P2002 handling, or try-catch
-            if ! grep -qE "upsert|P2002|catch|try" "$f" 2>/dev/null; then
-              grep -Hn "\.create\s*(" "$f" | head -3
-            fi
-          fi
-        done
     note: |
       create() throws P2002 on unique constraint violations.
       Handle this with upsert or catch:
@@ -553,7 +460,7 @@ rules:
   M4:
     title: Singleton Client Pattern
     severity: MUST
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-20"
       confidence: high
@@ -565,28 +472,6 @@ rules:
     description: >
       Use the global singleton pattern for PrismaClient, not per-request
       instantiation. This is critical for connection pool management.
-    check:
-      type: script
-      code: |
-        # Check if there's a singleton pattern in the codebase
-        found_singleton=0
-        for f in "$@"; do
-          if grep -qE "globalThis.*prisma|global.*prisma.*PrismaClient" "$f" 2>/dev/null; then
-            found_singleton=1
-            break
-          fi
-        done
-        # Check if there are any prisma imports
-        has_prisma=0
-        for f in "$@"; do
-          if grep -qE "@prisma/client|PrismaClient" "$f" 2>/dev/null; then
-            has_prisma=1
-            break
-          fi
-        done
-        if [[ $has_prisma -eq 1 ]] && [[ $found_singleton -eq 0 ]]; then
-          echo "No PrismaClient singleton pattern found (expected in lib/prisma.ts or similar)"
-        fi
     note: |
       Create a singleton in lib/prisma.ts:
 
@@ -627,7 +512,7 @@ rules:
   M6:
     title: Include orgId in Schema
     severity: MUST
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-20"
       confidence: high
@@ -639,35 +524,6 @@ rules:
     description: >
       All tenant-scoped models must have an orgId field for multi-tenant
       data isolation. This is the foundation of tenant security.
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if [[ "$f" == *"schema.prisma"* ]]; then
-            # Find models that look like tenant data (not User, Organization, etc)
-            # Check if they have orgId
-            awk '
-            /^model [A-Z]/ {
-              model = $2
-              in_model = 1
-              has_orgid = 0
-              # Skip system models
-              if (model ~ /^(User|Organization|Account|Session|VerificationToken)$/) {
-                in_model = 0
-              }
-            }
-            in_model && /orgId|organizationId/ {
-              has_orgid = 1
-            }
-            in_model && /^}/ {
-              if (!has_orgid && model !~ /^(User|Organization|Account|Session|VerificationToken|Membership)$/) {
-                print FILENAME": Model "model" may need orgId field for multi-tenant isolation"
-              }
-              in_model = 0
-            }
-            ' "$f" 2>/dev/null
-          fi
-        done
     note: |
       Add orgId to all tenant-scoped models:
 

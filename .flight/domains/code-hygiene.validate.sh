@@ -103,10 +103,7 @@ check "N4: Redundant Boolean Comparisons" \
 
 # N5: Magic Number Calculations
 check "N5: Magic Number Calculations" \
-    bash -c 'for file in "$@"; do
-grep -HnE '"'"'60\s*\*\s*60|24\s*\*\s*60|1000\s*\*\s*60|7\s*\*\s*24|1024\s*\*\s*1024'"'"' "$file" 2>/dev/null | \
-  grep -v '"'"'[A-Z_]\{2,\}\s*='"'"'
-done' _ "${FILES[@]}"
+    bash -c '(grep -HnE "60\\s*\\*\\s*60|24\\s*\\*\\s*60|1000\\s*\\*\\s*60|7\\s*\\*\\s*24|1024\\s*\\*\\s*1024" "$@" | grep -v "[A-Z_]\\{2,\\}\\s*=") || true' _ "${FILES[@]}"
 
 # N6: Generic Function Names
 check "N6: Generic Function Names" \
@@ -114,24 +111,22 @@ check "N6: Generic Function Names" \
 
 # N7: Single-Letter Variables Outside Loops
 check "N7: Single-Letter Variables Outside Loops" \
-    bash -c 'for file in "$@"; do
-# Find single letter assignments not in for/while lines
-# Exclude i, j for loops and x for simple lambdas
-grep -HnE '"'"'^\s*(const|let|var|)\s+[a-hk-wyz]\s*='"'"' "$file" 2>/dev/null | \
-  grep -v '"'"'for\s*('"'"' | grep -v '"'"'while\s*('"'"'
-done' _ "${FILES[@]}"
+    bash -c '(grep -HnE "^\\s*(const|let|var|)\\s+[a-hk-wyz]\\s*=" "$@" | grep -v "for\\s*(" | grep -v "while\\s*(") || true' _ "${FILES[@]}"
 
 # N8: Console/Print Debugging in Production Code
-check "N8: Console/Print Debugging in Production Code" \
-    bash -c 'for file in "$@"; do
-# Skip test files
-if [[ "$file" == *"_test."* ]] || [[ "$file" == *".test."* ]] || \
-   [[ "$file" == *"test_"* ]] || [[ "$file" == *"/tests/"* ]] || \
-   [[ "$file" == *"_spec."* ]] || [[ "$file" == *".spec."* ]]; then
-  exit 0
+# Path filtering for this rule
+FILTERED_FILES=()
+for __f in "${FILES[@]}"; do
+    if [[ "$__f" == *_test.* ]] || [[ "$__f" == *.test.* ]] || [[ "$__f" == *test_* ]] || [[ "$__f" == *tests/* ]] || [[ "$__f" == *_spec.* ]] || [[ "$__f" == *.spec.* ]]; then continue; fi
+    FILTERED_FILES+=("$__f")
+done
+if [[ ${#FILTERED_FILES[@]} -gt 0 ]]; then
+    check "N8: Console/Print Debugging in Production Code" \
+        grep -En "console\\.(log|warn|error)\\s*\\(|print\\s*\\(|System\\.out\\.print|println!\\s*\\(|fmt\\.Print" "${FILTERED_FILES[@]}"
+else
+    green "✅ N8: Console/Print Debugging in Production Code (skipped - no matching files after path filter)"
+    ((PASS++)) || true
 fi
-grep -HnE '"'"'console\.(log|warn|error)\s*\(|print\s*\(|System\.out\.print|println!\s*\(|fmt\.Print'"'"' "$file" 2>/dev/null || true
-done' _ "${FILES[@]}"
 
 # N9: Negated Boolean Names
 check "N9: Negated Boolean Names" \
@@ -157,41 +152,23 @@ printf '\n%s\n' "## MUST Rules"
 
 # M1: Boolean Variables Use Proper Prefixes
 check "M1: Boolean Variables Use Proper Prefixes" \
-    bash -c 'for file in "$@"; do
-# Find boolean assignments without proper prefix
-grep -HnE '"'"'(const|let|var)\s+[a-z]+\s*=\s*(true|false)\s*;'"'"' "$file" 2>/dev/null | \
-  grep -vE '"'"'(is|has|can|should|will|was|did|does)[A-Z]'"'"'
-done' _ "${FILES[@]}"
+    bash -c '(grep -HnE "(const|let|var)\\s+[a-z]+\\s*=\\s*(true|false)\\s*;" "$@" | grep -v "(is|has|can|should|will|was|did|does)[A-Z]") || true' _ "${FILES[@]}"
 
 # M2: Collections Use Plural Names
 check "M2: Collections Use Plural Names" \
-    bash -c 'for file in "$@"; do
-# Find array literals assigned to singular names
-grep -HnE '"'"'(const|let|var)\s+(user|item|order|product|result|file|row|record|entry)\s*=\s*\['"'"' "$file" 2>/dev/null || true
-done' _ "${FILES[@]}"
+    grep -HnE "(const|let|var)\\s+(user|item|order|product|result|file|row|record|entry)\\s*=\\s*\\[" "${FILES[@]}"
 
 # M3: Constants Use UPPER_SNAKE_CASE
 check "M3: Constants Use UPPER_SNAKE_CASE" \
-    bash -c 'for file in "$@"; do
-# Find const with numeric value not in UPPER_CASE
-grep -HnE '"'"'const\s+[a-z][a-zA-Z]*\s*=\s*[0-9]+\s*;'"'"' "$file" 2>/dev/null | \
-  grep -vE '"'"'const\s+[A-Z_]+\s*='"'"'
-done' _ "${FILES[@]}"
+    bash -c '(grep -HnE "const\\s+[a-z][a-zA-Z]*\\s*=\\s*[0-9]+\\s*;" "$@" | grep -v "const\\s+[A-Z_]+\\s*=") || true' _ "${FILES[@]}"
 
 # M4: Error Messages Include Context
 check "M4: Error Messages Include Context" \
-    bash -c 'for file in "$@"; do
-# Find short/generic error messages (less than 15 chars)
-grep -HnE "throw\s+new\s+Error\(['"'"'\"][^'"'"'\"]{0,15}['"'"'\"]|raise\s+.*Exception\(['"'"'\"][^'"'"'\"]{0,15}['"'"'\"]" "$file" 2>/dev/null || true
-done' _ "${FILES[@]}"
+    grep -HnE "throw\\s+new\\s+Error\\(['\"][^'\"]{0,15}['\"]|raise\\s+.*Exception\\(['\"][^'\"]{0,15}['\"]" "${FILES[@]}"
 
 # M5: Function Names Are Verb Phrases
 check "M5: Function Names Are Verb Phrases" \
-    bash -c 'for file in "$@"; do
-# Find function names that don'"'"'t start with common verb prefixes
-grep -HnE '"'"'^(export\s+)?(async\s+)?function\s+[a-z]+\s*\('"'"' "$file" 2>/dev/null | \
-  grep -vE '"'"'function\s+(get|set|fetch|load|save|send|create|update|delete|remove|add|find|check|validate|is|has|can|should|handle|process|render|init|start|stop|on|do|make|build|parse|format|convert|to|from|ensure|assert|verify|compute|calculate|generate|transform|map|filter|reduce|sort|merge|split|join|open|close|read|write|run|execute|apply|reset|clear|register|subscribe|unsubscribe|publish|emit|dispatch|trigger|mount|unmount|connect|disconnect|enable|disable|show|hide|toggle|select|deselect|activate|deactivate|delay|wait|sleep|pause|retry|poll|defer|schedule|queue|batch|throttle|debounce)([A-Z]|\s*\()'"'"'
-done' _ "${FILES[@]}"
+    bash -c '(grep -HnE "^(export\\s+)?(async\\s+)?function\\s+[a-z]+\\s*\\(" "$@" | grep -v "function\\s+(get|set|fetch|load|save|send|create|update|delete|remove|add|find|check|validate|is|has|can|should|handle|process|render|init|start|stop|on|do|make|build|parse|format|convert|to|from|ensure|assert|verify|compute|calculate|generate|transform|map|filter|reduce|sort|merge|split|join|open|close|read|write|run|execute|apply|reset|clear|register|subscribe|unsubscribe|publish|emit|dispatch|trigger|mount|unmount|connect|disconnect|enable|disable|show|hide|toggle|select|deselect|activate|deactivate|delay|wait|sleep|pause|retry|poll|defer|schedule|queue|batch|throttle|debounce)([A-Z]|\\s*\\()") || true' _ "${FILES[@]}"
 
 printf '\n%s\n' "## Info"
 

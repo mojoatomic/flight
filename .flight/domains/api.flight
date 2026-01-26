@@ -415,16 +415,10 @@ rules:
           accessed: "2026-01-16"
           quote: "List methods must support pagination... next_page_token in response"
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Note: after_id|before_id excluded - N3 forbids exposing internal IDs
-          if grep -qEi "cursor|next_cursor|page_token|offset.*limit|page.*per_page" "$f" 2>/dev/null; then
-            if ! grep -qEi "has_more|next_cursor|prev_cursor|total_pages|total_count|page_info" "$f" 2>/dev/null; then
-              echo "$f: pagination patterns found but no response metadata"
-            fi
-          fi
-        done
+      type: requires
+      trigger: 'cursor|next_cursor|page_token|offset.*limit|page.*per_page'
+      requirement: 'has_more|next_cursor|prev_cursor|total_pages|total_count|page_info'
+      message: "pagination patterns without response metadata"
     examples:
       cursor_based:
         - |
@@ -520,15 +514,10 @@ rules:
           accessed: "2026-01-16"
           quote: "The primary resource created by the request is identified by... a Location header field"
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qEi "status\(201\)|\.created\(" "$f" 2>/dev/null; then
-            if ! grep -qEi "location.*header|header.*location|\.header\(.location" "$f" 2>/dev/null; then
-              echo "$f: 201 responses found but no Location header"
-            fi
-          fi
-        done
+      type: requires
+      trigger: 'status\(201\)|\.created\('
+      requirement: 'location.*header|header.*location|\.header\(.*location'
+      message: "201 response without Location header"
     examples:
       bad:
         - 'res.status(201).json(newUser)'
@@ -635,7 +624,7 @@ rules:
   S4:
     title: Consistent Field Naming Convention
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: Use snake_case or camelCase consistently, never mix
     provenance:
       last_verified: "2026-01-16"
@@ -648,14 +637,6 @@ rules:
         - url: "https://github.com/microsoft/api-guidelines/blob/vNext/Guidelines.md"
           accessed: "2026-01-16"
           quote: "Property names should be camelCase"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qE '"[a-z]+_[a-z]+"' "$f" 2>/dev/null && grep -qE '"[a-z]+[A-Z][a-z]+"' "$f" 2>/dev/null; then
-            echo "$f: mixed snake_case and camelCase"
-          fi
-        done
     examples:
       bad:
         - '{ "user_id": 123, "createdAt": "..." }'
@@ -755,7 +736,7 @@ rules:
   S10:
     title: 202 Accepted for Long-Running Operations
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: Use async pattern for operations > 10 seconds
     provenance:
       last_verified: "2026-01-16"
@@ -765,22 +746,6 @@ rules:
         - url: "https://www.rfc-editor.org/rfc/rfc9110.html#name-202-accepted"
           accessed: "2026-01-16"
           quote: "The 202 status code indicates that the request has been accepted for processing, but the processing has not been completed"
-    check:
-      type: script
-      code: |
-        has_async=false
-        has_202=false
-        for f in "$@"; do
-          if grep -qEi "job|queue|worker|async.*process|background" "$f" 2>/dev/null; then
-            has_async=true
-          fi
-          if grep -qEi "status\(202\)|\.accepted\(" "$f" 2>/dev/null; then
-            has_202=true
-          fi
-        done
-        if $has_async && ! $has_202; then
-          echo "Async/background patterns found but no 202 Accepted responses"
-        fi
     examples:
       response:
         - |
@@ -834,11 +799,17 @@ rules:
           accessed: "2026-01-16"
           quote: "Store config in the environment... strict separation of config from code"
     check:
-      type: script
-      code: |
-        # Find hardcoded URLs, excluding documentation references
-        grep -EHn "https?://[a-zA-Z0-9][a-zA-Z0-9.-]+\.(com|io|net|org|dev|app)" "$@" 2>/dev/null | \
-          grep -vE "localhost|127\.0\.0\.1|example\.(com|org)|rfc-editor\.org|w3\.org|json-schema\.org|@(see|link)" || true
+      type: grep
+      pattern: 'https?://[a-zA-Z0-9][a-zA-Z0-9.-]+\.(com|io|net|org|dev|app)'
+      flags: -EHn
+      ignore_when:
+        - 'localhost'
+        - '127\.0\.0\.1'
+        - 'example\.(com|org)'
+        - 'rfc-editor\.org'
+        - 'w3\.org'
+        - 'json-schema\.org'
+        - '@(see|link)'
     examples:
       bad:
         - 'const apiUrl = "https://api.stripe.com/v1/charges"'
@@ -863,15 +834,10 @@ rules:
           accessed: "2026-01-16"
           quote: "A trace represents the journey of a request through a distributed system"
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qEi "res\.(status\(4|status\(5|json\(.*error" "$f" 2>/dev/null; then
-            if ! grep -qEi "request_id|trace_id|requestId|traceId|x-request-id" "$f" 2>/dev/null; then
-              echo "$f: error responses found but no request/trace ID handling"
-            fi
-          fi
-        done
+      type: requires
+      trigger: 'status\([45][0-9][0-9]\)|\.json\(.*error'
+      requirement: 'request_id|trace_id|requestId|traceId|x-request-id'
+      message: "error responses without request/trace ID handling"
     examples:
       bad:
         - '{ "error": "Something failed" }'

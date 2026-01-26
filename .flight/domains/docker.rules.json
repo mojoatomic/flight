@@ -27,6 +27,34 @@
       }
     },
     {
+      "id": "M2",
+      "title": "Pin Base Image Versions",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "^FROM\\s+[^:@\\s]+\\s*$|^FROM\\s+[^@\\s]+:latest(\\s|$)",
+      "query": null,
+      "message": "Always pin base image versions with specific tags or SHA digests. Using 'latest' or no tag causes unpredictable builds and security issues.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "M3",
+      "title": "Use COPY Instead of ADD for Local Files",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "^ADD\\s+[^h][^\\s]+\\s+",
+      "query": null,
+      "message": "Use COPY for copying local files. ADD has implicit behaviors (tar extraction, URL fetching) that make builds unpredictable. Use ADD only for tar extraction.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
       "id": "M4",
       "title": "MAINTAINER is Deprecated",
       "severity": "MUST",
@@ -34,6 +62,20 @@
       "pattern": "^MAINTAINER\\s+",
       "query": null,
       "message": "MAINTAINER instruction is deprecated. Use LABEL maintainer=\"...\" instead for better metadata handling and OCI compliance.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "M5",
+      "title": "Use JSON Notation for CMD and ENTRYPOINT",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "^(CMD|ENTRYPOINT)\\s+[^\\[]",
+      "query": null,
+      "message": "Use JSON array format (exec form) for CMD and ENTRYPOINT. Shell form invokes a shell wrapper, preventing proper signal handling and PID 1 issues.",
       "provenance": {
         "last_verified": "2026-01-16",
         "confidence": "high",
@@ -90,6 +132,48 @@
       "pattern": "(password|passwd|secret|api_key|apikey|private_key|token)\\s*[=:]\\s*[\"\\047][^\"\\047]+[\"\\047]",
       "query": null,
       "message": "Never hardcode passwords, API keys, or other secrets directly in Dockerfiles. These become permanently visible in image layers and history.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "S1",
+      "title": "Pin Package Versions in apt-get",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "apt-get\\s+install.*\\s[a-z][a-z0-9+-]+(\\s|$)",
+      "query": null,
+      "message": "Pin versions in apt-get install for reproducible builds. Unpinned packages may change between builds, causing subtle breakages.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "S2",
+      "title": "Clean Package Cache in Same Layer",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "^RUN\\s+.*apt-get\\s+install",
+      "query": null,
+      "message": "Remove package manager cache in the same RUN layer as install. Cleaning in a separate layer doesn't reduce image size due to layer caching.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "S8",
+      "title": "Use Specific COPY Targets",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "^COPY\\s+\\.\\s+",
+      "query": null,
+      "message": "Avoid COPY . when possible. Copy only required files to improve cache efficiency and reduce unintended file inclusion.",
       "provenance": {
         "last_verified": "2026-01-16",
         "confidence": "high",

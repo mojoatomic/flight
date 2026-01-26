@@ -105,7 +105,7 @@ rules:
   S1:
     title: Protected Directories Exist
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Protected directories (.flight/, tasks/, .git/, docs/, scripts/)
       should exist after any scaffold operation.
@@ -117,18 +117,6 @@ rules:
         - url: "https://github.com/mojoatomic/flight"
           accessed: "2026-01-20"
           quote: "Flight infrastructure directories must be preserved during scaffold operations"
-    check:
-      type: script
-      code: |
-        missing=""
-        for d in .flight tasks .git; do
-          if [ ! -d "$d" ]; then
-            missing="$missing $d"
-          fi
-        done
-        if [ -n "$missing" ]; then
-          echo "Missing protected directories:$missing"
-        fi
     note: |
       These directories contain project infrastructure that must survive
       scaffold operations. If missing, check git or backups.
@@ -136,7 +124,7 @@ rules:
   S2:
     title: Git Clean Before Scaffold
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Git working directory should be clean (committed or stashed) before
       running scaffold commands.
@@ -148,14 +136,6 @@ rules:
         - url: "https://git-scm.com/docs/git-status"
           accessed: "2026-01-20"
           quote: "Clean working tree enables easy recovery via git checkout"
-    check:
-      type: script
-      code: |
-        if [ -d ".git" ]; then
-          if git status --porcelain 2>/dev/null | grep -q .; then
-            echo "Git has uncommitted changes - commit or stash before scaffolding"
-          fi
-        fi
     note: |
       Clean git state allows recovery via `git checkout` if scaffold
       causes damage. Always commit or stash before scaffolding.

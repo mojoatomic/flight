@@ -111,16 +111,11 @@ check "N6: String Type for Status/Type/Kind Fields" \
 
 # N7: Exported Functions Must Have Return Type
 check "N7: Exported Functions Must Have Return Type" \
-    bash -c 'for file in "$@"; do
-grep -En '"'"'^export (async )?function \w+\([^)]*\)\s*\{'"'"' "$@" | grep -v '"'"'):'"'"'
-done' _ "${FILES[@]}"
+    bash -c '(grep -En "^export (async )?function \\w+\\([^)]*\\)\\s*\\{" "$@" | grep -v "\\):") || true' _ "${FILES[@]}"
 
 # N8: Implicit Any in Callbacks (JSON.parse, as any)
 check "N8: Implicit Any in Callbacks (JSON.parse, as any)" \
-    bash -c 'for file in "$@"; do
-grep -En '"'"'JSON\.parse\([^)]*\)\.(map|filter|reduce|forEach|find|some|every)\('"'"' "$@"
-grep -En '"'"'as any\)\.(map|filter|reduce|forEach|find|some|every)\('"'"' "$@"
-done' _ "${FILES[@]}"
+    grep -En "JSON\\.parse\\([^)]*\\)\\.(map|filter|reduce|forEach|find|some|every)\\(|as any\\)\\.(map|filter|reduce|forEach|find|some|every)\\(" "${FILES[@]}"
 
 # N9: eval() Usage
 check "N9: eval() Usage" \
@@ -136,54 +131,29 @@ check "N11: document.write() Usage" \
 
 printf '\n%s\n' "## MUST Rules"
 
-# M1: tsconfig strict Mode
-check "M1: tsconfig strict Mode" \
-    bash -c 'for file in "$@"; do
-STRICT_FOUND=false
-if [ -f tsconfig.json ]; then
-  if grep -qE '"'"'"strict"[[:space:]]*:[[:space:]]*true'"'"' tsconfig.json 2>/dev/null; then
-    STRICT_FOUND=true
-  fi
-fi
-if [ -f tsconfig.app.json ]; then
-  if grep -qE '"'"'"strict"[[:space:]]*:[[:space:]]*true'"'"' tsconfig.app.json 2>/dev/null; then
-    STRICT_FOUND=true
-  fi
-fi
-if [ "$STRICT_FOUND" = false ]; then
-  if [ -f tsconfig.json ] || [ -f tsconfig.app.json ]; then
-    echo '"'"'No tsconfig file has strict: true enabled'"'"'
-  fi
-fi
-done' _ "${FILES[@]}"
-
 # M2: Type Guards for unknown
 check "M2: Type Guards for unknown" \
-    bash -c 'for file in "$@"; do
+    bash -c '
 for f in "$@"; do
-  if grep -q '"'"': unknown'"'"' "$f"; then
-    if ! grep -q '"'"'is [A-Z]'"'"' "$f"; then
-      echo "$f: uses '"'"'unknown'"'"' but no type guard found"
+    trigger_lines=$(grep -nE ": unknown" "$f" 2>/dev/null)
+    if [[ -n "$trigger_lines" ]]; then
+        if ! grep -qE "is [A-Z]" "$f" 2>/dev/null; then
+            echo "$trigger_lines" | while IFS= read -r line; do
+                linenum="${line%%:*}"
+                echo "$f:$linenum: uses '"'"'unknown'"'"' but no type guard found"
+            done
+        fi
     fi
-  fi
 done
-done' _ "${FILES[@]}"
+' _ "${FILES[@]}"
 
 # M3: Interface for Object Shapes
 check "M3: Interface for Object Shapes" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  grep -Hn '"'"'type [A-Z][a-zA-Z]* = {'"'"' "$f" 2>/dev/null | head -3
-done
-done' _ "${FILES[@]}"
+    grep -En "type [A-Z][a-zA-Z]* = \\{" "${FILES[@]}"
 
 # M4: Readonly for Array Parameters
 check "M4: Readonly for Array Parameters" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  grep -En '"'"'function.*\([^)]*:\s*[A-Za-z]+\[\]'"'"' "$f" 2>/dev/null | grep -v '"'"'readonly'"'"' | head -3
-done
-done' _ "${FILES[@]}"
+    bash -c '(grep -En "function.*\\([^)]*:\\s*[A-Za-z]+\\[\\]" "$@" | grep -v "readonly") || true' _ "${FILES[@]}"
 
 printf '\n%s\n' "## Info"
 

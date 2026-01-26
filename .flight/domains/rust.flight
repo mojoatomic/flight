@@ -162,19 +162,18 @@ rules:
         - url: "https://rust-lang.github.io/api-guidelines/interoperability.html"
           accessed: "2026-01-20"
           quote: "Libraries should return Result for recoverable errors, not panic"
+    skip_paths:
+      - '**/*_test.rs'
+      - '**/tests/**'
+      - '**/main.rs'
+      - '**/bin/**'
+      - '**/examples/**'
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Skip test files, main.rs, and bin files
-          if [[ "$f" == *"_test.rs" ]] || [[ "$f" == *"/tests/"* ]] || \
-             [[ "$f" == *"main.rs" ]] || [[ "$f" == *"/bin/"* ]] || \
-             [[ "$f" == *"/examples/"* ]]; then
-            continue
-          fi
-          grep -HnE 'panic!\s*\(|todo!\s*\(|unimplemented!\s*\(' "$f" 2>/dev/null | \
-            grep -v "unreachable!"
-        done
+      type: grep
+      pattern: 'panic!\s*\(|todo!\s*\(|unimplemented!\s*\('
+      flags: -En
+      ignore_when:
+        - 'unreachable!'
     note: |
       Libraries should let callers decide how to handle errors. Use panic! only for
       bugs (invariant violations) that indicate programmer error, not user input errors.
@@ -204,17 +203,14 @@ rules:
         - url: "https://rust-lang.github.io/rust-clippy/master/#unwrap_used"
           accessed: "2026-01-20"
           quote: "Using .unwrap() is discouraged...use ? or .expect() with descriptive message"
+    skip_paths:
+      - '**/*_test.rs'
+      - '**/tests/**'
+      - '**/examples/**'
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Skip test files
-          if [[ "$f" == *"_test.rs" ]] || [[ "$f" == *"/tests/"* ]] || \
-             [[ "$f" == *"/examples/"* ]]; then
-            continue
-          fi
-          grep -HnE '\.unwrap\(\s*\)' "$f" 2>/dev/null
-        done
+      type: grep
+      pattern: '\.unwrap\(\s*\)'
+      flags: -En
     note: |
       .unwrap() panics without context. In production code, use ? for propagation,
       .expect("reason") for invariants, or match/if-let for handling.
@@ -331,7 +327,7 @@ rules:
   N8:
     title: Mutex Held Across Await Point
     severity: NEVER
-    mechanical: true
+    mechanical: false
     clippy: await_holding_lock
     description: >
       Holding a std::sync::Mutex guard across an .await causes deadlocks.
@@ -344,25 +340,6 @@ rules:
         - url: "https://rust-lang.github.io/rust-clippy/master/#await_holding_lock"
           accessed: "2026-01-20"
           quote: "Holding a MutexGuard across an await point can cause deadlocks"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Look for patterns like: lock() followed by .await without drop
-          if grep -qE '\.lock\(\)' "$f" 2>/dev/null; then
-            if grep -qE '\.await' "$f" 2>/dev/null; then
-              # Check for suspicious patterns (heuristic)
-              awk '
-                /\.lock\(\)/ { in_lock = 1; lock_line = NR }
-                /\.await/ && in_lock {
-                  print FILENAME ":" lock_line ": mutex may be held across await"
-                  in_lock = 0
-                }
-                /drop\(|}\s*$/ { in_lock = 0 }
-              ' "$f" 2>/dev/null
-            fi
-          fi
-        done
     note: |
       std::sync::Mutex is not async-aware. If a task yields while holding the lock,
       it blocks the executor thread, preventing other tasks from releasing the lock.
@@ -402,12 +379,9 @@ rules:
           accessed: "2026-01-20"
           quote: "The ? operator can only be used in functions that return Result or Option"
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Look for verbose match patterns that could use ?
-          grep -HnE 'match\s+\w+\s*\{[^}]*Ok\s*\(\s*\w+\s*\)\s*=>\s*\w+\s*,' "$f" 2>/dev/null
-        done
+      type: grep
+      pattern: 'match\s+\w+\s*\{[^}]*Ok\s*\(\s*\w+\s*\)\s*=>\s*\w+\s*,'
+      flags: -En
     note: |
       The ? operator is the idiomatic way to propagate errors in Rust. It makes
       error paths explicit while keeping code concise.
@@ -438,12 +412,9 @@ rules:
           accessed: "2026-01-20"
           quote: "The value is dropped without being used after cloning"
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Look for .clone() immediately before passing to function or after &
-          grep -HnE '&\w+\.clone\(\)|\.clone\(\)\s*\)' "$f" 2>/dev/null
-        done
+      type: grep
+      pattern: '&\w+\.clone\(\)|\.clone\(\)\s*\)'
+      flags: -En
     note: |
       Cloning has runtime cost. If you're cloning to work around borrow checker
       errors, consider restructuring or using Cow, Rc, or Arc instead.
@@ -562,18 +533,17 @@ rules:
         - url: "https://rust-lang.github.io/api-guidelines/documentation.html"
           accessed: "2026-01-20"
           quote: "Libraries should use log crate for configurable logging"
+    skip_paths:
+      - '**/*_test.rs'
+      - '**/tests/**'
+      - '**/main.rs'
+      - '**/bin/**'
+      - '**/examples/**'
+      - '**/benches/**'
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Skip test files, main.rs, bin files, and examples
-          if [[ "$f" == *"_test.rs" ]] || [[ "$f" == *"/tests/"* ]] || \
-             [[ "$f" == *"main.rs" ]] || [[ "$f" == *"/bin/"* ]] || \
-             [[ "$f" == *"/examples/"* ]] || [[ "$f" == *"/benches/"* ]]; then
-            continue
-          fi
-          grep -HnE 'println!\s*\(|print!\s*\(|eprintln!\s*\(|eprint!\s*\(' "$f" 2>/dev/null
-        done
+      type: grep
+      pattern: 'println!\s*\(|print!\s*\(|eprintln!\s*\(|eprint!\s*\('
+      flags: -En
     note: |
       Library users should control output. Use log::info!, log::debug!, etc.
       or tracing::info!, tracing::debug! for structured logging.
@@ -589,7 +559,7 @@ rules:
   M7:
     title: Blocking Operations in Async Context
     severity: MUST
-    mechanical: true
+    mechanical: false
     clippy: blocking_operations_in_async
     description: >
       Do not perform blocking I/O or CPU-intensive work in async functions.
@@ -602,14 +572,6 @@ rules:
         - url: "https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html"
           accessed: "2026-01-20"
           quote: "Use spawn_blocking for blocking operations in async contexts"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -qE 'async\s+fn' "$f" 2>/dev/null; then
-            grep -HnE 'std::fs::|std::thread::sleep|std::io::stdin|\.read_to_string\(' "$f" 2>/dev/null
-          fi
-        done
     note: |
       Blocking operations in async code block the entire executor thread,
       preventing other tasks from making progress.
@@ -655,7 +617,7 @@ rules:
   M9:
     title: Derive Common Traits
     severity: MUST
-    mechanical: true
+    mechanical: false
     description: >
       Public types should derive common traits: Debug, Clone, PartialEq where
       appropriate. At minimum, all public types should implement Debug.
@@ -667,19 +629,6 @@ rules:
         - url: "https://rust-lang.github.io/api-guidelines/interoperability.html#c-common-traits"
           accessed: "2026-01-20"
           quote: "Types eagerly implement common traits like Debug, Clone, Eq, PartialEq"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          awk '
-            /^pub\s+(struct|enum)\s+\w+/ {
-              if (prev !~ /#\[derive\(.*Debug/) {
-                print FILENAME ":" NR ": public type missing Debug derive"
-              }
-            }
-            { prev = $0 }
-          ' "$f" 2>/dev/null
-        done
     note: |
       From Rust API Guidelines (C-COMMON-TRAITS): Types should eagerly implement
       common traits like Debug, Clone, Eq, PartialEq, Hash, Default.
@@ -717,12 +666,9 @@ rules:
           accessed: "2026-01-20"
           quote: "Iterator methods are more idiomatic and often produce better optimized code"
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Look for patterns like for i in 0..vec.len() { vec[i] }
-          grep -HnE 'for\s+\w+\s+in\s+0\s*\.\.\s*\w+\.len\(\)' "$f" 2>/dev/null
-        done
+      type: grep
+      pattern: 'for\s+\w+\s+in\s+0\s*\.\.\s*\w+\.len\(\)'
+      flags: -En
     note: |
       Iterator methods are idiomatic Rust and often produce better optimized code.
       The compiler can better understand intent with iterators.
@@ -754,12 +700,9 @@ rules:
           accessed: "2026-01-20"
           quote: "A match with a single non-default arm is more clearly written as if let"
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Look for match with only one meaningful arm and _ => {}
-          grep -HnE 'match\s+\w+\s*\{[^}]*_\s*=>\s*\{\s*\}[^}]*\}' "$f" 2>/dev/null
-        done
+      type: grep
+      pattern: 'match\s+\w+\s*\{[^}]*_\s*=>\s*\{\s*\}[^}]*\}'
+      flags: -En
     note: |
       'match' with a single pattern and '_ => {}' is verbose. 'if let' is clearer
       when you only need to handle one case.
@@ -779,7 +722,7 @@ rules:
   S3:
     title: Implement Default for Types with Obvious Defaults
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Types with sensible default values should implement the Default trait.
       This enables ..Default::default() syntax and integration with serde.
@@ -791,20 +734,6 @@ rules:
         - url: "https://rust-lang.github.io/api-guidelines/interoperability.html#c-common-traits"
           accessed: "2026-01-20"
           quote: "Types should implement Default when there's an obvious default value"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Look for pub fn new() that takes no args - might want Default
-          if grep -qE 'pub\s+fn\s+new\s*\(\s*\)\s*->' "$f" 2>/dev/null; then
-            if ! grep -qE 'impl\s+Default\s+for' "$f" 2>/dev/null; then
-              name=$(grep -oE 'impl[^{]+\{[^}]*pub\s+fn\s+new\s*\(' "$f" 2>/dev/null | head -1)
-              if [ -n "$name" ]; then
-                echo "$f: has new() but no Default implementation"
-              fi
-            fi
-          fi
-        done
     note: |
       From Rust API Guidelines: Types should implement Default when there's
       an obvious default value. Use #[derive(Default)] when possible.
@@ -866,13 +795,12 @@ rules:
           accessed: "2026-01-20"
           quote: "Wildcard imports make it unclear which items are being used"
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Skip test modules and prelude imports
-          grep -HnE '^use\s+[^;]+::\*;' "$f" 2>/dev/null | \
-            grep -vE 'prelude::\*|#\[cfg\(test\)\]'
-        done
+      type: grep
+      pattern: '^use\s+[^;]+::\*;'
+      flags: -En
+      ignore_when:
+        - 'prelude::\*'
+        - '#\[cfg\(test\)\]'
     note: |
       Wildcard imports reduce code clarity. Explicit imports document dependencies
       and prevent name collisions.
@@ -932,12 +860,9 @@ rules:
           accessed: "2026-01-20"
           quote: "Large stack arrays can cause stack overflow"
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Look for arrays larger than 256 elements of basic types
-          grep -HnE '\[\s*[a-z0-9_]+\s*;\s*[0-9]{4,}\s*\]' "$f" 2>/dev/null
-        done
+      type: grep
+      pattern: '\[\s*[a-z0-9_]+\s*;\s*[0-9]{4,}\s*\]'
+      flags: -En
     note: |
       The default stack size is limited (usually 2-8MB). Large arrays or
       deeply nested structs can cause stack overflows.

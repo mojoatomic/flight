@@ -86,217 +86,145 @@ printf 'Files: %d\n\n' "${#FILES[@]}"
 printf '\n%s\n' "## NEVER Rules"
 
 # N1: Secret Key in Client Code
-check "N1: Secret Key in Client Code" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Check for secret key in any client-accessible file
-  # Skip files that are clearly server-only (api/, server/, actions/)
-  if [[ "$f" != *"/api/"* ]] && [[ "$f" != *"/server/"* ]] && [[ "$f" != *".server."* ]] && [[ "$f" != *"/actions/"* ]] && [[ "$f" != *"middleware"* ]]; then
-    grep -HnE '"'"'CLERK_SECRET_KEY|secretKey.*clerk'"'"' "$f" 2>/dev/null
-  fi
+# Path filtering for this rule
+FILTERED_FILES=()
+for __f in "${FILES[@]}"; do
+    if [[ "$__f" == *api/* ]] || [[ "$__f" == *server/* ]] || [[ "$__f" == *.server.* ]] || [[ "$__f" == *actions/* ]] || [[ "$__f" == *middleware* ]]; then continue; fi
+    FILTERED_FILES+=("$__f")
 done
-done' _ "${FILES[@]}"
+if [[ ${#FILTERED_FILES[@]} -gt 0 ]]; then
+    check "N1: Secret Key in Client Code" \
+        grep -En "CLERK_SECRET_KEY|secretKey.*clerk" "${FILTERED_FILES[@]}"
+else
+    green "✅ N1: Secret Key in Client Code (skipped - no matching files after path filter)"
+    ((PASS++)) || true
+fi
 
 # N2: Deprecated authMiddleware
 check "N2: Deprecated authMiddleware" \
     grep -En "authMiddleware|from ['\"]@clerk/nextjs['\"].*authMiddleware" "${FILES[@]}"
 
-# N3: auth() in Client Components
-check "N3: auth() in Client Components" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Check if file is a client component
-  if grep -q "'"'"'use client'"'"'" "$f" 2>/dev/null; then
-    # Flag if importing auth from server
-    if grep -qE "from ['"'"'\"]@clerk/nextjs/server['"'"'\"]" "$f" 2>/dev/null; then
-      grep -Hn "from ['"'"'\"]@clerk/nextjs/server['"'"'\"]" "$f"
-    fi
-  fi
-done
-done' _ "${FILES[@]}"
-
 # N4: Synchronous auth() Call in Next.js 15+
 check "N4: Synchronous auth() Call in Next.js 15+" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Find auth() calls that aren'"'"'t awaited or in async context
-  # Look for patterns like: const { userId } = auth() without await
-  grep -HnE "const\s*\{[^}]*\}\s*=\s*auth\(\)" "$f" 2>/dev/null | \
-    grep -v "await"
-done
-done' _ "${FILES[@]}"
+    bash -c '(grep -En "const\\s*\\{[^}]*\\}\\s*=\\s*auth\\(\\)" "$@" | grep -v "await") || true' _ "${FILES[@]}"
 
 # N5: Hardcoded Clerk Keys
 check "N5: Hardcoded Clerk Keys" \
     grep -En "pk_test_[a-zA-Z0-9]+|pk_live_[a-zA-Z0-9]+|sk_test_[a-zA-Z0-9]+|sk_live_[a-zA-Z0-9]+" "${FILES[@]}"
 
 # N6: Missing Webhook Signature Verification
-check "N6: Missing Webhook Signature Verification" \
-    bash -c 'for file in "$@"; do
+# Path filtering for this rule
+FILTERED_FILES=()
+for __f in "${FILES[@]}"; do
+    if ! ( [[ "$__f" == *api/**webhook*/* ]] || [[ "$__f" == *api/*/webhook* ]] ); then continue; fi
+    FILTERED_FILES+=("$__f")
+done
+if [[ ${#FILTERED_FILES[@]} -gt 0 ]]; then
+    check "N6: Missing Webhook Signature Verification" \
+        bash -c '
 for f in "$@"; do
-  # Check webhook handler files
-  if [[ "$f" == *"webhook"* ]] && [[ "$f" == *"/api/"* ]]; then
-    # Must have svix verification
     if ! grep -qE "Webhook|verifyWebhook|svix-id|svix-timestamp|svix-signature" "$f" 2>/dev/null; then
-      echo "$f: webhook handler without signature verification"
+        echo "$f: webhook handler without signature verification"
     fi
-  fi
 done
-done' _ "${FILES[@]}"
-
-# N7: Using userId When orgId is Required
-check "N7: Using userId When orgId is Required" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Skip test files
-  if [[ "$f" == *".test."* ]] || [[ "$f" == *".spec."* ]]; then
-    continue
-  fi
-  # In server files that query data
-  if [[ "$f" == *"/api/"* ]] || [[ "$f" == *"/actions/"* ]] || [[ "$f" == *".server."* ]]; then
-    # Flag if using userId for data filtering without orgId
-    # Covers Prisma (where: { userId }) and Drizzle (eq(*.userId, ...))
-    if grep -qE "where.*userId|userId.*=|eq\(.*userId" "$f" 2>/dev/null; then
-      if ! grep -qE "orgId|organizationId|organization_id|org_id" "$f" 2>/dev/null; then
-        grep -Hn "userId" "$f" 2>/dev/null | head -3
-      fi
-    fi
-  fi
-done
-done' _ "${FILES[@]}"
-
-# N8: Missing Organization Context in Protected Routes
-check "N8: Missing Organization Context in Protected Routes" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Check API routes and server actions
-  if [[ "$f" == *"/api/"* ]] || [[ "$f" == *"/actions/"* ]]; then
-    # If file uses auth() but doesn'"'"'t check orgId
-    if grep -q "await auth()" "$f" 2>/dev/null; then
-      if grep -qE "userId\s*\}" "$f" 2>/dev/null; then
-        if ! grep -qE "orgId|organizationId|organization_id|org_id|!.*org" "$f" 2>/dev/null; then
-          echo "$f: auth check without orgId verification"
-        fi
-      fi
-    fi
-  fi
-done
-done' _ "${FILES[@]}"
-
-# N9: Missing Null Checks for Auth Values
-check "N9: Missing Null Checks for Auth Values" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Check files using auth()
-  if grep -q "await auth()" "$f" 2>/dev/null; then
-    # Find destructured values being used directly without checks
-    if grep -qE "\{ userId \}|\{ orgId \}" "$f" 2>/dev/null; then
-      # Check if there'"'"'s a null check before usage
-      if grep -qE "userId\!|orgId\!" "$f" 2>/dev/null; then
-        if ! grep -qE "if.*!.*userId|if.*!.*orgId|userId\s*\?\?" "$f" 2>/dev/null; then
-          grep -Hn "userId\!|orgId\!" "$f"
-        fi
-      fi
-    fi
-  fi
-done
-done' _ "${FILES[@]}"
+' _ "${FILTERED_FILES[@]}"
+else
+    green "✅ N6: Missing Webhook Signature Verification (skipped - no matching files after path filter)"
+    ((PASS++)) || true
+fi
 
 printf '\n%s\n' "## MUST Rules"
 
-# M1: ClerkProvider at Root
-check "M1: ClerkProvider at Root" \
-    bash -c 'for file in "$@"; do
-# Check if any layout file has ClerkProvider
-for f in "$@"; do
-  if [[ "$f" == *"layout"* ]]; then
-    if grep -q "ClerkProvider" "$f" 2>/dev/null; then
-      exit 0  # Found it, pass
-    fi
-  fi
-done
-# If we get here, no layout has ClerkProvider
-echo "No ClerkProvider found in layout files"
-done' _ "${FILES[@]}"
-
 # M2: Middleware Matcher Configuration
-check "M2: Middleware Matcher Configuration" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  if [[ "$f" == *"middleware"* ]]; then
-    if grep -q "clerkMiddleware" "$f" 2>/dev/null; then
-      if ! grep -q "matcher" "$f" 2>/dev/null; then
-        echo "$f: clerkMiddleware without matcher config"
-      fi
-    fi
-  fi
+# Path filtering for this rule
+FILTERED_FILES=()
+for __f in "${FILES[@]}"; do
+    if ! ( [[ "$__f" == *middleware.ts ]] || [[ "$__f" == *middleware.js ]] ); then continue; fi
+    FILTERED_FILES+=("$__f")
 done
-done' _ "${FILES[@]}"
+if [[ ${#FILTERED_FILES[@]} -gt 0 ]]; then
+    check "M2: Middleware Matcher Configuration" \
+        bash -c '
+for f in "$@"; do
+    trigger_lines=$(grep -nE "clerkMiddleware" "$f" 2>/dev/null)
+    if [[ -n "$trigger_lines" ]]; then
+        if ! grep -qE "matcher" "$f" 2>/dev/null; then
+            echo "$trigger_lines" | while IFS= read -r line; do
+                linenum="${line%%:*}"
+                echo "$f:$linenum: clerkMiddleware without matcher config"
+            done
+        fi
+    fi
+done
+' _ "${FILTERED_FILES[@]}"
+else
+    green "✅ M2: Middleware Matcher Configuration (skipped - no matching files after path filter)"
+    ((PASS++)) || true
+fi
 
 # M3: Use createRouteMatcher for Route Protection
-check "M3: Use createRouteMatcher for Route Protection" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  if [[ "$f" == *"middleware"* ]]; then
-    if grep -q "clerkMiddleware" "$f" 2>/dev/null; then
-      # Check if using auth.protect() without createRouteMatcher
-      if grep -q "auth\.protect\|auth()\.protect" "$f" 2>/dev/null; then
-        if ! grep -q "createRouteMatcher" "$f" 2>/dev/null; then
-          echo "$f: using auth.protect without createRouteMatcher"
-        fi
-      fi
-    fi
-  fi
+# Path filtering for this rule
+FILTERED_FILES=()
+for __f in "${FILES[@]}"; do
+    if ! ( [[ "$__f" == *middleware.ts ]] || [[ "$__f" == *middleware.js ]] ); then continue; fi
+    FILTERED_FILES+=("$__f")
 done
-done' _ "${FILES[@]}"
+if [[ ${#FILTERED_FILES[@]} -gt 0 ]]; then
+    check "M3: Use createRouteMatcher for Route Protection" \
+        bash -c '
+for f in "$@"; do
+    trigger_lines=$(grep -nE "auth\\.protect|auth\\(\\)\\.protect" "$f" 2>/dev/null)
+    if [[ -n "$trigger_lines" ]]; then
+        if ! grep -qE "createRouteMatcher" "$f" 2>/dev/null; then
+            echo "$trigger_lines" | while IFS= read -r line; do
+                linenum="${line%%:*}"
+                echo "$f:$linenum: using auth.protect without createRouteMatcher"
+            done
+        fi
+    fi
+done
+' _ "${FILTERED_FILES[@]}"
+else
+    green "✅ M3: Use createRouteMatcher for Route Protection (skipped - no matching files after path filter)"
+    ((PASS++)) || true
+fi
 
 # M4: Validate Organization Slug in Routes
-check "M4: Validate Organization Slug in Routes" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Check route files with orgSlug parameter
-  if [[ "$f" == *"[orgSlug]"* ]] || [[ "$f" == *"[slug]"* ]]; then
-    # Should have validation against auth orgSlug
-    if ! grep -qE "orgSlug.*===|slug.*===|validateSlug|params\.orgSlug" "$f" 2>/dev/null; then
-      echo "$f: org slug route without slug validation"
-    fi
-  fi
+# Path filtering for this rule
+FILTERED_FILES=()
+for __f in "${FILES[@]}"; do
+    if ! ( [[ "$__f" == *[orgSlug]*/* ]] || [[ "$__f" == *[slug]*/* ]] ); then continue; fi
+    FILTERED_FILES+=("$__f")
 done
-done' _ "${FILES[@]}"
-
-# M5: Include orgId in Database Queries
-check "M5: Include orgId in Database Queries" \
-    bash -c 'for file in "$@"; do
+if [[ ${#FILTERED_FILES[@]} -gt 0 ]]; then
+    check "M4: Validate Organization Slug in Routes" \
+        bash -c '
 for f in "$@"; do
-  # Check data access files
-  if [[ "$f" == *"/api/"* ]] || [[ "$f" == *"/actions/"* ]] || [[ "$f" == *".server."* ]]; then
-    # If file has database queries (Prisma or Drizzle)
-    if grep -qE "findMany|findFirst|findUnique|select.*from|query\.|\.insert\(|\.update\(|\.delete\(" "$f" 2>/dev/null; then
-      # Should have orgId in where clause (supports various naming conventions)
-      # orgId = Clerk auth object, organizationId = Clerk SDK, organization_id = REST API, org_id = PostgreSQL/Supabase
-      if ! grep -qE "orgId|organization_id|organizationId|org_id" "$f" 2>/dev/null; then
-        echo "$f: database query without orgId filter"
-      fi
+    if ! grep -qE "orgSlug.*===|slug.*===|validateSlug|params\\.orgSlug" "$f" 2>/dev/null; then
+        echo "$f: org slug route without slug validation"
     fi
-  fi
 done
-done' _ "${FILES[@]}"
+' _ "${FILTERED_FILES[@]}"
+else
+    green "✅ M4: Validate Organization Slug in Routes (skipped - no matching files after path filter)"
+    ((PASS++)) || true
+fi
 
 # M6: Handle Organization Switching
 check "M6: Handle Organization Switching" \
-    bash -c 'for file in "$@"; do
+    bash -c '
 for f in "$@"; do
-  # Check client files using OrganizationSwitcher
-  if grep -q "'"'"'use client'"'"'" "$f" 2>/dev/null; then
-    if grep -qE "OrganizationSwitcher" "$f" 2>/dev/null; then
-      # Should have URL prop or custom navigation handling
-      if ! grep -qE "afterSelectOrganizationUrl|setActive|router\.(push|replace|refresh)" "$f" 2>/dev/null; then
-        echo "$f: OrganizationSwitcher without navigation handling"
-      fi
+    trigger_lines=$(grep -nE "OrganizationSwitcher" "$f" 2>/dev/null)
+    if [[ -n "$trigger_lines" ]]; then
+        if ! grep -qE "afterSelectOrganizationUrl|setActive|router\\.(push|replace|refresh)" "$f" 2>/dev/null; then
+            echo "$trigger_lines" | while IFS= read -r line; do
+                linenum="${line%%:*}"
+                echo "$f:$linenum: OrganizationSwitcher without navigation handling"
+            done
+        fi
     fi
-  fi
 done
-done' _ "${FILES[@]}"
+' _ "${FILES[@]}"
 
 printf '\n%s\n' "## Info"
 

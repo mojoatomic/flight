@@ -130,6 +130,10 @@ visible in pod specs, logs, and kubectl describe output.
 8. **Default ServiceAccount** - Do not use the default ServiceAccount for workloads. The default account
 may have excessive permissions. Create dedicated ServiceAccounts.
 
+
+   > Create a dedicated ServiceAccount for each workload with minimal permissions.
+This limits blast radius if the workload is compromised.
+
    ```
    // BAD
    serviceAccountName: default
@@ -160,6 +164,10 @@ unpredictable deployments and makes rollbacks impossible.
 2. **Resource Requests Required** - Always set resource requests for CPU and memory. Without requests,
 the scheduler cannot make informed decisions and autoscaling fails.
 
+
+   > From Polaris: "Setting appropriate resource requests will ensure that all
+your applications have sufficient compute resources."
+
    ```
    // BAD
    containers:
@@ -181,6 +189,10 @@ the scheduler cannot make informed decisions and autoscaling fails.
 3. **Resource Limits Required** - Always set resource limits for memory. Without limits, a single
 misbehaving container can consume all node resources.
 
+
+   > Memory limits are essential to prevent OOM situations affecting other pods.
+CPU limits are recommended but can cause throttling issues.
+
    ```
    // BAD
    resources:
@@ -199,6 +211,10 @@ misbehaving container can consume all node resources.
 
 4. **Liveness Probe Required** - Define liveness probes for long-running containers. Without liveness
 probes, Kubernetes cannot detect and restart deadlocked applications.
+
+
+   > From kube-score: "Liveness probes are designed to ensure that an application
+stays in a healthy state. When a liveness probe fails, the pod will be restarted."
 
    ```
    // BAD
@@ -223,6 +239,10 @@ probes, Kubernetes cannot detect and restart deadlocked applications.
 5. **Readiness Probe Required** - Define readiness probes for services. Without readiness probes, traffic
 is sent to pods before they're ready, causing errors.
 
+
+   > From Polaris: "Readiness probes are designed to ensure that an application
+has reached a ready state before receiving traffic."
+
    ```
    // BAD
    containers:
@@ -246,6 +266,10 @@ is sent to pods before they're ready, causing errors.
 6. **Deployment Replicas** - Deployments should have at least 2 replicas for high availability.
 Single replica deployments have no redundancy during updates or failures.
 
+
+   > From kube-score: "Makes sure that Deployment has multiple replicas."
+Single replicas mean zero availability during rolling updates.
+
    ```
    // BAD
    replicas: 1
@@ -258,6 +282,10 @@ Single replica deployments have no redundancy during updates or failures.
 
 7. **Labels Required** - Pods must have standard labels for identification and selection.
 Missing labels break service discovery and monitoring.
+
+
+   > Use standard Kubernetes labels: app.kubernetes.io/name, app.kubernetes.io/instance,
+app.kubernetes.io/version, app.kubernetes.io/component.
 
    ```
    // BAD
@@ -276,6 +304,10 @@ Missing labels break service discovery and monitoring.
 
 8. **Namespace Required** - Specify namespace explicitly. Relying on kubectl context can deploy
 to wrong namespace. Never use 'default' namespace for applications.
+
+
+   > The default namespace should be reserved for system resources.
+Always specify namespace to avoid accidental deployments.
 
    ```
    // BAD
@@ -297,6 +329,10 @@ to wrong namespace. Never use 'default' namespace for applications.
 1. **Run as Non-Root** - Set runAsNonRoot: true in securityContext. This provides defense in depth
 even if the container image runs as non-root by default.
 
+
+   > From Pod Security Standards (Restricted): "Containers must be required to
+run as non-root users."
+
    ```
    // BAD
    securityContext: {}
@@ -311,6 +347,10 @@ even if the container image runs as non-root by default.
 
 2. **Read-Only Root Filesystem** - Set readOnlyRootFilesystem: true. This prevents attackers from modifying
 container binaries or installing malware.
+
+
+   > Use emptyDir volumes for directories that need write access (e.g., /tmp).
+This significantly reduces attack surface.
 
    ```
    // BAD
@@ -328,6 +368,10 @@ container binaries or installing malware.
 3. **Drop All Capabilities** - Drop all Linux capabilities and only add back what's needed.
 By default, containers get several capabilities that are rarely needed.
 
+
+   > From Pod Security Standards (Restricted): "Containers must drop ALL
+capabilities, and are only permitted to add back NET_BIND_SERVICE."
+
    ```
    // BAD
    securityContext:
@@ -344,6 +388,10 @@ By default, containers get several capabilities that are rarely needed.
 
 4. **PodDisruptionBudget Required** - Create PodDisruptionBudgets for critical deployments. PDBs ensure minimum
 availability during voluntary disruptions like node drains.
+
+
+   > From kube-score: "Makes sure that all StatefulSets and Deployments are
+targeted by a PDB."
 
    ```
    // BAD
@@ -363,6 +411,10 @@ availability during voluntary disruptions like node drains.
 
 5. **Pod Anti-Affinity** - Configure pod anti-affinity to spread replicas across nodes.
 Without anti-affinity, all replicas may run on the same node.
+
+
+   > From kube-score: "Makes sure that a podAntiAffinity has been set that
+prevents multiple pods from being scheduled on the same node."
 
    ```
    // BAD
@@ -388,6 +440,10 @@ Without anti-affinity, all replicas may run on the same node.
 6. **Image Pull Policy Always** - Set imagePullPolicy to Always. This ensures fresh images are pulled
 and ImagePullSecrets are always validated.
 
+
+   > From kube-score: "Makes sure that the pullPolicy is set to Always."
+This prevents using cached images that may be outdated or compromised.
+
    ```
    // BAD
    imagePullPolicy: IfNotPresent
@@ -400,6 +456,10 @@ and ImagePullSecrets are always validated.
 
 7. **Seccomp Profile** - Configure a Seccomp profile to restrict system calls.
 Seccomp significantly reduces the kernel attack surface.
+
+
+   > From Pod Security Standards (Restricted): "Seccomp profile must be
+explicitly set to RuntimeDefault or Localhost."
 
    ```
    // BAD
@@ -416,6 +476,10 @@ Seccomp significantly reduces the kernel attack surface.
 8. **Service Account Token Automount** - Disable automatic mounting of ServiceAccount tokens when not needed.
 Most applications don't need Kubernetes API access.
 
+
+   > From Polaris: "Fails when automountServiceAccountToken is automounted."
+Set to false unless the workload needs to interact with the Kubernetes API.
+
    ```
    // BAD
    spec:
@@ -431,6 +495,10 @@ Most applications don't need Kubernetes API access.
 
 9. **Network Policy** - Create NetworkPolicies to restrict pod-to-pod communication.
 By default, all pods can communicate with each other.
+
+
+   > From kube-score: "Makes sure that all Pods are targeted by a NetworkPolicy."
+NetworkPolicies implement zero-trust networking within the cluster.
 
    ```
    // BAD
@@ -451,6 +519,10 @@ By default, all pods can communicate with each other.
 
 10. **Probes Must Differ** - Liveness and readiness probes should not be identical.
 Identical probes can cause cascading failures during startup.
+
+
+   > From kube-score: "Makes sure that readiness and liveness probes are not
+identical." Use different endpoints or different timing settings.
 
    ```
    // BAD

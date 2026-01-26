@@ -184,11 +184,13 @@ rules:
       Never mutate state directly with push/pop/splice. React won't detect
       the change and won't re-render.
     check:
-      type: script
-      code: |
-        # Exclude navigation methods: router.push, history.push, navigate
-        grep -En '\.push\(|\.splice\(|\.pop\(|\.shift\(|\.unshift\(' "$@" 2>/dev/null | \
-        grep -v 'router\.push\|history\.push\|navigate\.' || true
+      type: grep
+      pattern: '\.push\(|\.splice\(|\.pop\(|\.shift\(|\.unshift\('
+      flags: -En
+      ignore_when:
+        - 'router\.push'
+        - 'history\.push'
+        - 'navigate\.'
     note: |
       Mutating arrays in place keeps the same reference.
       React compares references, not contents. Create new arrays.
@@ -221,9 +223,10 @@ rules:
       useEffect/useMemo/useCallback with empty deps but referencing
       outer variables causes stale closures.
     check:
-      type: script
-      code: |
-        grep -Pzo 'useEffect\(\s*\(\)\s*=>\s*\{[^}]*[a-zA-Z]+[^}]*\},\s*\[\]\)' "$@" 2>/dev/null | head -5 || true
+      type: grep
+      pattern: 'useEffect\(\s*\(\)\s*=>\s*\{[^}]*[a-zA-Z]+[^}]*\},\s*\[\]\)'
+      flags: -En
+      multiline: true
     note: |
       Empty deps [] means "run once". If the callback uses userId but deps is [],
       userId will be stale forever. Add all referenced variables to deps.
@@ -315,17 +318,20 @@ rules:
     description: >
       Use named exports for better refactoring support and explicit imports.
       Exception: Next.js App Router special files require export default.
+    skip_paths:
+      - '**/page.{tsx,jsx,ts,js}'
+      - '**/layout.{tsx,jsx,ts,js}'
+      - '**/loading.{tsx,jsx,ts,js}'
+      - '**/error.{tsx,jsx,ts,js}'
+      - '**/global-error.{tsx,jsx,ts,js}'
+      - '**/not-found.{tsx,jsx,ts,js}'
+      - '**/template.{tsx,jsx,ts,js}'
+      - '**/default.{tsx,jsx,ts,js}'
+      - '**/main.{tsx,jsx,ts,js}'
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-            basename=$(basename "$f")
-            # Skip Next.js special files that require export default
-            if [[ "$basename" =~ ^(page|layout|loading|error|global-error|not-found|template|default|main)\.(tsx|jsx|ts|js)$ ]]; then
-                continue
-            fi
-            grep -En '^export default' "$f" 2>/dev/null || true
-        done
+      type: grep
+      pattern: '^export default'
+      flags: -En
     note: |
       export default allows renaming on import, hiding the real name.
       Named exports keep names consistent across codebase.
@@ -367,9 +373,13 @@ rules:
       Generic prop names like data, info, item hide intent.
       Use domain-specific names that describe the prop's purpose.
     check:
-      type: script
-      code: |
-        grep -En '\{\s*(data|info|item|value)\s*\}' "$@" | grep -v 'const\|let\|var' || true
+      type: grep
+      pattern: '\{\s*(data|info|item|value)\s*\}'
+      flags: -En
+      ignore_when:
+        - 'const'
+        - 'let'
+        - 'var'
     note: |
       <List data={data}> tells you nothing. <ProductList products={products}>
       tells you exactly what it does. Domain names prevent misuse.
@@ -493,15 +503,10 @@ rules:
       Components with async operations (fetch, useQuery, useSWR) should
       handle loading state to prevent flash of empty content.
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -q 'fetch\|useQuery\|useSWR\|useEffect.*async' "$f"; then
-            if ! grep -q 'isLoading\|loading' "$f"; then
-              echo "$f: has async but no loading state"
-            fi
-          fi
-        done
+      type: requires
+      trigger: 'fetch\(|useQuery|useSWR|useEffect.*async'
+      requirement: 'isLoading|loading'
+      message: "has async operations but no loading state"
     note: |
       Users should see a loading indicator, not a blank screen or
       broken layout while data loads.
@@ -537,15 +542,10 @@ rules:
       Components with async operations should handle error state
       to show meaningful feedback instead of crashing.
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -q 'fetch\|useQuery\|useSWR\|useEffect.*async' "$f"; then
-            if ! grep -q 'error\|Error' "$f"; then
-              echo "$f: has async but no error handling"
-            fi
-          fi
-        done
+      type: requires
+      trigger: 'fetch\(|useQuery|useSWR|useEffect.*async'
+      requirement: 'error|Error'
+      message: "has async operations but no error handling"
     note: |
       Network requests fail. APIs return errors. Show users what went wrong
       instead of crashing or showing stale data.
@@ -598,18 +598,10 @@ rules:
       Event handlers defined with const should use useCallback
       when passed to child components to prevent unnecessary re-renders.
     check:
-      type: script
-      code: |
-        for f in "$@"; do
-          if grep -q 'const handle' "$f"; then
-            if ! grep -q 'useCallback' "$f"; then
-              handlers=$(grep -c 'const handle' "$f")
-              if [ "$handlers" -gt 0 ]; then
-                echo "$f: $handlers handlers without useCallback"
-              fi
-            fi
-          fi
-        done
+      type: requires
+      trigger: 'const handle[A-Z]'
+      requirement: 'useCallback'
+      message: "handlers defined without useCallback"
     note: |
       Without useCallback, handlers are recreated every render.
       This breaks React.memo and causes child re-renders.

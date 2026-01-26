@@ -158,7 +158,7 @@ rules:
   N3:
     title: Invoke-WebRequest Without -UseBasicParsing
     severity: NEVER
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-20"
       confidence: high
@@ -172,15 +172,6 @@ rules:
       embedded scripts. CVE-2025-54100 exploits this for RCE. Windows PowerShell 5.1
       requires -UseBasicParsing explicitly; PowerShell 7+ defaults to basic parsing
       but explicit is safer for cross-version scripts.
-    check:
-      type: script
-      code: |
-        # Check for Invoke-WebRequest or iwr without -UseBasicParsing
-        for f in "$@"; do
-          grep -Ein 'Invoke-WebRequest|[^a-zA-Z]iwr\s' "$f" 2>/dev/null | \
-          grep -v 'UseBasicParsing' | grep -v 'SuppressMessage' | \
-          sed "s|^|$f:|"
-        done
     note: |
       December 2025 CVE-2025-54100 patches added security prompts for unsafe parsing.
       Always use -UseBasicParsing for automation scripts that run unattended.
@@ -347,7 +338,7 @@ rules:
   N9:
     title: Hardcoded Paths
     severity: NEVER
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-20"
       confidence: high
@@ -359,14 +350,6 @@ rules:
     description: |
       Hardcoded paths like C:\Temp or /tmp break cross-platform scripts.
       Use environment variables and Join-Path for portability.
-    check:
-      type: script
-      code: |
-        # Exclude comment lines before checking for hardcoded paths
-        for f in "$@"; do
-          grep -v '^\s*#' "$f" 2>/dev/null | grep -n "['\"][A-Za-z]:\\\|['\"]/tmp/" | \
-          while read -r line; do echo "$f:$line"; done
-        done
     examples:
       bad:
         - '$logFile = "C:\Temp\log.txt"'
@@ -404,7 +387,7 @@ rules:
   M1:
     title: Set-StrictMode Required
     severity: MUST
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-20"
       confidence: high
@@ -416,12 +399,6 @@ rules:
     description: |
       Scripts must enable strict mode to catch undefined variables and other
       common mistakes early. Use Set-StrictMode -Version Latest.
-    check:
-      type: script
-      code: |
-        # Report files missing Set-StrictMode
-        grep -L 'Set-StrictMode' "$@" 2>/dev/null | \
-        while read -r f; do echo "$f: Missing Set-StrictMode"; done
     note: |
       Strict mode catches: uninitialized variables, non-existent properties,
       function calls with wrong syntax, and more. Essential for production scripts.
@@ -437,7 +414,7 @@ rules:
   M2:
     title: ErrorActionPreference Stop for Critical Scripts
     severity: MUST
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-20"
       confidence: high
@@ -449,12 +426,6 @@ rules:
     description: |
       Production scripts should set $ErrorActionPreference = 'Stop' or use
       -ErrorAction Stop on critical commands to catch failures.
-    check:
-      type: script
-      code: |
-        # Report files missing ErrorActionPreference or -ErrorAction Stop
-        grep -L -E '\$ErrorActionPreference.*Stop|-ErrorAction\s+Stop' "$@" 2>/dev/null | \
-        while read -r f; do echo "$f: Missing ErrorActionPreference or -ErrorAction Stop"; done
     note: |
       PowerShell's default is Continue, which silently proceeds after errors.
       For automation, this leads to cascading failures and corrupted state.
@@ -495,7 +466,7 @@ rules:
   M4:
     title: CmdletBinding for Advanced Functions
     severity: MUST
-    mechanical: true
+    mechanical: false
     pssa_rule: PSUseCmdletBinding
     provenance:
       last_verified: "2026-01-20"
@@ -508,11 +479,6 @@ rules:
     description: |
       Functions should use [CmdletBinding()] to enable common parameters like
       -Verbose, -Debug, -ErrorAction, and -WhatIf support.
-    check:
-      type: script
-      code: |
-        # Find functions without CmdletBinding
-        grep -Pzo 'function\s+\w+[^{]*\{(?![^}]*\[CmdletBinding)' "$file"
     examples:
       bad:
         - |
@@ -534,7 +500,7 @@ rules:
   M5:
     title: Approved Verbs for Functions
     severity: MUST
-    mechanical: true
+    mechanical: false
     pssa_rule: PSUseApprovedVerbs
     provenance:
       last_verified: "2026-01-20"
@@ -547,17 +513,6 @@ rules:
     description: |
       Function names must use approved PowerShell verbs (Get, Set, New, Remove, etc.)
       to maintain consistency with the PowerShell ecosystem.
-    check:
-      type: script
-      code: |
-        # Check for functions not using approved verbs
-        grep -Po 'function\s+\K[A-Za-z]+-' "$file" | \
-        while read -r verb; do
-          verb="${verb%-}"
-          if ! pwsh -c "Get-Verb '$verb'" 2>/dev/null | grep -q "$verb"; then
-            echo "$file: Unapproved verb '$verb'"
-          fi
-        done
     note: |
       Run Get-Verb to see the full list of approved verbs. Use the closest match
       or consider if your function is doing too much (single responsibility).
@@ -645,7 +600,7 @@ rules:
   S2:
     title: Comment-Based Help
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     pssa_rule: PSProvideCommentHelp
     provenance:
       last_verified: "2026-01-20"
@@ -658,11 +613,6 @@ rules:
     description: |
       Functions should include comment-based help with at minimum .SYNOPSIS
       and .PARAMETER documentation for discoverability via Get-Help.
-    check:
-      type: script
-      code: |
-        # Check functions without help comments
-        grep -Pzo 'function\s+\w+[^}]*\{(?![^}]*\.SYNOPSIS)' "$file"
     examples:
       good:
         - |
@@ -688,7 +638,7 @@ rules:
   S3:
     title: ShouldProcess for Destructive Operations
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     pssa_rule: PSUseShouldProcessForStateChangingFunctions
     provenance:
       last_verified: "2026-01-20"
@@ -701,16 +651,6 @@ rules:
     description: |
       Functions that modify state (files, registry, AD, etc.) should support
       -WhatIf and -Confirm via SupportsShouldProcess.
-    check:
-      type: script
-      code: |
-        # Check for Set/Remove/New functions without ShouldProcess
-        grep -E 'function\s+(Set|Remove|New|Clear|Disable|Enable)-' "$file" | \
-        while read -r line; do
-          if ! grep -A20 "$line" "$file" | grep -q 'SupportsShouldProcess'; then
-            echo "$file: $line - Missing ShouldProcess"
-          fi
-        done
     examples:
       good:
         - |

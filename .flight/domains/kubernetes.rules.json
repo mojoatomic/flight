@@ -17,6 +17,20 @@
   },
   "rules": [
     {
+      "id": "M1",
+      "title": "Container Image Tag Required",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "image:\\s*[\"\\x27]?[a-zA-Z0-9._/-]+(:latest)?\\s*[\"\\x27]?\\s*$",
+      "query": null,
+      "message": "Always specify explicit image tags. Using :latest or no tag causes\nunpredictable deployments and makes rollbacks impossible.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
       "id": "N1",
       "title": "Privileged Containers",
       "severity": "NEVER",
@@ -66,6 +80,20 @@
       "pattern": "hostPath:",
       "query": null,
       "message": "Do not mount host filesystem paths. HostPath volumes allow container escape\nby accessing sensitive host files like /etc/shadow or Docker socket.",
+      "provenance": {
+        "last_verified": "2026-01-16",
+        "confidence": "high",
+        "re_verify_after": "2027-01-16"
+      }
+    },
+    {
+      "id": "N5",
+      "title": "Privilege Escalation Allowed",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "allowPrivilegeEscalation:\\s*true",
+      "query": null,
+      "message": "Explicitly disable privilege escalation. When allowPrivilegeEscalation is\ntrue or unset, processes can gain more privileges than their parent.",
       "provenance": {
         "last_verified": "2026-01-16",
         "confidence": "high",

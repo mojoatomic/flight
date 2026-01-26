@@ -199,6 +199,10 @@ Type-safe TypeScript patterns that catch errors at compile time. Don't lie to th
 
 1. **tsconfig strict Mode** - Enable `strict: true` in tsconfig.json or tsconfig.app.json. This enables all strict type-checking options.
 
+
+   > strict: true enables noImplicitAny, strictNullChecks, and other
+important checks. It's the baseline for type safety.
+
    ```
    {
      "compilerOptions": {

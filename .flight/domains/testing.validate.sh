@@ -163,34 +163,13 @@ check "N5_ts: Unawaited .then() Callbacks (TypeScript)" \
 
 printf '\n%s\n' "## SHOULD Rules"
 
-# S1: Shared Mutable State Between Tests
-warn "S1: Shared Mutable State Between Tests" \
-    bash -c 'for file in "$@"; do
-grep -l "beforeAll" "$@" 2>/dev/null | xargs -I{} sh -c '"'"'grep -l "^let\s" "{}" 2>/dev/null && echo "{}: has beforeAll with top-level let"'"'"'
-done' _ "${FILES[@]}"
-
-# S2: Try-Catch Swallowing Failures
-warn "S2: Try-Catch Swallowing Failures" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  if grep -q "catch\s*(" "$f" 2>/dev/null; then
-    match=$(grep -A5 "catch\s*(" "$f" | grep -E "expect|assert" | grep -v "toThrow\|rejects")
-    if [[ -n "$match" ]]; then
-      echo "$f: catch block contains assertions - verify not swallowing"
-    fi
-  fi
-done
-done' _ "${FILES[@]}"
-
 # S3: Non-Descriptive Test Names
 warn "S3: Non-Descriptive Test Names" \
     grep -En "test\\(['\"]test['\"]|test\\(['\"]works['\"]|it\\(['\"]it['\"]|it\\(['\"]test['\"]" "${FILES[@]}"
 
 # S4: Logic in Tests
 warn "S4: Logic in Tests" \
-    bash -c 'for file in "$@"; do
-grep -En "^\s+(if|for|while)\s*\(" "$@" | grep -v "forEach\|test\.each\|pytest\.mark"
-done' _ "${FILES[@]}"
+    bash -c '(grep -En "^\\s+(if|for|while)\\s*\\(" "$@" | grep -v "forEach" | grep -v "test\\.each" | grep -v "pytest\\.mark") || true' _ "${FILES[@]}"
 
 # S4_js: Logic in Tests (JavaScript)
 warn "S4_js: Logic in Tests (JavaScript)" \

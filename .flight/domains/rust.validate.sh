@@ -94,32 +94,34 @@ check "N2: mem::transmute Usage" \
     # Unknown check type: ast
 
 # N3: Panic in Library Code
-check "N3: Panic in Library Code" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Skip test files, main.rs, and bin files
-  if [[ "$f" == *"_test.rs" ]] || [[ "$f" == *"/tests/"* ]] || \
-     [[ "$f" == *"main.rs" ]] || [[ "$f" == *"/bin/"* ]] || \
-     [[ "$f" == *"/examples/"* ]]; then
-    continue
-  fi
-  grep -HnE '"'"'panic!\s*\(|todo!\s*\(|unimplemented!\s*\('"'"' "$f" 2>/dev/null | \
-    grep -v "unreachable!"
+# Path filtering for this rule
+FILTERED_FILES=()
+for __f in "${FILES[@]}"; do
+    if [[ "$__f" == *_test.rs ]] || [[ "$__f" == *tests/* ]] || [[ "$__f" == *main.rs ]] || [[ "$__f" == *bin/* ]] || [[ "$__f" == *examples/* ]]; then continue; fi
+    FILTERED_FILES+=("$__f")
 done
-done' _ "${FILES[@]}"
+if [[ ${#FILTERED_FILES[@]} -gt 0 ]]; then
+    check "N3: Panic in Library Code" \
+        bash -c '(grep -En "panic!\\s*\\(|todo!\\s*\\(|unimplemented!\\s*\\(" "$@" | grep -v "unreachable!") || true' _ "${FILTERED_FILES[@]}"
+else
+    green "✅ N3: Panic in Library Code (skipped - no matching files after path filter)"
+    ((PASS++)) || true
+fi
 
 # N4: .unwrap() in Production Code
-check "N4: .unwrap() in Production Code" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Skip test files
-  if [[ "$f" == *"_test.rs" ]] || [[ "$f" == *"/tests/"* ]] || \
-     [[ "$f" == *"/examples/"* ]]; then
-    continue
-  fi
-  grep -HnE '"'"'\.unwrap\(\s*\)'"'"' "$f" 2>/dev/null
+# Path filtering for this rule
+FILTERED_FILES=()
+for __f in "${FILES[@]}"; do
+    if [[ "$__f" == *_test.rs ]] || [[ "$__f" == *tests/* ]] || [[ "$__f" == *examples/* ]]; then continue; fi
+    FILTERED_FILES+=("$__f")
 done
-done' _ "${FILES[@]}"
+if [[ ${#FILTERED_FILES[@]} -gt 0 ]]; then
+    check "N4: .unwrap() in Production Code" \
+        grep -En "\\.unwrap\\(\\s*\\)" "${FILTERED_FILES[@]}"
+else
+    green "✅ N4: .unwrap() in Production Code (skipped - no matching files after path filter)"
+    ((PASS++)) || true
+fi
 
 # N5: .expect() Without Descriptive Message
 check "N5: .expect() Without Descriptive Message" \
@@ -133,46 +135,15 @@ check "N6: Raw Pointer Arithmetic Without Bounds Check" \
 check "N7: mem::forget Without Clear Justification" \
     grep -En "mem::forget\\s*\\(|std::mem::forget\\s*\\(" "${FILES[@]}"
 
-# N8: Mutex Held Across Await Point
-check "N8: Mutex Held Across Await Point" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Look for patterns like: lock() followed by .await without drop
-  if grep -qE '"'"'\.lock\(\)'"'"' "$f" 2>/dev/null; then
-    if grep -qE '"'"'\.await'"'"' "$f" 2>/dev/null; then
-      # Check for suspicious patterns (heuristic)
-      awk '"'"'
-        /\.lock\(\)/ { in_lock = 1; lock_line = NR }
-        /\.await/ && in_lock {
-          print FILENAME ":" lock_line ": mutex may be held across await"
-          in_lock = 0
-        }
-        /drop\(|}\s*$/ { in_lock = 0 }
-      '"'"' "$f" 2>/dev/null
-    fi
-  fi
-done
-done' _ "${FILES[@]}"
-
 printf '\n%s\n' "## MUST Rules"
 
 # M1: Use ? Operator for Error Propagation
 check "M1: Use ? Operator for Error Propagation" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Look for verbose match patterns that could use ?
-  grep -HnE '"'"'match\s+\w+\s*\{[^}]*Ok\s*\(\s*\w+\s*\)\s*=>\s*\w+\s*,'"'"' "$f" 2>/dev/null
-done
-done' _ "${FILES[@]}"
+    grep -En "match\\s+\\w+\\s*\\{[^}]*Ok\\s*\\(\\s*\\w+\\s*\\)\\s*=>\\s*\\w+\\s*," "${FILES[@]}"
 
 # M2: Clone Abuse - Cloning to Satisfy Borrow Checker
 check "M2: Clone Abuse - Cloning to Satisfy Borrow Checker" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Look for .clone() immediately before passing to function or after &
-  grep -HnE '"'"'&\w+\.clone\(\)|\.clone\(\)\s*\)'"'"' "$f" 2>/dev/null
-done
-done' _ "${FILES[@]}"
+    grep -En "&\\w+\\.clone\\(\\)|\\.clone\\(\\)\\s*\\)" "${FILES[@]}"
 
 # M3: String Parameter When &str Would Work
 check "M3: String Parameter When &str Would Work" \
@@ -187,89 +158,33 @@ check "M5: Box<T> When T Would Work" \
     grep -En "Box<(String|Vec<|HashMap<|HashSet<)" "${FILES[@]}"
 
 # M6: println! in Library Code
-check "M6: println! in Library Code" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Skip test files, main.rs, bin files, and examples
-  if [[ "$f" == *"_test.rs" ]] || [[ "$f" == *"/tests/"* ]] || \
-     [[ "$f" == *"main.rs" ]] || [[ "$f" == *"/bin/"* ]] || \
-     [[ "$f" == *"/examples/"* ]] || [[ "$f" == *"/benches/"* ]]; then
-    continue
-  fi
-  grep -HnE '"'"'println!\s*\(|print!\s*\(|eprintln!\s*\(|eprint!\s*\('"'"' "$f" 2>/dev/null
+# Path filtering for this rule
+FILTERED_FILES=()
+for __f in "${FILES[@]}"; do
+    if [[ "$__f" == *_test.rs ]] || [[ "$__f" == *tests/* ]] || [[ "$__f" == *main.rs ]] || [[ "$__f" == *bin/* ]] || [[ "$__f" == *examples/* ]] || [[ "$__f" == *benches/* ]]; then continue; fi
+    FILTERED_FILES+=("$__f")
 done
-done' _ "${FILES[@]}"
-
-# M7: Blocking Operations in Async Context
-check "M7: Blocking Operations in Async Context" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  if grep -qE '"'"'async\s+fn'"'"' "$f" 2>/dev/null; then
-    grep -HnE '"'"'std::fs::|std::thread::sleep|std::io::stdin|\.read_to_string\('"'"' "$f" 2>/dev/null
-  fi
-done
-done' _ "${FILES[@]}"
-
-# M9: Derive Common Traits
-check "M9: Derive Common Traits" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  awk '"'"'
-    /^pub\s+(struct|enum)\s+\w+/ {
-      if (prev !~ /#\[derive\(.*Debug/) {
-        print FILENAME ":" NR ": public type missing Debug derive"
-      }
-    }
-    { prev = $0 }
-  '"'"' "$f" 2>/dev/null
-done
-done' _ "${FILES[@]}"
+if [[ ${#FILTERED_FILES[@]} -gt 0 ]]; then
+    check "M6: println! in Library Code" \
+        grep -En "println!\\s*\\(|print!\\s*\\(|eprintln!\\s*\\(|eprint!\\s*\\(" "${FILTERED_FILES[@]}"
+else
+    green "✅ M6: println! in Library Code (skipped - no matching files after path filter)"
+    ((PASS++)) || true
+fi
 
 printf '\n%s\n' "## SHOULD Rules"
 
 # S1: Use Iterators Over Manual Loops
 warn "S1: Use Iterators Over Manual Loops" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Look for patterns like for i in 0..vec.len() { vec[i] }
-  grep -HnE '"'"'for\s+\w+\s+in\s+0\s*\.\.\s*\w+\.len\(\)'"'"' "$f" 2>/dev/null
-done
-done' _ "${FILES[@]}"
+    grep -En "for\\s+\\w+\\s+in\\s+0\\s*\\.\\.\\s*\\w+\\.len\\(\\)" "${FILES[@]}"
 
 # S2: Use if let for Single-Arm Matches
 warn "S2: Use if let for Single-Arm Matches" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Look for match with only one meaningful arm and _ => {}
-  grep -HnE '"'"'match\s+\w+\s*\{[^}]*_\s*=>\s*\{\s*\}[^}]*\}'"'"' "$f" 2>/dev/null
-done
-done' _ "${FILES[@]}"
-
-# S3: Implement Default for Types with Obvious Defaults
-warn "S3: Implement Default for Types with Obvious Defaults" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Look for pub fn new() that takes no args - might want Default
-  if grep -qE '"'"'pub\s+fn\s+new\s*\(\s*\)\s*->'"'"' "$f" 2>/dev/null; then
-    if ! grep -qE '"'"'impl\s+Default\s+for'"'"' "$f" 2>/dev/null; then
-      name=$(grep -oE '"'"'impl[^{]+\{[^}]*pub\s+fn\s+new\s*\('"'"' "$f" 2>/dev/null | head -1)
-      if [ -n "$name" ]; then
-        echo "$f: has new() but no Default implementation"
-      fi
-    fi
-  fi
-done
-done' _ "${FILES[@]}"
+    grep -En "match\\s+\\w+\\s*\\{[^}]*_\\s*=>\\s*\\{\\s*\\}[^}]*\\}" "${FILES[@]}"
 
 # S5: Avoid Wildcard Imports
 warn "S5: Avoid Wildcard Imports" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Skip test modules and prelude imports
-  grep -HnE '"'"'^use\s+[^;]+::\*;'"'"' "$f" 2>/dev/null | \
-    grep -vE '"'"'prelude::\*|#\[cfg\(test\)\]'"'"'
-done
-done' _ "${FILES[@]}"
+    bash -c '(grep -En "^use\\s+[^;]+::\\*;" "$@" | grep -v "prelude::\\*" | grep -v "#\\[cfg\\(test\\)\\]") || true' _ "${FILES[@]}"
 
 # S6: Use snake_case for Functions and Variables
 warn "S6: Use snake_case for Functions and Variables" \
@@ -277,12 +192,7 @@ warn "S6: Use snake_case for Functions and Variables" \
 
 # S7: Avoid Large Stack Allocations
 warn "S7: Avoid Large Stack Allocations" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Look for arrays larger than 256 elements of basic types
-  grep -HnE '"'"'\[\s*[a-z0-9_]+\s*;\s*[0-9]{4,}\s*\]'"'"' "$f" 2>/dev/null
-done
-done' _ "${FILES[@]}"
+    grep -En "\\[\\s*[a-z0-9_]+\\s*;\\s*[0-9]{4,}\\s*\\]" "${FILES[@]}"
 
 # S8: Prefer From/Into Over as for Type Conversions
 warn "S8: Prefer From/Into Over as for Type Conversions" \

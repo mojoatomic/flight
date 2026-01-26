@@ -72,7 +72,7 @@ rules:
   N1:
     title: service_role Key in Client Code
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       The service_role key bypasses RLS. NEVER use it in browser-accessible
       code. Only use in server-side code that is never bundled to client.
@@ -84,16 +84,6 @@ rules:
         - url: "https://supabase.com/docs/guides/api/api-keys"
           accessed: "2026-01-20"
           quote: "service_role key bypasses Row Level Security"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Check for service_role in any client-accessible file
-          # Skip files that are clearly server-only (api/, server/, actions/)
-          if [[ "$f" != *"/api/"* ]] && [[ "$f" != *"/server/"* ]] && [[ "$f" != *".server."* ]] && [[ "$f" != *"/actions/"* ]]; then
-            grep -HnE 'service_role|SERVICE_ROLE' "$f" 2>/dev/null
-          fi
-        done
     note: |
       The service_role key has admin privileges and bypasses Row Level Security.
       If exposed to the browser, attackers can read/write any data.
@@ -149,7 +139,7 @@ rules:
   N3:
     title: Raw @supabase/supabase-js in Next.js App Router
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       In Next.js App Router, use @supabase/ssr for proper cookie handling.
       Raw @supabase/supabase-js doesn't handle SSR cookies correctly.
@@ -161,18 +151,6 @@ rules:
         - url: "https://supabase.com/docs/guides/auth/server-side/creating-a-client"
           accessed: "2026-01-20"
           quote: "Use @supabase/ssr for proper cookie handling in Next.js"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Only flag if it's importing createClient from supabase-js directly
-          # AND it looks like a Next.js app (has 'use client' or next imports)
-          if grep -q "from ['\"]@supabase/supabase-js['\"]" "$f" 2>/dev/null; then
-            if grep -qE "'use client'|\"use client\"|from ['\"]next" "$f" 2>/dev/null; then
-              grep -Hn "from ['\"]@supabase/supabase-js['\"]" "$f"
-            fi
-          fi
-        done
     note: |
       @supabase/supabase-js doesn't handle cookies for SSR. In Next.js:
       - Use createBrowserClient from @supabase/ssr in client components
@@ -234,7 +212,7 @@ rules:
   N5:
     title: .single() Without Error Handling
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       .single() throws PGRST116 error if zero rows OR if multiple rows.
       Always handle the error or use .maybeSingle() for optional data.
@@ -246,24 +224,6 @@ rules:
         - url: "https://supabase.com/docs/reference/javascript/select"
           accessed: "2026-01-20"
           quote: ".single() returns error if not exactly one row"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Find .single() calls that don't have error handling nearby
-          awk '
-          /\.single\(\)/ {
-            # Check if this line or next few lines have error handling
-            line = $0
-            getline next1
-            getline next2
-            combined = line next1 next2
-            if (combined !~ /error|Error|catch|PGRST|throw|if.*!|\.maybeSingle/) {
-              print FILENAME":"NR": "$0
-            }
-          }
-          ' "$f" 2>/dev/null
-        done
     note: |
       .single() expects exactly one row. It returns error code PGRST116 if:
       - No rows found (common case!)
@@ -297,7 +257,7 @@ rules:
   N6:
     title: Realtime Subscription Without Cleanup
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       Realtime subscriptions must be cleaned up on component unmount.
       Leaked subscriptions cause memory leaks and stale callbacks.
@@ -309,18 +269,6 @@ rules:
         - url: "https://supabase.com/docs/guides/realtime"
           accessed: "2026-01-20"
           quote: "Unsubscribe from channels when no longer needed"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Find files with realtime subscriptions
-          if grep -q "\.channel\|\.on.*postgres_changes\|\.subscribe()" "$f" 2>/dev/null; then
-            # Check if there's cleanup (removeChannel, unsubscribe, or cleanup return)
-            if ! grep -qE "removeChannel|\.unsubscribe\(\)|return.*=>.*remove|return.*\(\).*=>|cleanup" "$f" 2>/dev/null; then
-              echo "$f: realtime subscription without cleanup"
-            fi
-          fi
-        done
     note: |
       Realtime subscriptions persist until explicitly removed. In React:
       - Create channel and subscribe in useEffect
@@ -348,7 +296,7 @@ rules:
   N7:
     title: getSession() in Server Code for Auth Checks
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       Never trust getSession() in server code for authentication. It reads
       from cookies which can be spoofed. Use getClaims() or getUser() instead.
@@ -360,20 +308,6 @@ rules:
         - url: "https://supabase.com/docs/guides/auth/server-side/creating-a-client"
           accessed: "2026-01-20"
           quote: "Use getUser() or getClaims() for server-side auth validation"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Check server files (api routes, server components, middleware)
-          if [[ "$f" == *"/api/"* ]] || [[ "$f" == *".server."* ]] || [[ "$f" == *"middleware"* ]] || [[ "$f" == *"/actions/"* ]]; then
-            # Flag getSession used for auth decisions without getClaims/getUser
-            if grep -q "getSession" "$f" 2>/dev/null; then
-              if ! grep -qE "getClaims|getUser" "$f" 2>/dev/null; then
-                grep -Hn "getSession" "$f"
-              fi
-            fi
-          fi
-        done
     note: |
       getSession() reads directly from cookies without validation. In server code:
       - Use getClaims() - validates JWT signature, fast, recommended
@@ -398,7 +332,7 @@ rules:
   M1:
     title: Type Database Schema
     severity: MUST
-    mechanical: true
+    mechanical: false
     description: >
       Use generated types for type-safe Supabase queries.
       Without types, query results are `any`.
@@ -410,14 +344,6 @@ rules:
         - url: "https://supabase.com/docs/reference/javascript/typescript-support"
           accessed: "2026-01-20"
           quote: "Generate types with supabase gen types typescript"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Find createBrowserClient or createServerClient without type param
-          grep -En "create(Browser|Server)Client\([^<]*\)" "$f" 2>/dev/null | \
-            grep -v "<Database>" | head -3
-        done
     note: |
       Generate types with: supabase gen types typescript --project-id xxx > types/supabase.ts
       Then use: createBrowserClient<Database>(url, key)
@@ -433,7 +359,7 @@ rules:
   M2:
     title: Handle Auth State Changes
     severity: MUST
-    mechanical: true
+    mechanical: false
     description: >
       Client components using auth should listen for auth state changes.
       Without this, the UI won't update when user signs in/out.
@@ -445,19 +371,6 @@ rules:
         - url: "https://supabase.com/docs/reference/javascript/auth-onauthstatechange"
           accessed: "2026-01-20"
           quote: "Listen to auth events with onAuthStateChange"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-          # Find client files that use auth but don't have onAuthStateChange
-          if grep -q "'use client'" "$f" 2>/dev/null; then
-            if grep -qE "supabase\.auth\.(getUser|getSession|signIn|signOut)" "$f" 2>/dev/null; then
-              if ! grep -q "onAuthStateChange" "$f" 2>/dev/null; then
-                echo "$f: uses auth without onAuthStateChange listener"
-              fi
-            fi
-          fi
-        done
     note: |
       Auth state can change from other tabs, token refresh, or session expiry.
       Listen with onAuthStateChange and clean up on unmount.

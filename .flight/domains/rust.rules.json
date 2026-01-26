@@ -15,6 +15,34 @@
   },
   "rules": [
     {
+      "id": "M1",
+      "title": "Use ? Operator for Error Propagation",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "match\\s+\\w+\\s*\\{[^}]*Ok\\s*\\(\\s*\\w+\\s*\\)\\s*=>\\s*\\w+\\s*,",
+      "query": null,
+      "message": "Prefer the ? operator over match/unwrap chains for error propagation. It's more concise and idiomatic.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "M2",
+      "title": "Clone Abuse - Cloning to Satisfy Borrow Checker",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "&\\w+\\.clone\\(\\)|\\.clone\\(\\)\\s*\\)",
+      "query": null,
+      "message": "Do not clone just to satisfy the borrow checker. This indicates a design issue. Restructure code, use references, or use Rc/Arc if shared ownership is needed.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
       "id": "M3",
       "title": "String Parameter When &str Would Work",
       "severity": "MUST",
@@ -57,6 +85,20 @@
       }
     },
     {
+      "id": "M6",
+      "title": "println! in Library Code",
+      "severity": "MUST",
+      "type": "grep",
+      "pattern": "println!\\s*\\(|print!\\s*\\(|eprintln!\\s*\\(|eprint!\\s*\\(",
+      "query": null,
+      "message": "Libraries should not use println!/print!/eprintln! for output. Use the log or tracing crate for configurable logging.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
       "id": "N1",
       "title": "Unsafe Block Without Safety Comment",
       "severity": "NEVER",
@@ -80,6 +122,34 @@
       "pattern": null,
       "query": "(call_expression\n  function: [\n    (scoped_identifier\n      name: (identifier) @fn)\n    (generic_function\n      function: (scoped_identifier\n        name: (identifier) @fn))\n  ]\n  (#eq? @fn \"transmute\")) @violation",
       "message": "Avoid mem::transmute - it's extremely dangerous and almost never needed. Use safer alternatives like from_ne_bytes, as casts, or pointer casts.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N3",
+      "title": "Panic in Library Code",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "panic!\\s*\\(|todo!\\s*\\(|unimplemented!\\s*\\(",
+      "query": null,
+      "message": "Libraries should not panic on recoverable errors. Return Result or Option instead. Panics should only occur for programmer errors (invariant violations).",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N4",
+      "title": ".unwrap() in Production Code",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "\\.unwrap\\(\\s*\\)",
+      "query": null,
+      "message": "Do not use .unwrap() in production code. Use ?, .expect() with a message, or proper error handling. Unwrap hides the failure reason.",
       "provenance": {
         "last_verified": "2026-01-20",
         "confidence": "high",
@@ -129,6 +199,48 @@
       }
     },
     {
+      "id": "S1",
+      "title": "Use Iterators Over Manual Loops",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "for\\s+\\w+\\s+in\\s+0\\s*\\.\\.\\s*\\w+\\.len\\(\\)",
+      "query": null,
+      "message": "Prefer iterator methods (map, filter, fold) over manual for loops when appropriate. They're often more readable and optimizable.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "S2",
+      "title": "Use if let for Single-Arm Matches",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "match\\s+\\w+\\s*\\{[^}]*_\\s*=>\\s*\\{\\s*\\}[^}]*\\}",
+      "query": null,
+      "message": "Use if let instead of match when you only care about one pattern. It's more concise and clearly expresses intent.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "S5",
+      "title": "Avoid Wildcard Imports",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "^use\\s+[^;]+::\\*;",
+      "query": null,
+      "message": "Avoid use foo::* imports in production code. They make it unclear where names come from and can cause conflicts when dependencies update.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
       "id": "S6",
       "title": "Use snake_case for Functions and Variables",
       "severity": "SHOULD",
@@ -140,6 +252,20 @@
         "last_verified": "2026-01-20",
         "confidence": "high",
         "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "S7",
+      "title": "Avoid Large Stack Allocations",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "\\[\\s*[a-z0-9_]+\\s*;\\s*[0-9]{4,}\\s*\\]",
+      "query": null,
+      "message": "Avoid large structs (>1KB) on the stack. Use Box for large data to prevent stack overflow in deeply recursive code.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "medium",
+        "re_verify_after": "2026-07-20"
       }
     },
     {

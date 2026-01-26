@@ -93,17 +93,6 @@ check "N1: Invoke-Expression with User Input" \
 check "N2: Plain Text Passwords in Code" \
     grep -Ein "-Password\\s+['\"][^'\"]+['\"]|password\\s*=\\s*['\"][^'\"]+['\"]" "${FILES[@]}"
 
-# N3: Invoke-WebRequest Without -UseBasicParsing
-check "N3: Invoke-WebRequest Without -UseBasicParsing" \
-    bash -c 'for file in "$@"; do
-# Check for Invoke-WebRequest or iwr without -UseBasicParsing
-for f in "$@"; do
-  grep -Ein '"'"'Invoke-WebRequest|[^a-zA-Z]iwr\s'"'"' "$f" 2>/dev/null | \
-  grep -v '"'"'UseBasicParsing'"'"' | grep -v '"'"'SuppressMessage'"'"' | \
-  sed "s|^|$f:|"
-done
-done' _ "${FILES[@]}"
-
 # N4: ConvertTo-SecureString with -AsPlainText in Source
 check "N4: ConvertTo-SecureString with -AsPlainText in Source" \
     grep -Ein "ConvertTo-SecureString.*-AsPlainText.*['\"][^'\"]+['\"]" "${FILES[@]}"
@@ -120,53 +109,7 @@ check "N6: Write-Host for Data Output" \
 check "N7: Positional Parameters in Scripts" \
     grep -En "\\b(Copy-Item|Move-Item|Set-Content|Out-File)\\s+[^-]" "${FILES[@]}"
 
-# N9: Hardcoded Paths
-check "N9: Hardcoded Paths" \
-    bash -c 'for file in "$@"; do
-# Exclude comment lines before checking for hardcoded paths
-for f in "$@"; do
-  grep -v '"'"'^\s*#'"'"' "$f" 2>/dev/null | grep -n "['"'"'\"][A-Za-z]:\\\|['"'"'\"]/tmp/" | \
-  while read -r line; do echo "$f:$line"; done
-done
-done' _ "${FILES[@]}"
-
 printf '\n%s\n' "## MUST Rules"
-
-# M1: Set-StrictMode Required
-check "M1: Set-StrictMode Required" \
-    bash -c 'for file in "$@"; do
-# Report files missing Set-StrictMode
-grep -L '"'"'Set-StrictMode'"'"' "$@" 2>/dev/null | \
-while read -r f; do echo "$f: Missing Set-StrictMode"; done
-done' _ "${FILES[@]}"
-
-# M2: ErrorActionPreference Stop for Critical Scripts
-check "M2: ErrorActionPreference Stop for Critical Scripts" \
-    bash -c 'for file in "$@"; do
-# Report files missing ErrorActionPreference or -ErrorAction Stop
-grep -L -E '"'"'\$ErrorActionPreference.*Stop|-ErrorAction\s+Stop'"'"' "$@" 2>/dev/null | \
-while read -r f; do echo "$f: Missing ErrorActionPreference or -ErrorAction Stop"; done
-done' _ "${FILES[@]}"
-
-# M4: CmdletBinding for Advanced Functions
-check "M4: CmdletBinding for Advanced Functions" \
-    bash -c 'for file in "$@"; do
-# Find functions without CmdletBinding
-grep -Pzo '"'"'function\s+\w+[^{]*\{(?![^}]*\[CmdletBinding)'"'"' "$file"
-done' _ "${FILES[@]}"
-
-# M5: Approved Verbs for Functions
-check "M5: Approved Verbs for Functions" \
-    bash -c 'for file in "$@"; do
-# Check for functions not using approved verbs
-grep -Po '"'"'function\s+\K[A-Za-z]+-'"'"' "$file" | \
-while read -r verb; do
-  verb="${verb%-}"
-  if ! pwsh -c "Get-Verb '"'"'$verb'"'"'" 2>/dev/null | grep -q "$verb"; then
-    echo "$file: Unapproved verb '"'"'$verb'"'"'"
-  fi
-done
-done' _ "${FILES[@]}"
 
 # M6: Parameter Validation
 check "M6: Parameter Validation" \
@@ -177,25 +120,6 @@ printf '\n%s\n' "## SHOULD Rules"
 # S1: Use
 warn "S1: Use" \
     bash -c 'grep -ql "#Requires" "$@" || echo "Pattern not found"' _ "${FILES[@]}"
-
-# S2: Comment-Based Help
-warn "S2: Comment-Based Help" \
-    bash -c 'for file in "$@"; do
-# Check functions without help comments
-grep -Pzo '"'"'function\s+\w+[^}]*\{(?![^}]*\.SYNOPSIS)'"'"' "$file"
-done' _ "${FILES[@]}"
-
-# S3: ShouldProcess for Destructive Operations
-warn "S3: ShouldProcess for Destructive Operations" \
-    bash -c 'for file in "$@"; do
-# Check for Set/Remove/New functions without ShouldProcess
-grep -E '"'"'function\s+(Set|Remove|New|Clear|Disable|Enable)-'"'"' "$file" | \
-while read -r line; do
-  if ! grep -A20 "$line" "$file" | grep -q '"'"'SupportsShouldProcess'"'"'; then
-    echo "$file: $line - Missing ShouldProcess"
-  fi
-done
-done' _ "${FILES[@]}"
 
 # S6: Explicitly Handle $null Comparisons
 warn "S6: Explicitly Handle \$null Comparisons" \

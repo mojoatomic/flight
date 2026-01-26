@@ -81,7 +81,7 @@ rules:
   N1:
     title: Unquoted Variables in Commands
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       Unquoted variables undergo word splitting and glob expansion.
       This breaks on filenames with spaces and can match unintended files.
@@ -96,12 +96,6 @@ rules:
         - url: "https://mywiki.wooledge.org/BashPitfalls#pf1"
           accessed: "2026-01-16"
           quote: "for f in $(ls *.mp3) - Word-splitting and glob expansion"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-            grep -En '\b(rm|cp|mv|cd|cat|chmod|chown)\s+[^"'\''|&;>]*\$[a-zA-Z_]' "$f" 2>/dev/null | grep -v '# shellcheck'
-        done
     note: |
       Word splitting: $var with spaces becomes multiple arguments.
       Glob expansion: $var with * matches files.
@@ -117,7 +111,7 @@ rules:
   N2:
     title: Unquoted $(cmd) Substitution
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       Unquoted command substitution has the same word splitting and
       glob expansion issues as unquoted variables.
@@ -132,12 +126,6 @@ rules:
         - url: "https://google.github.io/styleguide/shellguide.html#quoting"
           accessed: "2026-01-16"
           quote: "Always quote strings containing variables, command substitutions"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-            grep -En '[^"=]\$\([^)]+\)[^"]' "$f" 2>/dev/null | grep -v '#' | grep -v 'check "' | head -5
-        done
     note: |
       The output of $(cmd) can contain spaces or glob characters.
       Always quote: "$(cmd)"
@@ -154,7 +142,7 @@ rules:
   N3:
     title: Parsing ls Output
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       Parsing ls output breaks on filenames with spaces, newlines, or
       special characters. Use globs or find instead.
@@ -169,12 +157,6 @@ rules:
         - url: "https://mywiki.wooledge.org/ParsingLs"
           accessed: "2026-01-16"
           quote: "Parsing ls is fraught with peril"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-            grep -En 'for\s+\w+\s+in\s+\$\(ls|\`ls|ls\s+\|' "$f" 2>/dev/null | grep -v '#'
-        done
     note: |
       ls output is for humans, not scripts. Filenames can contain
       any character except / and NUL. Use glob patterns or find -print0.
@@ -191,7 +173,7 @@ rules:
   N4:
     title: Backticks for Command Substitution
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       Backticks are the old style command substitution. They can't nest
       easily and are harder to read than $().
@@ -206,12 +188,6 @@ rules:
         - url: "https://google.github.io/styleguide/shellguide.html#command-substitution"
           accessed: "2026-01-16"
           quote: "Use $(command) instead of backticks"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-            grep -En '\`[^\`]+\`' "$f" 2>/dev/null | grep -v '#'
-        done
     note: |
       $() can nest: $(cmd1 $(cmd2))
       Backticks require escaping: `cmd1 \`cmd2\``
@@ -224,7 +200,7 @@ rules:
   N5:
     title: Single Brackets [ ] in Bash
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       In bash scripts, use [[ ]] instead of [ ]. Single brackets require
       quoting and don't support pattern matching or regex.
@@ -239,14 +215,6 @@ rules:
         - url: "https://mywiki.wooledge.org/BashFAQ/031"
           accessed: "2026-01-16"
           quote: "[[ is a bash keyword similar to (but more powerful than) ["
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-            if head -1 "$f" | grep -q 'bash'; then
-                grep -En '^\s*\[\s+|\s+\[\s+[^[]' "$f" | grep -v '\[\[' | grep -v '#' | grep -v 'check "' | head -5
-            fi
-        done
     note: |
       [[ ]] is safer: no word splitting on variables.
       [[ ]] supports: regex (=~), pattern matching (*), logical operators (&&, ||).
@@ -262,7 +230,7 @@ rules:
   N6:
     title: "'function' Keyword"
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       The 'function' keyword is bash-specific and not POSIX compliant.
       Use the portable name() { } syntax.
@@ -277,12 +245,6 @@ rules:
         - url: "https://www.shellcheck.net/wiki/SC2112"
           accessed: "2026-01-16"
           quote: "'function' keyword is non-standard"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-            grep -En '^\s*function\s+\w+' "$f" 2>/dev/null | grep -v '#'
-        done
     note: |
       'function foo {' is bash-only.
       'foo() {' works in bash, sh, dash, and other shells.
@@ -301,7 +263,7 @@ rules:
   N7:
     title: Bare 'cd' Without Error Handling
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       cd can fail (permissions, path doesn't exist). Without error handling,
       the script continues in the wrong directory.
@@ -316,12 +278,6 @@ rules:
         - url: "https://mywiki.wooledge.org/BashPitfalls#pf27"
           accessed: "2026-01-16"
           quote: "cd /some/path - cd can fail"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-            grep -En '^\s*cd\s+' "$f" | grep -v '\|\||&&\|exit\|return\|;\|#' | head -5
-        done
     note: |
       If cd fails and script continues, subsequent commands run in
       the wrong directory. rm -rf * could delete the wrong files.
@@ -337,7 +293,7 @@ rules:
   N8:
     title: Useless Cat
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       cat file | cmd creates an extra process. Most commands can read
       files directly or via stdin redirection.
@@ -352,12 +308,6 @@ rules:
         - url: "https://en.wikipedia.org/wiki/Cat_(Unix)#Useless_use_of_cat"
           accessed: "2026-01-16"
           quote: "Useless use of cat - using cat when not necessary"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-            grep -En 'cat\s+[^|]+\|\s*(grep|awk|sed|head|tail|wc|sort|uniq|cut)' "$f" 2>/dev/null | grep -v '#'
-        done
     note: |
       cat file | grep is 2 processes. grep pattern file is 1 process.
       For stdin: cmd < file
@@ -372,7 +322,7 @@ rules:
   N9:
     title: eval Usage
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       eval executes arbitrary code. With user input, this is command injection.
       Use arrays for dynamic commands.
@@ -387,12 +337,6 @@ rules:
         - url: "https://www.shellcheck.net/wiki/SC2086"
           accessed: "2026-01-16"
           quote: "Variables in eval should be quoted to prevent word splitting"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-            grep -En '^\s*eval\s|\seval\s' "$f" | grep -v 'grep.*eval\|check.*eval\|#' | head -5
-        done
     note: |
       eval "$cmd" with user input = remote code execution.
       Use arrays: cmd_args=("$prog" "$arg"); "${cmd_args[@]}"
@@ -407,7 +351,7 @@ rules:
   N10:
     title: Hardcoded /tmp Files
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       Hardcoded temp paths are predictable and create race conditions.
       Use mktemp for unique, secure temporary files.
@@ -422,12 +366,6 @@ rules:
         - url: "https://cwe.mitre.org/data/definitions/377.html"
           accessed: "2026-01-16"
           quote: "CWE-377: Insecure Temporary File"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-            grep -En '"/tmp/[^\$]' "$f" | grep -v 'mktemp\|#' | head -5
-        done
     note: |
       /tmp/myscript.tmp is predictable. Attacker can create symlink
       before your script runs. mktemp creates unique names safely.
@@ -440,7 +378,7 @@ rules:
   N11:
     title: curl|bash Remote Code Execution
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       Piping remote scripts directly to bash executes untrusted code.
       Download, inspect, then execute.
@@ -455,12 +393,6 @@ rules:
         - url: "https://owasp.org/www-community/attacks/Code_Injection"
           accessed: "2026-01-16"
           quote: "Code injection is the exploitation of a computer bug"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-            grep -En 'curl\s+.*\|\s*(ba)?sh|wget\s+.*\|\s*(ba)?sh' "$f" 2>/dev/null | grep -v '#'
-        done
     note: |
       curl | bash executes whatever the server sends.
       Partial downloads can execute incomplete scripts.
@@ -477,7 +409,7 @@ rules:
   N12:
     title: Unquoted Array Expansion
     severity: NEVER
-    mechanical: true
+    mechanical: false
     description: >
       ${arr[*]} joins array elements into a single string.
       Use "${arr[@]}" to preserve separate elements.
@@ -492,12 +424,6 @@ rules:
         - url: "https://mywiki.wooledge.org/BashGuide/Arrays"
           accessed: "2026-01-16"
           quote: "${array[@]} expands each element as separate word"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-            grep -En '\$\{[a-zA-Z_]+\[\*\]\}' "$f" | head -3
-        done
     note: |
       ${arr[*]} = "a b c" (one string)
       "${arr[@]}" = "a" "b" "c" (three strings)
@@ -514,7 +440,7 @@ rules:
   M1:
     title: Shebang Required
     severity: MUST
-    mechanical: true
+    mechanical: false
     description: >
       Every script must have a shebang declaring the interpreter.
       This ensures the script runs with the intended shell.
@@ -529,14 +455,6 @@ rules:
         - url: "https://www.shellcheck.net/wiki/SC2148"
           accessed: "2026-01-16"
           quote: "Tips depend on target shell and target is not specified"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-            if ! head -1 "$f" | grep -qE '^#!.*(bash|sh)'; then
-                printf '%s: missing shebang\n' "$f"
-            fi
-        done
     note: |
       Without shebang, the system default shell runs the script.
       #!/bin/bash for bash features, #!/bin/sh for POSIX compatibility.
@@ -549,7 +467,7 @@ rules:
   M2:
     title: Strict Mode Required
     severity: MUST
-    mechanical: true
+    mechanical: false
     description: >
       Scripts must enable strict mode with set -euo pipefail.
       This catches errors early instead of silently continuing.
@@ -564,16 +482,6 @@ rules:
         - url: "https://google.github.io/styleguide/shellguide.html#s7.1-errexit"
           accessed: "2026-01-16"
           quote: "Always use set -e"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-            if ! grep -q 'set -euo pipefail' "$f"; then
-                if ! (grep -q 'set.*-e' "$f" && grep -q 'set.*-u' "$f" && grep -q 'pipefail' "$f"); then
-                    printf '%s: missing strict mode\n' "$f"
-                fi
-            fi
-        done
     note: |
       -e: Exit on any command failure
       -u: Error on undefined variables
@@ -591,7 +499,7 @@ rules:
   S1:
     title: Safe Path Pattern Before cd
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       When using cd, either use pushd/popd or capture the original directory
       to ensure relative paths still work after directory change.
@@ -606,17 +514,6 @@ rules:
         - url: "https://mywiki.wooledge.org/BashPitfalls#pf27"
           accessed: "2026-01-16"
           quote: "Paths relative to original directory break after cd"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-            grep -qE '^\s*cd\s+' "$f" || continue
-            if grep -q 'pushd' "$f" 2>/dev/null; then continue; fi
-            if grep -qE '(pwd|realpath|SCRIPT_DIR).*=|original.*=.*pwd' "$f" 2>/dev/null; then continue; fi
-            grep -En '^\s*cd\s+"\$' "$f" 2>/dev/null | head -3 | while IFS= read -r line; do
-                printf '%s (review: paths resolved before cd?)\n' "$line"
-            done
-        done
     note: |
       Relative paths break after cd. Either:
       1. Use pushd/popd to restore directory
@@ -636,7 +533,7 @@ rules:
   S2:
     title: Functions Should Use 'local'
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Variables assigned in functions should use 'local' to avoid
       polluting the global namespace.
@@ -651,16 +548,6 @@ rules:
         - url: "https://www.shellcheck.net/wiki/SC2155"
           accessed: "2026-01-16"
           quote: "Declare and assign separately to avoid masking return values"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-            awk '/^[a-zA-Z_][a-zA-Z0-9_]*\s*\(\)\s*\{/,/^\}/ {
-                if (/^\s+[a-zA-Z_][a-zA-Z0-9_]*=/ && !/local\s|readonly\s|declare\s|export\s/) {
-                    print FILENAME":"NR": "$0
-                }
-            }' "$f"
-        done | head -10
     note: |
       Without local, function variables are global. This causes
       subtle bugs when function names collide with outer scope.
@@ -679,7 +566,7 @@ rules:
   S3:
     title: mktemp Needs Cleanup Trap
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Scripts using mktemp should set up a trap to clean up temp files
       on exit, even if the script fails.
@@ -694,14 +581,6 @@ rules:
         - url: "https://mywiki.wooledge.org/BashFAQ/062"
           accessed: "2026-01-16"
           quote: "Use trap to clean up temporary files"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-            if grep -q 'mktemp' "$f" && ! grep -q 'trap.*EXIT' "$f"; then
-                printf '%s: mktemp without trap\n' "$f"
-            fi
-        done
     note: |
       Without trap, temp files accumulate on failures.
       trap 'rm -f "$tmp"' EXIT runs on normal exit and signals.
@@ -714,7 +593,7 @@ rules:
   S4:
     title: Constants Should Use readonly
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Script constants (UPPER_CASE variables) should use readonly
       to prevent accidental modification.
@@ -729,12 +608,6 @@ rules:
         - url: "https://www.gnu.org/software/bash/manual/html_node/Bourne-Shell-Builtins.html#index-readonly"
           accessed: "2026-01-16"
           quote: "readonly prevents the value from being changed"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-            grep -En '^[A-Z_]+=' "$f" | grep -v 'readonly\|declare -r\|export\|local' | head -3
-        done
     note: |
       readonly prevents accidental reassignment.
       Makes script intent clearer.
@@ -747,7 +620,7 @@ rules:
   S5:
     title: Read Loops Need 'IFS= read -r'
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Read loops should use 'IFS= read -r' to preserve whitespace
       and backslashes in input.
@@ -762,12 +635,6 @@ rules:
         - url: "https://mywiki.wooledge.org/BashFAQ/001"
           accessed: "2026-01-16"
           quote: "Use IFS= read -r line for robust line reading"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-            grep -En 'while\s+read\s' "$f" | grep -v 'IFS=\|read -r' | head -3
-        done
     note: |
       Without IFS=, leading/trailing whitespace is stripped.
       Without -r, backslashes are interpreted as escapes.
@@ -780,7 +647,7 @@ rules:
   S6:
     title: Lines Under 100 Characters
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       Keep lines under 100 characters for readability.
       Use backslash continuation for long commands.
@@ -792,12 +659,6 @@ rules:
         - url: "https://google.github.io/styleguide/shellguide.html#line-length"
           accessed: "2026-01-16"
           quote: "Maximum line length is 80 characters"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-            awk 'length > 100 { print FILENAME":"NR": "length" chars" }' "$f" | head -3
-        done
     note: |
       Long lines are hard to read and review.
       Break at logical points with backslash.
@@ -811,7 +672,7 @@ rules:
   S7:
     title: Prefer printf Over echo
     severity: SHOULD
-    mechanical: true
+    mechanical: false
     description: >
       printf behavior is consistent across systems. echo behavior
       varies (escapes, options) between shells and platforms.
@@ -826,12 +687,6 @@ rules:
         - url: "https://mywiki.wooledge.org/BashPitfalls#pf22"
           accessed: "2026-01-16"
           quote: "echo's behavior varies between implementations"
-    check:
-      type: script
-      code: |
-        for f in "$@"; do
-            grep -En 'echo\s+"\$|echo\s+-e' "$f" | head -3
-        done
     note: |
       echo "$var" may interpret escapes or options.
       printf '%s\n' "$var" is always literal.

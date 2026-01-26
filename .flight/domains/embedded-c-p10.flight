@@ -315,7 +315,7 @@ rules:
   N9:
     title: Functions Must Be 60 Lines or Less
     severity: NEVER
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -327,22 +327,6 @@ rules:
     description: >
       Every function must be 60 lines or less. This ensures functions
       fit on one screen and are easier to understand, test, and verify.
-    check:
-      type: script
-      code: |
-        awk '
-        /^(status_t|static|void|int|uint[0-9]+_t|bool) [a-z_]+\(/ {
-          start=NR; fname=$0; in_func=1
-        }
-        /^}$/ && in_func {
-          len=NR-start
-          if (len > 60) {
-            gsub(/\(.*/, "", fname)
-            gsub(/^.* /, "", fname)
-            print fname": "len" lines"
-          }
-          in_func=0
-        }' "$@"
     examples:
       bad:
         - "// Function with more than 60 lines"
@@ -352,7 +336,7 @@ rules:
   N10:
     title: Minimum 2 Assertions Per Function
     severity: NEVER
-    mechanical: true
+    mechanical: false
     provenance:
       last_verified: "2026-01-16"
       confidence: high
@@ -365,22 +349,6 @@ rules:
       Every function must have at least 2 ASSERT() calls - typically
       one for preconditions (input validation) and one for postconditions
       (output validation).
-    check:
-      type: script
-      code: |
-        awk '
-        /^(status_t|static|void|int|uint[0-9]+_t|bool) [a-z_]+\(/ {
-          fname=$0; asserts=0; in_func=1
-        }
-        /ASSERT\(|assert\(/ && in_func { asserts++ }
-        /^}$/ && in_func {
-          if (asserts < 2) {
-            gsub(/\(.*/, "", fname)
-            gsub(/^.* /, "", fname)
-            print fname": "asserts" asserts"
-          }
-          in_func=0
-        }' "$@"
     examples:
       bad:
         - |

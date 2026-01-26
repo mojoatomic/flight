@@ -13,6 +13,15 @@ Next.js 14-16+ App Router patterns for server components, routing, and data fetc
 
 1. **Inconsistent Source Directory Structure** - If src/ directory exists, all application code must live under src/. No parallel directories at root level (lib/ alongside src/lib/). This prevents AI assistants from creating duplicate file structures.
 
+
+   > When src/ directory exists, Next.js expects application code under src/.
+Path aliases like @/* typically map to ./src/*.
+
+Having both lib/ and src/lib/ causes:
+- Import confusion (which lib/ is correct?)
+- AI assistants creating files in wrong locations
+- Maintenance nightmare with duplicate code
+
    ```
    // BAD
    # Split structure - NEVER do this
@@ -105,6 +114,10 @@ Next.js 14-16+ App Router patterns for server components, routing, and data fetc
 
 5. **process.env in Client Components** - Non-NEXT_PUBLIC_ environment variables are not available in client components and would expose secrets if they were. Only NEXT_PUBLIC_ vars are safe client-side.
 
+
+   > NEXT_PUBLIC_ vars are inlined at build time and safe for client.
+All other env vars are server-only and undefined in client bundles.
+
    ```
    // BAD
    'use client';
@@ -168,6 +181,10 @@ Next.js 14-16+ App Router patterns for server components, routing, and data fetc
 
 9. **Fat Route Handlers (>100 lines)** - Route handlers should be thin orchestrators. Extract business logic to separate functions for testability and reuse. 100 lines allows for proper validation, auth, and error handling while flagging genuinely fat handlers.
 
+
+   > Fat handlers are hard to test and reason about.
+Extract validation, business logic, and responses to separate functions.
+
    ```
    // BAD
    export async function POST(req: Request) {
@@ -185,6 +202,15 @@ Next.js 14-16+ App Router patterns for server components, routing, and data fetc
    ```
 
 10. **Deprecated middleware.ts File (Next.js 16+)** - Next.js 16 deprecated middleware.ts in favor of proxy.ts. The middleware file convention has been renamed to clarify its network boundary purpose and avoid confusion with Express middleware.
+
+
+   > Migration steps:
+1. Run: npx @next/codemod@canary middleware-to-proxy .
+2. Or manually rename middleware.ts → proxy.ts
+3. Rename export function middleware() → export function proxy()
+4. Note: proxy.ts runs on Node.js runtime (not Edge)
+
+See G4 for the new proxy pattern.
 
    ```
    // BAD
@@ -214,6 +240,10 @@ Next.js 14-16+ App Router patterns for server components, routing, and data fetc
 
 2. **Consider Promise.all for Independent Fetches** - Multiple sequential awaits that don't depend on each other should use Promise.all to fetch in parallel and reduce load time.
 
+
+   > Sequential awaits are waterfall requests. If fetches are independent,
+Promise.all runs them in parallel, cutting total time.
+
    ```
    // BAD
    const user = await fetchUser();
@@ -232,6 +262,10 @@ Next.js 14-16+ App Router patterns for server components, routing, and data fetc
 
 3. **Pages Should Have loading.tsx** - Directories with page.tsx should have loading.tsx to show instant loading state while the page suspends.
 
+
+   > Without loading.tsx, users see nothing while page data loads.
+loading.tsx shows immediately, improving perceived performance.
+
    ```
    app/
      dashboard/
@@ -241,6 +275,10 @@ Next.js 14-16+ App Router patterns for server components, routing, and data fetc
 
 4. **Pages Should Have error.tsx** - Directories with page.tsx should have error.tsx to handle errors gracefully instead of crashing the entire app.
 
+
+   > Without error boundaries, errors bubble up and crash larger sections.
+error.tsx contains errors and allows retry.
+
    ```
    app/
      dashboard/
@@ -249,6 +287,10 @@ Next.js 14-16+ App Router patterns for server components, routing, and data fetc
    ```
 
 5. **Server-Only Import for Sensitive Files** - Database and auth files should import 'server-only' to prevent accidental import in client components.
+
+
+   > 'server-only' package causes build error if imported in client component.
+This prevents accidental exposure of server secrets.
 
    ```
    // lib/db.ts

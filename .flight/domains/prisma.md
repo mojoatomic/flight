@@ -13,6 +13,17 @@ Prisma ORM patterns for TypeScript/Next.js applications with multi-tenant SaaS f
 
 1. **Queries Without orgId (Multi-tenant)** - All data queries must include orgId for tenant isolation. Queries without orgId can leak data between tenants in multi-tenant applications.
 
+
+   > In multi-tenant SaaS, the organization is the tenant boundary:
+- Data belongs to organizations, not individual users
+- Users can access data in orgs they belong to
+- Always filter by orgId
+
+BAD:  prisma.post.findMany()
+BAD:  prisma.post.findMany({ where: { published: true } })
+GOOD: prisma.post.findMany({ where: { orgId } })
+GOOD: prisma.post.findMany({ where: { orgId, published: true } })
+
    ```
    // BAD
    prisma.post.findMany()
@@ -41,6 +52,23 @@ Prisma ORM patterns for TypeScript/Next.js applications with multi-tenant SaaS f
 
 3. **N+1 Query Pattern** - Fetching related data in loops instead of using include creates N+1 queries. This causes severe performance issues as the number of records grows.
 
+
+   > The N+1 problem occurs when you query in a loop:
+
+BAD:
+  const users = await prisma.user.findMany()
+  for (const user of users) {
+    const posts = await prisma.post.findMany({ where: { userId: user.id } })
+  }
+
+GOOD:
+  const users = await prisma.user.findMany({
+    include: { posts: true }
+  })
+
+Use include or select with nested relations to fetch related data
+in a single query.
+
    ```
    // BAD
    const users = await prisma.user.findMany()
@@ -57,6 +85,27 @@ Prisma ORM patterns for TypeScript/Next.js applications with multi-tenant SaaS f
    ```
 
 4. **Unhandled Prisma Errors** - Prisma throws specific error codes (P2002, P2025, etc.) that need handling. Generic catch blocks hide the actual error and provide poor user experience.
+
+
+   > Always handle specific Prisma error codes:
+
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
+
+try {
+  await prisma.user.create({ data })
+} catch (e) {
+  if (e instanceof PrismaClientKnownRequestError) {
+    if (e.code === 'P2002') throw new Error('Email already exists')
+    if (e.code === 'P2025') throw new Error('Record not found')
+  }
+  throw e
+}
+
+Common error codes:
+- P2002: Unique constraint violation
+- P2003: Foreign key constraint violation
+- P2025: Record not found (update/delete)
+- P2014: Required relation violation
 
    ```
    // BAD
@@ -83,6 +132,23 @@ Prisma ORM patterns for TypeScript/Next.js applications with multi-tenant SaaS f
    ```
 
 5. **New PrismaClient Per Request** - Creating PrismaClient instances per request exhausts database connections. Use a singleton pattern to reuse the client across requests.
+
+
+   > Creating PrismaClient per request exhausts connection pool.
+Use the singleton pattern:
+
+// lib/prisma.ts
+import { PrismaClient } from '@prisma/client'
+
+const globalForPrisma = globalThis as { prisma?: PrismaClient }
+
+export const prisma = globalForPrisma.prisma ?? new PrismaClient()
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma
+}
+
+Then import from lib/prisma.ts everywhere.
 
    ```
    // BAD
@@ -121,6 +187,27 @@ This is especially important for:
 
 
 7. **Missing Unique Constraint Handling** - create() without handling unique violations crashes on duplicate data. Either use upsert or catch P2002 errors.
+
+
+   > create() throws P2002 on unique constraint violations.
+Handle this with upsert or catch:
+
+// Using upsert (preferred for idempotent operations)
+await prisma.user.upsert({
+  where: { email },
+  update: {},  // or update with new data
+  create: { email, name }
+})
+
+// Or catch P2002
+try {
+  await prisma.user.create({ data: { email, name } })
+} catch (e) {
+  if (e instanceof PrismaClientKnownRequestError && e.code === 'P2002') {
+    throw new Error('User with this email already exists')
+  }
+  throw e
+}
 
    ```
    // BAD
@@ -212,6 +299,21 @@ if (count === 0) throw new Error('Post not found')
 4. **Singleton Client Pattern** - Use the global singleton pattern for PrismaClient, not per-request instantiation. This is critical for connection pool management.
 
 
+   > Create a singleton in lib/prisma.ts:
+
+import { PrismaClient } from '@prisma/client'
+
+const globalForPrisma = globalThis as { prisma?: PrismaClient }
+
+export const prisma = globalForPrisma.prisma ?? new PrismaClient()
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma
+}
+
+The globalThis pattern prevents hot reload from creating new instances.
+
+
 5. **Type Generated Client** - Run `prisma generate` after schema changes to regenerate the typed client. Stale types cause runtime errors and type mismatches.
 
 
@@ -231,6 +333,21 @@ This ensures the client is always in sync with the schema.
 
 
 6. **Include orgId in Schema** - All tenant-scoped models must have an orgId field for multi-tenant data isolation. This is the foundation of tenant security.
+
+
+   > Add orgId to all tenant-scoped models:
+
+model Post {
+  id        String   @id @default(cuid())
+  orgId     String   // REQUIRED for multi-tenant
+  title     String
+  content   String
+  org       Organization @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+}
+
+The @@index([orgId]) improves query performance for tenant-filtered queries.
 
    ```
    model Post {

@@ -103,16 +103,19 @@ check "N4: Defer in Loop" \
 
 # N5: Goroutine without Lifetime Management
 check "N5: Goroutine without Lifetime Management" \
-    bash -c 'for file in "$@"; do
+    bash -c '
 for f in "$@"; do
-  # Look for goroutines without context, done channel, or WaitGroup
-  if grep -qE '"'"'go\s+func\s*\('"'"' "$f" 2>/dev/null; then
-    if ! grep -qE '"'"'context\.|<-done|<-ctx\.Done|sync\.WaitGroup|errgroup\.'"'"' "$f" 2>/dev/null; then
-      echo "$f: goroutine found but no lifetime management (context, done channel, or WaitGroup)"
+    trigger_lines=$(grep -nE "go\\s+func\\s*\\(" "$f" 2>/dev/null)
+    if [[ -n "$trigger_lines" ]]; then
+        if ! grep -qE "context\\.|<-done|<-ctx\\.Done|sync\\.WaitGroup|errgroup\\." "$f" 2>/dev/null; then
+            echo "$trigger_lines" | while IFS= read -r line; do
+                linenum="${line%%:*}"
+                echo "$f:$linenum: goroutine found but no lifetime management (context, done channel, or WaitGroup)"
+            done
+        fi
     fi
-  fi
 done
-done' _ "${FILES[@]}"
+' _ "${FILES[@]}"
 
 # N6: Unbuffered Channel in Select with Default
 check "N6: Unbuffered Channel in Select with Default" \
@@ -135,21 +138,6 @@ check "M1: MixedCaps Naming" \
 # M2: Initialisms Must Be Consistent Case
 check "M2: Initialisms Must Be Consistent Case" \
     grep -En "(Url|Http|Api|Sql|Json|Xml|Html|Css|Tcp|Udp|Ip|Dns|Cpu|Gpu|Ram|Ssd|Hdd|Usb|Pdf|Csv)[A-Z]|(Url|Http|Api|Sql|Json|Xml|Html|Css|Tcp|Udp|Ip|Dns|Cpu|Gpu|Ram|Ssd|Hdd|Usb|Pdf|Csv)\\s*[=:(]" "${FILES[@]}"
-
-# M3: Exported Names Must Have Doc Comments
-check "M3: Exported Names Must Have Doc Comments" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Find exported functions/types without preceding comment
-  awk '"'"'
-    /^func [A-Z]/ && prev !~ /^\/\// { print FILENAME ":" NR ": " $0 }
-    /^type [A-Z]/ && prev !~ /^\/\// { print FILENAME ":" NR ": " $0 }
-    /^var [A-Z]/ && prev !~ /^\/\// { print FILENAME ":" NR ": " $0 }
-    /^const [A-Z]/ && prev !~ /^\/\// { print FILENAME ":" NR ": " $0 }
-    { prev = $0 }
-  '"'"' "$f" 2>/dev/null
-done
-done' _ "${FILES[@]}"
 
 # M4: Context as First Parameter
 check "M4: Context as First Parameter" \
@@ -175,32 +163,19 @@ printf '\n%s\n' "## SHOULD Rules"
 
 # S1: Wrap Errors with Context
 warn "S1: Wrap Errors with Context" \
-    bash -c 'for file in "$@"; do
+    bash -c '
 for f in "$@"; do
-  # Look for bare error returns without wrapping
-  if grep -qE '"'"'return\s+(nil,\s*)?err\s*$'"'"' "$f" 2>/dev/null; then
-    if ! grep -qE '"'"'fmt\.Errorf.*%w|errors\.Wrap|errors\.WithMessage'"'"' "$f" 2>/dev/null; then
-      echo "$f: bare error returns found but no error wrapping"
+    trigger_lines=$(grep -nE "return\\s+(nil,\\s*)?err\\s*\$" "$f" 2>/dev/null)
+    if [[ -n "$trigger_lines" ]]; then
+        if ! grep -qE "fmt\\.Errorf.*%w|errors\\.Wrap|errors\\.WithMessage" "$f" 2>/dev/null; then
+            echo "$trigger_lines" | while IFS= read -r line; do
+                linenum="${line%%:*}"
+                echo "$f:$linenum: bare error returns found but no error wrapping"
+            done
+        fi
     fi
-  fi
 done
-done' _ "${FILES[@]}"
-
-# S2: Table-Driven Tests
-warn "S2: Table-Driven Tests" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  if [[ "$f" == *"_test.go" ]]; then
-    # Multiple similar test functions suggest table-driven would be better
-    count=$(grep -cE '"'"'^func Test\w+\('"'"' "$f" 2>/dev/null || echo 0)
-    if [[ "$count" -gt 5 ]]; then
-      if ! grep -qE '"'"'tests?\s*:?=\s*\[\]struct|for\s+.*,\s*tt\s*:=\s*range'"'"' "$f" 2>/dev/null; then
-        echo "$f: $count test functions - consider table-driven tests"
-      fi
-    fi
-  fi
-done
-done' _ "${FILES[@]}"
+' _ "${FILES[@]}"
 
 # S3: Prefer var for Zero Values
 warn "S3: Prefer var for Zero Values" \
@@ -209,52 +184,6 @@ warn "S3: Prefer var for Zero Values" \
 # S4: Synchronous Functions Preferred
 warn "S4: Synchronous Functions Preferred" \
     grep -Ezn "func\\s+\\w+\\([^)]*chan\\s*<-[^)]*\\)\\s*\\{[^}]*go\\s+func" "${FILES[@]}"
-
-# S5: Project Structure
-warn "S5: Project Structure" \
-    bash -c 'for file in "$@"; do
-# Only check if this looks like a project root (has go.mod)
-if [[ -f "go.mod" ]]; then
-  issues=""
-  # Check for proper cmd/ structure for multiple binaries
-  if ls cmd/*/main.go 2>/dev/null | wc -l | grep -q '"'"'^0$'"'"'; then
-    if ls *.go 2>/dev/null | grep -v _test.go | wc -l | grep -qv '"'"'^[01]$'"'"'; then
-      : # OK - single binary project
-    fi
-  fi
-  # Check for internal/ misuse
-  if [[ -d "internal" ]] && ls internal/*.go 2>/dev/null | grep -q .; then
-    : # OK
-  fi
-  # Warn about pkg/ antipattern
-  if [[ -d "pkg" ]]; then
-    echo "pkg/ directory found - consider using internal/ instead"
-  fi
-fi
-done' _ "${FILES[@]}"
-
-# S6: Use t.Helper in Test Helpers
-warn "S6: Use t.Helper in Test Helpers" \
-    bash -c 'for file in "$@"; do
-for f in "$@"; do
-  if [[ "$f" == *"_test.go" ]]; then
-    # Find functions that take *testing.T but don'"'"'t call t.Helper()
-    awk '"'"'
-      /func [a-z]\w*\([^)]*\*testing\.(T|B)/ && !/t\.Helper\(\)/ {
-        # Read until end of function
-        start = NR
-        while ((getline line) > 0) {
-          if (line ~ /t\.Helper\(\)/) { next }
-          if (line ~ /^}$/) {
-            print FILENAME ":" start ": test helper missing t.Helper()"
-            break
-          }
-        }
-      }
-    '"'"' "$f" 2>/dev/null
-  fi
-done
-done' _ "${FILES[@]}"
 
 # S7: Avoid Global State
 warn "S7: Avoid Global State" \

@@ -37,6 +37,34 @@
       }
     },
     {
+      "id": "N2",
+      "title": "String Interpolation in SQL",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "\\`[^\\`]*(SELECT|INSERT|UPDATE|DELETE).*\\$\\{|(SELECT|INSERT|UPDATE|DELETE).*\"\\s*\\+|f\"[^\"]*(SELECT|INSERT|UPDATE).*\\{",
+      "query": null,
+      "message": "Never use string interpolation in SQL queries. SQL injection risk. Use parameterized queries with placeholders ($1, ?, :param).",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N3",
+      "title": "UPDATE/DELETE Without WHERE",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "DELETE\\s+FROM\\s+\\w+\\s*;",
+      "query": null,
+      "message": "Never run UPDATE or DELETE without a WHERE clause. This modifies or deletes ALL rows in the table, causing catastrophic data loss.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
       "id": "N4",
       "title": "LIKE with Leading Wildcard",
       "severity": "NEVER",
@@ -72,6 +100,62 @@
       "pattern": "OFFSET\\s+[0-9]{4,}|OFFSET\\s+\\$",
       "query": null,
       "message": "Never use large OFFSET values for pagination. OFFSET scans and discards rows, getting slower as offset grows. Use cursor/keyset pagination.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N7",
+      "title": "Plain Text Password Column",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "password\\s+(varchar|text|char)",
+      "query": null,
+      "message": "Never store passwords in plain text. Use password_hash, password_digest, or hashed_password columns and store bcrypt/argon2 hashes.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N8",
+      "title": "timestamp Without Timezone",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "\\stimestamp\\s",
+      "query": null,
+      "message": "Never use 'timestamp' without timezone. Use 'timestamptz' or 'timestamp with time zone' to avoid timezone ambiguity.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "N9",
+      "title": "float/real for Money",
+      "severity": "NEVER",
+      "type": "grep",
+      "pattern": "(price|cost|total|amount|balance|fee|rate)\\s+(float|real|double)",
+      "query": null,
+      "message": "Never use float or real types for monetary values. Floating point has precision issues. Use decimal(10,2) for exact currency amounts.",
+      "provenance": {
+        "last_verified": "2026-01-20",
+        "confidence": "high",
+        "re_verify_after": "2027-01-20"
+      }
+    },
+    {
+      "id": "S1",
+      "title": "Boolean Without NOT NULL DEFAULT",
+      "severity": "SHOULD",
+      "type": "grep",
+      "pattern": "\\s+boolean\\s*[,)]",
+      "query": null,
+      "message": "Boolean columns should have NOT NULL DEFAULT to avoid three-state logic (true, false, NULL). Explicit defaults prevent bugs.",
       "provenance": {
         "last_verified": "2026-01-20",
         "confidence": "high",
