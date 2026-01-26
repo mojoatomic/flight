@@ -104,10 +104,8 @@ check "N4: Redundant Boolean Comparisons" \
 # N5: Magic Number Calculations
 check "N5: Magic Number Calculations" \
     bash -c 'for file in "$@"; do
-for f in "$@"; do
-  grep -HnE '"'"'60\s*\*\s*60|24\s*\*\s*60|1000\s*\*\s*60|7\s*\*\s*24|1024\s*\*\s*1024'"'"' "$f" 2>/dev/null | \
-    grep -v '"'"'[A-Z_]\{2,\}\s*='"'"'
-done
+grep -HnE '"'"'60\s*\*\s*60|24\s*\*\s*60|1000\s*\*\s*60|7\s*\*\s*24|1024\s*\*\s*1024'"'"' "$file" 2>/dev/null | \
+  grep -v '"'"'[A-Z_]\{2,\}\s*='"'"'
 done' _ "${FILES[@]}"
 
 # N6: Generic Function Names
@@ -117,26 +115,22 @@ check "N6: Generic Function Names" \
 # N7: Single-Letter Variables Outside Loops
 check "N7: Single-Letter Variables Outside Loops" \
     bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Find single letter assignments not in for/while lines
-  # Exclude i, j for loops and x for simple lambdas
-  grep -HnE '"'"'^\s*(const|let|var|)\s+[a-hk-wyz]\s*='"'"' "$f" 2>/dev/null | \
-    grep -v '"'"'for\s*('"'"' | grep -v '"'"'while\s*('"'"'
-done
+# Find single letter assignments not in for/while lines
+# Exclude i, j for loops and x for simple lambdas
+grep -HnE '"'"'^\s*(const|let|var|)\s+[a-hk-wyz]\s*='"'"' "$file" 2>/dev/null | \
+  grep -v '"'"'for\s*('"'"' | grep -v '"'"'while\s*('"'"'
 done' _ "${FILES[@]}"
 
 # N8: Console/Print Debugging in Production Code
 check "N8: Console/Print Debugging in Production Code" \
     bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Skip test files
-  if [[ "$f" == *"_test."* ]] || [[ "$f" == *".test."* ]] || \
-     [[ "$f" == *"test_"* ]] || [[ "$f" == *"/tests/"* ]] || \
-     [[ "$f" == *"_spec."* ]] || [[ "$f" == *".spec."* ]]; then
-    continue
-  fi
-  grep -HnE '"'"'console\.(log|warn|error)\s*\(|print\s*\(|System\.out\.print|println!\s*\(|fmt\.Print'"'"' "$f" 2>/dev/null
-done
+# Skip test files
+if [[ "$file" == *"_test."* ]] || [[ "$file" == *".test."* ]] || \
+   [[ "$file" == *"test_"* ]] || [[ "$file" == *"/tests/"* ]] || \
+   [[ "$file" == *"_spec."* ]] || [[ "$file" == *".spec."* ]]; then
+  exit 0
+fi
+grep -HnE '"'"'console\.(log|warn|error)\s*\(|print\s*\(|System\.out\.print|println!\s*\(|fmt\.Print'"'"' "$file" 2>/dev/null || true
 done' _ "${FILES[@]}"
 
 # N9: Negated Boolean Names
@@ -164,49 +158,39 @@ printf '\n%s\n' "## MUST Rules"
 # M1: Boolean Variables Use Proper Prefixes
 check "M1: Boolean Variables Use Proper Prefixes" \
     bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Find boolean assignments without proper prefix
-  grep -HnE '"'"'(const|let|var)\s+[a-z]+\s*=\s*(true|false)\s*;'"'"' "$f" 2>/dev/null | \
-    grep -vE '"'"'(is|has|can|should|will|was|did|does)[A-Z]'"'"'
-done
+# Find boolean assignments without proper prefix
+grep -HnE '"'"'(const|let|var)\s+[a-z]+\s*=\s*(true|false)\s*;'"'"' "$file" 2>/dev/null | \
+  grep -vE '"'"'(is|has|can|should|will|was|did|does)[A-Z]'"'"'
 done' _ "${FILES[@]}"
 
 # M2: Collections Use Plural Names
 check "M2: Collections Use Plural Names" \
     bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Find array literals assigned to singular names
-  grep -HnE '"'"'(const|let|var)\s+(user|item|order|product|result|file|row|record|entry)\s*=\s*\['"'"' "$f" 2>/dev/null
-done
+# Find array literals assigned to singular names
+grep -HnE '"'"'(const|let|var)\s+(user|item|order|product|result|file|row|record|entry)\s*=\s*\['"'"' "$file" 2>/dev/null || true
 done' _ "${FILES[@]}"
 
 # M3: Constants Use UPPER_SNAKE_CASE
 check "M3: Constants Use UPPER_SNAKE_CASE" \
     bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Find const with numeric value not in UPPER_CASE
-  grep -HnE '"'"'const\s+[a-z][a-zA-Z]*\s*=\s*[0-9]+\s*;'"'"' "$f" 2>/dev/null | \
-    grep -vE '"'"'const\s+[A-Z_]+\s*='"'"'
-done
+# Find const with numeric value not in UPPER_CASE
+grep -HnE '"'"'const\s+[a-z][a-zA-Z]*\s*=\s*[0-9]+\s*;'"'"' "$file" 2>/dev/null | \
+  grep -vE '"'"'const\s+[A-Z_]+\s*='"'"'
 done' _ "${FILES[@]}"
 
 # M4: Error Messages Include Context
 check "M4: Error Messages Include Context" \
     bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Find short/generic error messages (less than 15 chars)
-  grep -HnE "throw\s+new\s+Error\(['"'"'\"][^'"'"'\"]{0,15}['"'"'\"]|raise\s+.*Exception\(['"'"'\"][^'"'"'\"]{0,15}['"'"'\"]" "$f" 2>/dev/null
-done
+# Find short/generic error messages (less than 15 chars)
+grep -HnE "throw\s+new\s+Error\(['"'"'\"][^'"'"'\"]{0,15}['"'"'\"]|raise\s+.*Exception\(['"'"'\"][^'"'"'\"]{0,15}['"'"'\"]" "$file" 2>/dev/null || true
 done' _ "${FILES[@]}"
 
 # M5: Function Names Are Verb Phrases
 check "M5: Function Names Are Verb Phrases" \
     bash -c 'for file in "$@"; do
-for f in "$@"; do
-  # Find function names that don'"'"'t start with common verb prefixes
-  grep -HnE '"'"'^(export\s+)?(async\s+)?function\s+[a-z]+\s*\('"'"' "$f" 2>/dev/null | \
-    grep -vE '"'"'function\s+(get|set|fetch|load|save|send|create|update|delete|remove|add|find|check|validate|is|has|can|should|handle|process|render|init|start|stop|on|do|make|build|parse|format|convert|to|from|ensure|assert|verify|compute|calculate|generate|transform|map|filter|reduce|sort|merge|split|join|open|close|read|write|run|execute|apply|reset|clear|register|subscribe|unsubscribe|publish|emit|dispatch|trigger|mount|unmount|connect|disconnect|enable|disable|show|hide|toggle|select|deselect|activate|deactivate|delay|wait|sleep|pause|retry|poll|defer|schedule|queue|batch|throttle|debounce)([A-Z]|\s*\()'"'"'
-done
+# Find function names that don'"'"'t start with common verb prefixes
+grep -HnE '"'"'^(export\s+)?(async\s+)?function\s+[a-z]+\s*\('"'"' "$file" 2>/dev/null | \
+  grep -vE '"'"'function\s+(get|set|fetch|load|save|send|create|update|delete|remove|add|find|check|validate|is|has|can|should|handle|process|render|init|start|stop|on|do|make|build|parse|format|convert|to|from|ensure|assert|verify|compute|calculate|generate|transform|map|filter|reduce|sort|merge|split|join|open|close|read|write|run|execute|apply|reset|clear|register|subscribe|unsubscribe|publish|emit|dispatch|trigger|mount|unmount|connect|disconnect|enable|disable|show|hide|toggle|select|deselect|activate|deactivate|delay|wait|sleep|pause|retry|poll|defer|schedule|queue|batch|throttle|debounce)([A-Z]|\s*\()'"'"'
 done' _ "${FILES[@]}"
 
 printf '\n%s\n' "## Info"

@@ -1,10 +1,16 @@
 {
-  "generated": "2026-01-15T19:00:00Z",
+  "version": "2",
+  "generated": "2026-01-26T00:00:00Z",
   "scan_root": ".",
-  "enabled_domains": [
-    "code-hygiene",
-    "bash"
-  ],
+  "domains": {
+    "source": ["code-hygiene", "bash"],
+    "test": []
+  },
+  "paths": {
+    "source": ["src", "lib", ".flight"],
+    "test": ["tests"],
+    "exclude": ["node_modules", "dist", "build"]
+  },
   "detection_log": {
     "code-hygiene": "always enabled",
     "bash": "found *.sh files"

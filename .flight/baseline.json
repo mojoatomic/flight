@@ -1,0 +1,5 @@
+{
+  "warnings": 1,
+  "updated": "2026-01-26T20:34:29Z",
+  "note": "Baseline for warning ratchet. Validation fails if warnings exceed this count."
+}
