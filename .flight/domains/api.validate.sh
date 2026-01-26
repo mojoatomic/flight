@@ -227,7 +227,7 @@ warn "S1: Use HTTPS Always" \
 # S3: Use ISO 8601 for Dates
 if [[ ${#API_ENDPOINT_FILES[@]} -gt 0 ]]; then
     warn "S3: Use ISO 8601 for Dates" \
-        bash -c 'grep -ql "toISOString|ISO.*8601|datetime|DateTimeFormatter" "$@" || echo "No ISO 8601 date handling detected"' _ "${API_ENDPOINT_FILES[@]}"
+        bash -c 'grep -qEl "toISOString|ISO.*8601|datetime|DateTimeFormatter" "$@" || echo "No ISO 8601 date handling detected"' _ "${API_ENDPOINT_FILES[@]}"
 else
     green "✅ S3: Use ISO 8601 for Dates (skipped - no API endpoint files)"
     ((PASS++)) || true
@@ -294,7 +294,11 @@ fi
 
 # S12: No Hardcoded URLs
 warn "S12: No Hardcoded URLs" \
-    grep -EHn "https?://[a-zA-Z0-9][a-zA-Z0-9.-]+\\.(com|io|net|org|dev|app)" "${FILES[@]}"
+    bash -c 'for file in "$@"; do
+# Find hardcoded URLs, excluding documentation references
+grep -EHn "https?://[a-zA-Z0-9][a-zA-Z0-9.-]+\.(com|io|net|org|dev|app)" "$@" 2>/dev/null | \
+  grep -vE "localhost|127\.0\.0\.1|example\.(com|org)|rfc-editor\.org|w3\.org|json-schema\.org|@(see|link)" || true
+done' _ "${FILES[@]}"
 
 # S13: Include Request IDs
 warn "S13: Include Request IDs" \

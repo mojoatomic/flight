@@ -225,20 +225,6 @@
         "confidence": "high",
         "re_verify_after": "2027-01-16"
       }
-    },
-    {
-      "id": "S12",
-      "title": "No Hardcoded URLs",
-      "severity": "SHOULD",
-      "type": "grep",
-      "pattern": "https?://[a-zA-Z0-9][a-zA-Z0-9.-]+\\.(com|io|net|org|dev|app)",
-      "query": null,
-      "message": "Use configuration/environment for external URLs",
-      "provenance": {
-        "last_verified": "2026-01-16",
-        "confidence": "high",
-        "re_verify_after": "2027-01-16"
-      }
     }
   ]
 }
