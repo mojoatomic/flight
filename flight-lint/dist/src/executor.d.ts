@@ -26,16 +26,16 @@ export declare function isRuleCompatibleWithFile(fileLanguage: string, ruleLangu
 export declare function executeRule(tree: Parser.Tree, rule: Rule, language: any): QueryMatch[];
 /**
  * Lint a single file with the given rules.
- * Only rules compatible with the file's language are executed.
+ * Handles both AST rules (tree-sitter) and grep rules (regex).
  * @param filePath - Path to the file to lint
  * @param rules - Rules to apply
- * @param fileLanguage - Language of the file
+ * @param fileLanguage - Language of the file (null for unknown)
  * @returns Array of lint results
  */
-export declare function lintFile(filePath: string, rules: readonly Rule[], fileLanguage: string): Promise<LintResult[]>;
+export declare function lintFile(filePath: string, rules: readonly Rule[], fileLanguage: string | null): Promise<LintResult[]>;
 /**
  * Lint multiple files with rules from a rules file.
- * Language filtering is done per-rule, not per-file.
+ * Grep rules run on all files; AST rules only on files with supported languages.
  * @param files - Array of file paths to lint
  * @param rulesFile - The rules file containing rules
  * @returns Summary of lint results

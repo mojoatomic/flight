@@ -140,12 +140,18 @@ function validateRule(ruleData, ruleIndex, filePath) {
     if (ruleType === 'ast' && !ruleLanguage) {
         throw new Error(`Rule ${ruleIndex} (${ruleObject.id}) is type 'ast' but missing 'language' in: ${filePath}`);
     }
+    // Pattern can be string or null for grep rules
+    const patternValue = ruleObject.pattern;
+    const pattern = (patternValue === null || typeof patternValue === 'string')
+        ? patternValue
+        : undefined;
     return {
         id: ruleObject.id,
         title: ruleObject.title,
         severity: severityValue,
         type: ruleType,
         language: ruleLanguage,
+        pattern,
         query: queryValue,
         message: ruleObject.message,
         provenance: rawProvenance ? mapRuleProvenance(rawProvenance) : undefined,

@@ -58,7 +58,7 @@ export type RuleType = 'ast' | 'grep';
 /**
  * A single lint rule definition.
  * Rules with type 'ast' require a query string and a language field.
- * Rules with type 'grep' have query set to null and no language field.
+ * Rules with type 'grep' require a pattern string.
  */
 export interface Rule {
   readonly id: string;
@@ -67,6 +67,9 @@ export interface Rule {
   readonly type?: RuleType;
   /** Target language for AST rules. Required for 'ast' type, absent for 'grep' type. */
   readonly language?: string;
+  /** Regex pattern for grep rules. */
+  readonly pattern?: string | null;
+  /** Tree-sitter query for AST rules. */
   readonly query: string | null;
   readonly message: string;
   readonly provenance?: RuleProvenance;
