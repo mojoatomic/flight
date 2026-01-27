@@ -4,6 +4,15 @@ import { getLanguage, detectLanguage, parseFile } from './parser.js';
 import type { Rule, RulesFile, LintResult, LintSummary } from './types.js';
 
 /**
+ * Internal interface for grep matches.
+ */
+interface GrepMatch {
+  readonly line: number;   // 1-indexed
+  readonly column: number; // 1-indexed
+  readonly text: string;
+}
+
+/**
  * Language compatibility map.
  * JavaScript rules can run on JavaScript and JSX files.
  * TypeScript rules can run on TypeScript and TSX files.
@@ -50,7 +59,53 @@ export function isRuleCompatibleWithFile(fileLanguage: string, ruleLanguage: str
  * @returns True if the rule has an executable AST query
  */
 function hasAstQuery(rule: Rule): boolean {
-  return rule.query !== null && rule.query.length > 0;
+  return rule.query !== null && rule.query !== undefined && rule.query.length > 0;
+}
+
+/**
+ * Check if a rule has a grep pattern that can be executed.
+ * @param rule - The rule to check
+ * @returns True if the rule has an executable grep pattern
+ */
+function hasGrepPattern(rule: Rule): boolean {
+  return rule.pattern !== null && rule.pattern !== undefined && rule.pattern.length > 0;
+}
+
+/**
+ * Execute a grep rule against file content using Node's regex.
+ * @param content - The file content to search
+ * @param rule - The rule containing the pattern
+ * @returns Array of matches with 1-indexed locations
+ */
+function executeGrepRule(content: string, rule: Rule): GrepMatch[] {
+  if (!hasGrepPattern(rule)) {
+    return [];
+  }
+
+  const matches: GrepMatch[] = [];
+  const lines = content.split('\n');
+
+  let regex: RegExp;
+  try {
+    regex = new RegExp(rule.pattern!);
+  } catch {
+    // Invalid regex pattern - skip silently
+    return [];
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    const match = regex.exec(line);
+    if (match) {
+      matches.push({
+        line: i + 1,  // 1-indexed
+        column: match.index + 1,  // 1-indexed
+        text: match[0],
+      });
+    }
+  }
+
+  return matches;
 }
 
 /**
@@ -101,31 +156,27 @@ export function executeRule(
 
 /**
  * Lint a single file with the given rules.
- * Only rules compatible with the file's language are executed.
+ * Handles both AST rules (tree-sitter) and grep rules (regex).
  * @param filePath - Path to the file to lint
  * @param rules - Rules to apply
- * @param fileLanguage - Language of the file
+ * @param fileLanguage - Language of the file (null for unknown)
  * @returns Array of lint results
  */
 export async function lintFile(
   filePath: string,
   rules: readonly Rule[],
-  fileLanguage: string
+  fileLanguage: string | null
 ): Promise<LintResult[]> {
   const sourceContent = await readFile(filePath, 'utf-8');
-  const tree = await parseFile(sourceContent, fileLanguage);
-  const treeSitterLanguage = await getLanguage(fileLanguage);
-
   const lintResults: LintResult[] = [];
 
-  for (const rule of rules) {
-    // Skip rules that don't match this file's language
-    if (!isRuleCompatibleWithFile(fileLanguage, rule.language)) {
-      continue;
-    }
+  // Separate rules by type
+  const grepRules = rules.filter(r => hasGrepPattern(r));
+  const astRules = rules.filter(r => hasAstQuery(r));
 
-    const matches = executeRule(tree, rule, treeSitterLanguage);
-
+  // Execute grep rules (work on any file)
+  for (const rule of grepRules) {
+    const matches = executeGrepRule(sourceContent, rule);
     for (const match of matches) {
       lintResults.push({
         filePath,
@@ -138,12 +189,41 @@ export async function lintFile(
     }
   }
 
+  // Execute AST rules (only if we can parse the file)
+  if (fileLanguage && astRules.length > 0) {
+    try {
+      const tree = await parseFile(sourceContent, fileLanguage);
+      const treeSitterLanguage = await getLanguage(fileLanguage);
+
+      for (const rule of astRules) {
+        // Skip rules that don't match this file's language
+        if (!isRuleCompatibleWithFile(fileLanguage, rule.language)) {
+          continue;
+        }
+
+        const matches = executeRule(tree, rule, treeSitterLanguage);
+        for (const match of matches) {
+          lintResults.push({
+            filePath,
+            line: match.line,
+            column: match.column,
+            ruleId: rule.id,
+            severity: rule.severity,
+            message: rule.message,
+          });
+        }
+      }
+    } catch {
+      // Failed to parse - skip AST rules for this file
+    }
+  }
+
   return lintResults;
 }
 
 /**
  * Lint multiple files with rules from a rules file.
- * Language filtering is done per-rule, not per-file.
+ * Grep rules run on all files; AST rules only on files with supported languages.
  * @param files - Array of file paths to lint
  * @param rulesFile - The rules file containing rules
  * @returns Summary of lint results
@@ -155,11 +235,14 @@ export async function lintFiles(
   const allResults: LintResult[] = [];
   let lintedFileCount = 0;
 
+  // Check if we have any grep rules (these can run on any file)
+  const hasGrepRules = rulesFile.rules.some(r => hasGrepPattern(r));
+
   for (const filePath of files) {
     const fileLanguage = detectLanguage(filePath);
 
-    // Skip files with unrecognized extensions (no tree-sitter parser available)
-    if (fileLanguage === null) {
+    // Skip files only if we have no grep rules AND no AST language support
+    if (!hasGrepRules && fileLanguage === null) {
       continue;
     }
 

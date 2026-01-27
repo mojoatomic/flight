@@ -35,7 +35,8 @@ fi
 [[ -f "$TMP_DIR/.flight/exclusions.sh" ]] && cp "$TMP_DIR/.flight/exclusions.sh" .flight/exclusions.sh
 
 # Update all domain files from source (preserves custom domains not in source)
-for file in "$TMP_DIR/.flight/domains/"*.md "$TMP_DIR/.flight/domains/"*.sh "$TMP_DIR/.flight/domains/"*.flight; do
+# .md = documentation, .rules.json = machine-readable rules, .flight = source spec
+for file in "$TMP_DIR/.flight/domains/"*.md "$TMP_DIR/.flight/domains/"*.rules.json "$TMP_DIR/.flight/domains/"*.flight; do
     [[ -f "$file" ]] && cp "$file" .flight/domains/
 done
 
@@ -84,8 +85,6 @@ fi
 # Make scripts executable
 chmod +x .flight/validate-all.sh 2>/dev/null || true
 chmod +x .flight/exclusions.sh 2>/dev/null || true
-chmod +x .flight/domains/*.validate.sh 2>/dev/null || true
-chmod +x .flight/domains/*.sh 2>/dev/null || true
 chmod +x .flight/bin/* 2>/dev/null || true
 chmod +x .flight/inject-flight-protocol.sh 2>/dev/null || true
 chmod +x .flight/hooks/*.sh 2>/dev/null || true

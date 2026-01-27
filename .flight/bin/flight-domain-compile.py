@@ -113,6 +113,8 @@ class Rule:
     examples: dict = field(default_factory=dict)
     api_files_only: bool = False
     provenance: Optional[RuleProvenance] = None
+    skip_paths: list = field(default_factory=list)  # Glob patterns to exclude
+    only_paths: list = field(default_factory=list)  # Glob patterns to include (if set, only these)
 
 
 @dataclass
@@ -241,6 +243,8 @@ def parse_rules(rules_data: dict) -> dict:
             examples=rule_data.get("examples", {}),
             api_files_only=rule_data.get("api_files_only", False),
             provenance=provenance,
+            skip_paths=rule_data.get("skip_paths", []),
+            only_paths=rule_data.get("only_paths", []),
         )
 
     return rules
@@ -291,7 +295,7 @@ def validate_spec(data: dict, domain: str) -> tuple[list, list]:
         check = rule_data.get("check", {})
         if check:
             check_type = check.get("type")
-            valid_types = ["grep", "presence", "script", "multi-condition", "file_exists", "ast"]
+            valid_types = ["grep", "presence", "script", "multi-condition", "file_exists", "ast", "requires"]
             if check_type and check_type not in valid_types:
                 errors.append(
                     f"{domain}.flight: Rule {rule_id} has unknown check type '{check_type}'"
@@ -752,6 +756,70 @@ def escape_pattern_for_bash_c(pattern: str) -> str:
     return result
 
 
+def glob_to_bash_pattern(pattern: str) -> str:
+    """Convert a glob pattern to a bash [[ ]] pattern.
+
+    Common conversions:
+    - **/*.sql -> *.sql (match files ending in .sql)
+    - **/test/** -> */test/* (match paths containing /test/)
+    - **/*.test.* -> *.test.* (match files with .test. in name)
+    """
+    result = pattern
+    # Remove leading **/ (match from any directory)
+    if result.startswith("**/"):
+        result = result[3:]  # Just strip **/, don't prepend extra *
+    # Convert internal /**/ to /*/ (match any subdirectory)
+    result = result.replace("/**/", "/*/")
+    # Convert trailing /** to /* (match any subdirectory)
+    if result.endswith("/**"):
+        result = result[:-3] + "/*"
+    # For bash [[ ]], we need * at the start to match full path
+    if not result.startswith("*") and not result.startswith("/"):
+        result = "*" + result
+    return result
+
+
+def generate_path_filter_code(skip_paths: list, only_paths: list, files_var: str) -> str:
+    """Generate bash code to filter files based on skip_paths and only_paths.
+
+    Returns code that creates FILTERED_FILES array from the source array.
+    """
+    if not skip_paths and not only_paths:
+        return ""
+
+    lines = ["# Path filtering for this rule", "FILTERED_FILES=()"]
+    lines.append(f'for __f in "{files_var}"; do')
+
+    conditions = []
+
+    # skip_paths: exclude files matching any of these patterns
+    if skip_paths:
+        skip_conditions = []
+        for pattern in skip_paths:
+            bash_pattern = glob_to_bash_pattern(pattern)
+            skip_conditions.append(f'[[ "$__f" == {bash_pattern} ]]')
+        # If ANY skip pattern matches, skip the file
+        skip_check = " || ".join(skip_conditions)
+        conditions.append(f'if {skip_check}; then continue; fi')
+
+    # only_paths: include only files matching any of these patterns
+    if only_paths:
+        only_conditions = []
+        for pattern in only_paths:
+            bash_pattern = glob_to_bash_pattern(pattern)
+            only_conditions.append(f'[[ "$__f" == {bash_pattern} ]]')
+        # If NO only_pattern matches, skip the file
+        only_check = " || ".join(only_conditions)
+        conditions.append(f'if ! ( {only_check} ); then continue; fi')
+
+    for cond in conditions:
+        lines.append(f'    {cond}')
+    lines.append('    FILTERED_FILES+=("$__f")')
+    lines.append("done")
+
+    return "\n".join(lines)
+
+
 def generate_check_command(rule: Rule) -> str:
     """Generate the bash command for a rule's check configuration."""
     check = rule.check
@@ -765,7 +833,23 @@ def generate_check_command(rule: Rule) -> str:
 
         # Direct grep - escape for double quotes
         escaped_pattern = escape_bash_pattern(pattern)
-        return f'grep {flags} "{escaped_pattern}" "${{FILES[@]}}"'
+        base_cmd = f'grep {flags} "{escaped_pattern}" "${{FILES[@]}}"'
+
+        # Handle ignore_when - filter out lines matching any exclusion pattern
+        ignore_when = check.get("ignore_when", [])
+        if ignore_when:
+            # Build pipeline: grep pattern | grep -v exclude1 | grep -v exclude2
+            # Use bash -c with positional args to pass FILES, similar to script type
+            # Escape patterns for single-quoted bash -c context
+            escaped_pattern_inner = escape_pattern_for_bash_c(pattern)
+            pipeline_parts = [f'grep {flags} "{escaped_pattern_inner}" "$@"']
+            for ignore_pattern in ignore_when:
+                escaped_ignore = escape_pattern_for_bash_c(ignore_pattern)
+                pipeline_parts.append(f'grep -v "{escaped_ignore}"')
+            pipeline = " | ".join(pipeline_parts)
+            return f"bash -c '({pipeline}) || true' _ \"${{FILES[@]}}\""
+
+        return base_cmd
 
     elif check_type == "presence":
         pattern = check.get("pattern", "")
@@ -777,6 +861,48 @@ def generate_check_command(rule: Rule) -> str:
         escaped_message = escape_for_single_quotes(message)
 
         return f"bash -c 'grep -q{flags[1:] if flags.startswith('-') else flags} \"{escaped_pattern}\" \"$@\" || echo \"{escaped_message}\"' _ \"${{FILES[@]}}\""
+
+    elif check_type == "requires":
+        # File-level invariant check: "if A exists, B must also exist"
+        # or unconditional "file must contain X"
+        trigger = check.get("trigger", "")
+        requirement = check.get("requirement", "")
+        must_exist = check.get("must_exist", "")
+        message = check.get("message", "requirement not met")
+        escaped_message = escape_for_single_quotes(message)
+
+        if must_exist:
+            # Unconditional: file must contain pattern
+            escaped_pattern = escape_pattern_for_bash_c(must_exist)
+            return f'''bash -c '
+for f in "$@"; do
+    if ! grep -qE "{escaped_pattern}" "$f" 2>/dev/null; then
+        echo "$f: {escaped_message}"
+    fi
+done
+' _ "${{FILES[@]}}"'''
+
+        elif trigger and requirement:
+            # Conditional: if trigger exists, requirement must also exist
+            # Report each trigger line that lacks the requirement
+            escaped_trigger = escape_pattern_for_bash_c(trigger)
+            escaped_requirement = escape_pattern_for_bash_c(requirement)
+            return f'''bash -c '
+for f in "$@"; do
+    trigger_lines=$(grep -nE "{escaped_trigger}" "$f" 2>/dev/null)
+    if [[ -n "$trigger_lines" ]]; then
+        if ! grep -qE "{escaped_requirement}" "$f" 2>/dev/null; then
+            echo "$trigger_lines" | while IFS= read -r line; do
+                linenum="${{line%%:*}}"
+                echo "$f:$linenum: {escaped_message}"
+            done
+        fi
+    fi
+done
+' _ "${{FILES[@]}}"'''
+
+        else:
+            return "# requires check missing trigger+requirement or must_exist"
 
     elif check_type == "script":
         code = check.get("code", "").strip()
@@ -837,19 +963,57 @@ def generate_rule_sh(rule: Rule) -> str:
     escaped_title = rule.title.replace('$', '\\$')
     title = f"{rule.id}: {escaped_title}"
 
-    # Handle api_files_only
-    files_var = "${API_ENDPOINT_FILES[@]}" if rule.api_files_only else "${FILES[@]}"
+    # Determine source files array
+    if rule.api_files_only:
+        source_files_var = "${API_ENDPOINT_FILES[@]}"
+    else:
+        source_files_var = "${FILES[@]}"
+
+    # Check if path filtering is needed
+    has_path_filter = bool(rule.skip_paths or rule.only_paths)
 
     # Generate the check command
     cmd = generate_check_command(rule)
 
-    # Adjust file variable if needed
-    if rule.api_files_only and "${FILES[@]}" in cmd:
-        cmd = cmd.replace("${FILES[@]}", "${API_ENDPOINT_FILES[@]}")
+    # Determine which files variable to use in the command
+    if has_path_filter:
+        # Use filtered files
+        final_files_var = "${FILTERED_FILES[@]}"
+        # Replace the source files variable with filtered files in the command
+        cmd = cmd.replace("${FILES[@]}", "${FILTERED_FILES[@]}")
+        cmd = cmd.replace("${API_ENDPOINT_FILES[@]}", "${FILTERED_FILES[@]}")
+    else:
+        final_files_var = source_files_var
+        # Adjust file variable if needed for api_files_only
+        if rule.api_files_only and "${FILES[@]}" in cmd:
+            cmd = cmd.replace("${FILES[@]}", "${API_ENDPOINT_FILES[@]}")
+
+    # Generate path filter code if needed
+    filter_code = ""
+    if has_path_filter:
+        filter_code = generate_path_filter_code(rule.skip_paths, rule.only_paths, source_files_var)
 
     # For api_files_only rules, wrap in a check for API files
     if rule.api_files_only:
-        return f'''
+        if has_path_filter:
+            return f'''
+# {rule.id}: {rule.title}
+if [[ ${{#API_ENDPOINT_FILES[@]}} -gt 0 ]]; then
+    {filter_code}
+    if [[ ${{#FILTERED_FILES[@]}} -gt 0 ]]; then
+        {func} "{title}" \\
+            {cmd}
+    else
+        green "✅ {title} (skipped - no matching files after path filter)"
+        ((PASS++)) || true
+    fi
+else
+    green "✅ {title} (skipped - no API endpoint files)"
+    ((PASS++)) || true
+fi
+'''
+        else:
+            return f'''
 # {rule.id}: {rule.title}
 if [[ ${{#API_ENDPOINT_FILES[@]}} -gt 0 ]]; then
     {func} "{title}" \\
@@ -860,7 +1024,20 @@ else
 fi
 '''
     else:
-        return f'''
+        if has_path_filter:
+            return f'''
+# {rule.id}: {rule.title}
+{filter_code}
+if [[ ${{#FILTERED_FILES[@]}} -gt 0 ]]; then
+    {func} "{title}" \\
+        {cmd}
+else
+    green "✅ {title} (skipped - no matching files after path filter)"
+    ((PASS++)) || true
+fi
+'''
+        else:
+            return f'''
 # {rule.id}: {rule.title}
 {func} "{title}" \\
     {cmd}

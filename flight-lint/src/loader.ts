@@ -169,12 +169,19 @@ function validateRule(ruleData: unknown, ruleIndex: number, filePath: string): R
     throw new Error(`Rule ${ruleIndex} (${ruleObject.id}) is type 'ast' but missing 'language' in: ${filePath}`);
   }
 
+  // Pattern can be string or null for grep rules
+  const patternValue = ruleObject.pattern;
+  const pattern = (patternValue === null || typeof patternValue === 'string')
+    ? patternValue as string | null
+    : undefined;
+
   return {
     id: ruleObject.id as string,
     title: ruleObject.title as string,
     severity: severityValue as Severity,
     type: ruleType,
     language: ruleLanguage,
+    pattern,
     query: queryValue as string | null,
     message: ruleObject.message as string,
     provenance: rawProvenance ? mapRuleProvenance(rawProvenance) : undefined,

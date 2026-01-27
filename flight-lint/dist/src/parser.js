@@ -29,15 +29,23 @@ export async function getLanguage(languageName) {
             languageModule = (await import('tree-sitter-typescript/bindings/node/tsx.js'));
             break;
         case 'python':
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore - tree-sitter-python may lack TypeScript declarations
             languageModule = (await import('tree-sitter-python'));
             break;
         case 'go':
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore - tree-sitter-go may lack TypeScript declarations
             languageModule = (await import('tree-sitter-go'));
             break;
         case 'rust':
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore - tree-sitter-rust may lack TypeScript declarations
             languageModule = (await import('tree-sitter-rust'));
             break;
         case 'c':
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore - tree-sitter-c may lack TypeScript declarations
             languageModule = (await import('tree-sitter-c'));
             break;
         default:
